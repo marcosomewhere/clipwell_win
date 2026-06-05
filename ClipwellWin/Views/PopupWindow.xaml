@@ -1,0 +1,812 @@
+<Window x:Class="ClipwellWin.Views.PopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:conv="clr-namespace:ClipwellWin.Converters"
+        xmlns:vm="clr-namespace:ClipwellWin.ViewModels"
+        xmlns:models="clr-namespace:ClipwellWin.Models"
+        Title="Clipwell"
+        Width="560"
+        Height="720"
+        MinWidth="500" MinHeight="620"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="CanResize"
+        Deactivated="Window_Deactivated">
+
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisInv" Invert="True" />
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+        <conv:NullToVisibilityConverter x:Key="NullToVisInv" Invert="True" />
+        <conv:BytesToImageConverter x:Key="BytesToImg" />
+        <conv:EntryTypeToIconConverter x:Key="TypeToIcon" />
+        <conv:EntryTypeToColorConverter x:Key="TypeToColor" />
+        <conv:HexToBrushConverter x:Key="HexToBrush" />
+        <conv:PinnedToIconConverter x:Key="PinToIcon" />
+        <conv:TypeToVisibilityConverter x:Key="IsImage" TargetType="Image" />
+        <conv:TypeToVisibilityConverter x:Key="IsUrl" TargetType="Url" />
+        <conv:TypeToVisibilityConverter x:Key="IsNotImage" TargetType="Image" Invert="True" />
+
+        <!-- ── Filter-Chip-Stil ──────────────────────────────────────────── -->
+        <Style x:Key="FilterChipStyle" TargetType="RadioButton">
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Padding" Value="{DynamicResource FilterChipPadding}" />
+            <Setter Property="FontSize" Value="{DynamicResource FilterChipFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource PopupTextMutedBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="12" Background="{DynamicResource PopupChipBrush}"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="SemiBold" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Hover-Action-Button-Stil ─────────────────────────────────── -->
+        <Style x:Key="HoverActionBtnStyle" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource PopupTextSecondaryBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" Width="{TemplateBinding Width}"
+                                Height="{TemplateBinding Height}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       FontFamily="{TemplateBinding FontFamily}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Bulk-Action-Button-Stil ───────────────────────────────────── -->
+        <Style x:Key="BulkBtnStyle" TargetType="Button">
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource PopupTextSecondaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="SemiBold" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── ListBoxItem-Stil ──────────────────────────────────────────── -->
+        <Style x:Key="EntryItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="{DynamicResource EntryItemMargin}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Padding="0">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Entry-DataTemplate ────────────────────────────────────────── -->
+        <DataTemplate DataType="{x:Type vm:EntryViewModel}">
+            <Grid Margin="{DynamicResource EntryContentMargin}"
+                  MinHeight="{DynamicResource EntryMinHeight}"
+                  MouseEnter="Item_MouseEnter"
+                  MouseLeave="Item_MouseLeave">
+                <Grid.ToolTip>
+                    <StackPanel MaxWidth="320">
+                        <TextBlock Text="{Binding Type}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding DetectionReason}" TextWrapping="Wrap" Opacity="0.8" />
+                    </StackPanel>
+                </Grid.ToolTip>
+                <Grid.ContextMenu>
+                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <MenuItem Header="Kopieren" Click="CopyMenuItem_Click" />
+                        <MenuItem Header="Plain Copy" Click="PlainCopyMenuItem_Click" />
+                        <Separator />
+                        <MenuItem Header="Pinnen" Click="PinMenuItem_Click" />
+                        <MenuItem Header="Löschen" Click="DeleteMenuItem_Click" />
+                        <MenuItem Header="Sicher löschen (VACUUM)" Click="SecureDeleteMenuItem_Click" />
+                        <Separator />
+                        <MenuItem Header="URL neu laden" Click="ReloadUrlMenuItem_Click">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Type}" Value="{x:Static models:EntryType.Url}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <MenuItem Header="Details" Click="DetailsMenuItem_Click" />
+                        <MenuItem Header="Typ ändern">
+                            <MenuItem Header="Als Text behandeln" Click="TreatAsTextMenuItem_Click" />
+                            <MenuItem Header="Als Code behandeln" Click="TreatAsCodeMenuItem_Click" />
+                        </MenuItem>
+                    </ContextMenu>
+                </Grid.ContextMenu>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Spalte 0: Checkbox (Bulk-Modus) -->
+                <CheckBox Grid.Column="0"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                          Margin="0,0,6,0"
+                          Visibility="{Binding DataContext.IsBulkMode,
+                                       RelativeSource={RelativeSource AncestorType=ListBox},
+                                       Converter={StaticResource BoolToVis}}" />
+
+                <!-- Spalte 1: Icon / Thumbnail -->
+                <Grid Grid.Column="1" VerticalAlignment="Top" Margin="0,2,0,0">
+                    <!-- Bild-Thumbnail -->
+                    <Image Visibility="{Binding Type, Converter={StaticResource IsImage}}"
+                           Source="{Binding Thumbnail}"
+                           Width="36" Height="36"
+                           Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality">
+                        <Image.Clip>
+                            <RectangleGeometry Rect="0,0,36,36" RadiusX="6" RadiusY="6" />
+                        </Image.Clip>
+                    </Image>
+
+                    <!-- URL-Favicon -->
+                    <Grid Visibility="{Binding Type, Converter={StaticResource IsUrl}}">
+                        <Border Width="36" Height="36" CornerRadius="8"
+                                Background="{Binding Type, Converter={StaticResource TypeToColor}}"
+                                Opacity="0.15" />
+                        <Image Source="{Binding Favicon}" Width="16" Height="16"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="{Binding Favicon, Converter={StaticResource NullToVis}}" />
+                        <!-- Lade-Spinner (URL loading) -->
+                        <TextBlock Text="⟳" FontSize="14"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{Binding Type, Converter={StaticResource TypeToColor}}"
+                                   Visibility="{Binding IsUrlLoading, Converter={StaticResource BoolToVis}}" />
+                        <!-- Fehler-Symbol -->
+                        <TextBlock Text="!" FontSize="14" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="#FFCC4444"
+                                   Visibility="{Binding IsUrlFailed, Converter={StaticResource BoolToVis}}" />
+                        <!-- Fallback "URL" wenn kein Favicon und kein Ladevorgang -->
+                        <TextBlock Text="URL" FontSize="9" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{Binding Type, Converter={StaticResource TypeToColor}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Favicon, Converter={StaticResource NullToVis}}" Value="Collapsed" />
+                                                <Condition Binding="{Binding IsUrlLoading}" Value="False" />
+                                                <Condition Binding="{Binding IsUrlFailed}" Value="False" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <!-- Andere Typen (kein Bild, keine URL) -->
+                    <Border Width="36" Height="36" CornerRadius="8"
+                            Background="{Binding Type, Converter={StaticResource TypeToColor}}"
+                            Opacity="0.15"
+                            Visibility="{Binding Type, Converter={StaticResource IsNotImage}}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Type}" Value="{x:Static models:EntryType.Url}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                    </Border>
+                    <TextBlock Text="{Binding Type, Converter={StaticResource TypeToIcon}}"
+                               FontFamily="Segoe Fluent Icons" FontSize="18"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{Binding Type, Converter={StaticResource TypeToColor}}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Type}" Value="{x:Static models:EntryType.Image}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Type}" Value="{x:Static models:EntryType.Url}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+
+                <!-- Spalte 2: Inhalt -->
+                <StackPanel Grid.Column="2" Margin="10,0,8,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding UrlTitle}"
+                               Visibility="{Binding UrlTitle, Converter={StaticResource NullToVis}}"
+                               FontSize="13" FontWeight="Medium"
+                               Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border MaxHeight="38" ClipToBounds="True">
+                        <TextBlock Text="{Binding PreviewText}"
+                                   FontSize="{DynamicResource EntryFontSizeMain}" Foreground="{DynamicResource PopupTextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UrlTitle, Converter={StaticResource NullToVis}}" Value="Visible">
+                                            <Setter Property="Foreground" Value="{DynamicResource PopupTextMutedBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                        <TextBlock Text="{Binding RelativeTime}" FontSize="{DynamicResource EntryFontSizeMeta}" Foreground="{DynamicResource PopupTextSubtleBrush}" />
+                        <Border Width="12" Height="12" CornerRadius="3" Margin="8,1,4,0"
+                                Background="{Binding HexColor, Converter={StaticResource HexToBrush}}"
+                                Visibility="{Binding HexColor, Converter={StaticResource NullToVis}}" />
+                        <TextBlock Text="{Binding HexColor}" FontSize="11"
+                                   FontFamily="Cascadia Code, Consolas" Foreground="{DynamicResource PopupTextMutedBrush}"
+                                   Visibility="{Binding HexColor, Converter={StaticResource NullToVis}}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Spalte 3: Badges ODER Hover-Aktionen -->
+                <Grid Grid.Column="3" Width="128">
+                    <!-- Badges (Normalzustand) -->
+                    <StackPanel x:Name="BadgesPanel" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,4,0,0" MaxWidth="86">
+                        <Border CornerRadius="4" Padding="5,2" Background="{DynamicResource PopupBadgeBrush}" Margin="0,0,0,3">
+                            <TextBlock Text="{Binding BadgeText}" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PopupTextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        </Border>
+                        <Border CornerRadius="4" Padding="5,2" Background="{DynamicResource PopupBadgeSecondaryBrush}" Margin="0,0,0,5"
+                                Visibility="{Binding DetailBadgeText, Converter={StaticResource NullToVis}}">
+                            <TextBlock Text="{Binding DetailBadgeText}" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PopupTextMutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="74" />
+                        </Border>
+                        <TextBlock Text="{Binding IsPinned, Converter={StaticResource PinToIcon}}"
+                                   FontFamily="Segoe Fluent Icons" FontSize="14"
+                                   HorizontalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource PopupTextFaintBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                            <Setter Property="Foreground" Value="#FFE0A030" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Hover-Aktionsleiste -->
+                    <StackPanel x:Name="HoverActions" Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Visibility="Hidden"
+                                Margin="0,0,2,0">
+                        <Button Content="&#xE8C8;" ToolTip="Kopieren"
+                                Style="{StaticResource HoverActionBtnStyle}"
+                                Click="HoverCopy_Click" />
+                        <Button Content="&#xE718;" ToolTip="Pinnen/Lösen"
+                                Style="{StaticResource HoverActionBtnStyle}"
+                                Click="HoverPin_Click" />
+                        <Button Content="&#xE74D;" ToolTip="Löschen"
+                                Style="{StaticResource HoverActionBtnStyle}"
+                                Click="HoverDelete_Click" />
+                        <Button Content="&#xE8A9;" ToolTip="Details"
+                                Style="{StaticResource HoverActionBtnStyle}"
+                                Click="HoverDetails_Click" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsHovered}" Value="True">
+                    <Setter TargetName="HoverActions" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="BadgesPanel" Property="Visibility" Value="Hidden" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </Window.Resources>
+
+    <!-- Root-Border mit abgerundeten Ecken und Hintergrund -->
+    <Border x:Name="RootBorder" CornerRadius="12"
+            Background="{DynamicResource PopupBackgroundBrush}"
+            BorderThickness="1" BorderBrush="{DynamicResource PopupBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="32" ShadowDepth="8" Opacity="0.35" Color="Black" />
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />   <!-- Row 0: Header: Suche + Filter -->
+                <RowDefinition Height="*" />       <!-- Row 1: Eintrags-Liste -->
+                <RowDefinition Height="Auto" />   <!-- Row 2: Schnellnotiz-Panel -->
+                <RowDefinition Height="Auto" />   <!-- Row 3: Bulk-Aktionsleiste -->
+                <RowDefinition Height="Auto" />   <!-- Row 4: Footer-Hinweisleiste -->
+            </Grid.RowDefinitions>
+
+            <!-- ── Header ─────────────────────────────────────────────────── -->
+            <Border Grid.Row="0" Padding="12,14,12,0"
+                    MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <StackPanel>
+                    <!-- Suchleiste + Bulk-Toggle -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="&#xE721;"
+                                   FontFamily="Segoe Fluent Icons" FontSize="16"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource PopupTextMutedBrush}"
+                                   Margin="4,0,10,0" />
+
+                        <Grid Grid.Column="1">
+                            <ui:TextBox x:Name="SearchBox"
+                                        PlaceholderText="Durchsuchen…"
+                                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                        FontSize="14" Background="Transparent"
+                                        BorderThickness="0" Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                                        CaretBrush="{DynamicResource PopupTextPrimaryBrush}"
+                                        KeyDown="SearchBox_KeyDown"
+                                        TextChanged="SearchBox_TextChanged" />
+                            <!-- Autocomplete-Popup -->
+                            <Popup x:Name="SuggestionsPopup"
+                                   PlacementTarget="{Binding ElementName=SearchBox}"
+                                   Placement="Bottom"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True">
+                                <Border Background="{DynamicResource PopupBackgroundBrush}" CornerRadius="6"
+                                        BorderBrush="{DynamicResource PopupBorderBrush}" BorderThickness="1"
+                                        Padding="4">
+                                    <ListBox x:Name="SuggestionsList"
+                                             Background="Transparent" BorderThickness="0"
+                                             MinWidth="180" MaxHeight="200"
+                                             SelectionChanged="Suggestions_SelectionChanged"
+                                             KeyDown="Suggestions_KeyDown">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Foreground" Value="{DynamicResource PopupTextSecondaryBrush}" />
+                                                <Setter Property="FontSize" Value="12" />
+                                                <Setter Property="Padding" Value="8,4" />
+                                                <Setter Property="Background" Value="Transparent" />
+                                                <Setter Property="BorderThickness" Value="0" />
+                                                <Setter Property="Cursor" Value="Hand" />
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+                                </Border>
+                            </Popup>
+                        </Grid>
+
+                        <!-- Header-Aktionsbuttons (Eyedropper + Schnellnotiz + Mehrfachauswahl) -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                                    Width="32" Height="32"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
+                                    ToolTip="Farbe vom Bildschirm wählen" Click="Eyedropper_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                                Width="32" Height="32">
+                                            <TextBlock Text="{TemplateBinding Content}"
+                                                       FontFamily="{TemplateBinding FontFamily}"
+                                                       FontSize="{TemplateBinding FontSize}"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Content="+" FontSize="18"
+                                    Width="32" Height="32"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
+                                    ToolTip="Schnellnotiz" Click="ToggleQuickNote_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                                Width="32" Height="32">
+                                            <TextBlock Text="{TemplateBinding Content}"
+                                                       FontSize="{TemplateBinding FontSize}"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Content="&#xE762;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                                    Width="32" Height="32"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
+                                    ToolTip="Mehrfachauswahl" Click="ToggleBulkMode_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                                Width="32" Height="32">
+                                            <TextBlock Text="{TemplateBinding Content}"
+                                                       FontFamily="{TemplateBinding FontFamily}"
+                                                       FontSize="{TemplateBinding FontSize}"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Filter-Chip-Leiste -->
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  Margin="0,8,0,10"
+                                  KeyboardNavigation.TabNavigation="Continue">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="ChipAll" Content="Alle"
+                                         GroupName="TypeFilter" IsChecked="True"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag=""
+                                         KeyDown="FilterChip_KeyDown" />
+                            <RadioButton Content="Text" GroupName="TypeFilter"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag="Text"
+                                         KeyDown="FilterChip_KeyDown" />
+                            <RadioButton Content="Code" GroupName="TypeFilter"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag="Code"
+                                         KeyDown="FilterChip_KeyDown" />
+                            <RadioButton Content="URL" GroupName="TypeFilter"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag="Url"
+                                         KeyDown="FilterChip_KeyDown" />
+                            <RadioButton Content="Bild" GroupName="TypeFilter"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag="Image"
+                                         KeyDown="FilterChip_KeyDown" />
+                            <RadioButton Content="Farbe" GroupName="TypeFilter"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag="Color"
+                                         KeyDown="FilterChip_KeyDown" />
+                            <RadioButton Content="Gepinnt" GroupName="TypeFilter"
+                                         IsTabStop="True"
+                                         Style="{StaticResource FilterChipStyle}"
+                                         Click="FilterChip_Click" Tag="Pinned"
+                                         KeyDown="FilterChip_KeyDown" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
+            <!-- Trennlinie -->
+            <Border Grid.Row="0" Height="1" Background="{DynamicResource PopupPanelBorderBrush}"
+                    VerticalAlignment="Bottom" Margin="12,0" />
+
+            <!-- ── Eintrags-Liste ──────────────────────────────────────────── -->
+            <ListBox Grid.Row="1" x:Name="EntryList"
+                     ItemsSource="{Binding FilteredEntries}"
+                     SelectedItem="{Binding SelectedEntry}"
+                     ItemContainerStyle="{StaticResource EntryItemStyle}"
+                     Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     KeyDown="EntryList_KeyDown"
+                     MouseDoubleClick="EntryList_MouseDoubleClick"
+                     PreviewMouseWheel="EntryList_PreviewMouseWheel"
+                     PreviewMouseLeftButtonDown="EntryList_PreviewMouseLeftButtonDown"
+                     PreviewMouseMove="EntryList_PreviewMouseMove">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource PopupTextFaintBrush}"
+                                           Margin="12,6,0,2" />
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                        <GroupStyle.ContainerStyle>
+                            <Style TargetType="GroupItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <StackPanel>
+                                                <ContentPresenter />
+                                                <ItemsPresenter />
+                                            </StackPanel>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </GroupStyle.ContainerStyle>
+                    </GroupStyle>
+                </ListBox.GroupStyle>
+            </ListBox>
+
+            <!-- Leer-Zustand -->
+            <StackPanel Grid.Row="1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        MaxWidth="300" IsHitTestVisible="False">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasItems, ElementName=EntryList}" Value="False">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <TextBlock Text="Keine Einträge" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource PopupTextSecondaryBrush}" HorizontalAlignment="Center"
+                           Margin="0,0,0,6" />
+                <TextBlock Text="Kopierte Texte, URLs, Farben und Bilder erscheinen hier."
+                           TextAlignment="Center" TextWrapping="Wrap"
+                           FontSize="12" Foreground="{DynamicResource PopupTextSubtleBrush}" />
+            </StackPanel>
+
+            <!-- ── Resize-Griff ─────────────────────────────────────────────── -->
+            <Thumb Grid.Row="1" Width="18" Height="18"
+                   HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                   Margin="0,0,2,2" Cursor="SizeNWSE"
+                   Panel.ZIndex="10"
+                   DragDelta="ResizeGrip_DragDelta">
+                <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="Transparent">
+                            <TextBlock Text="&#xE76F;" FontFamily="Segoe Fluent Icons"
+                                       FontSize="10" Foreground="{DynamicResource PopupTextFaintBrush}"
+                                       HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                        </Border>
+                    </ControlTemplate>
+                </Thumb.Template>
+            </Thumb>
+
+            <!-- ── Schnellnotiz-Panel ────────────────────────────────────────── -->
+            <Border Grid.Row="2" x:Name="QuickNotePanel"
+                    Padding="12,8" Background="{DynamicResource PopupPanelBrush}"
+                    BorderBrush="{DynamicResource PopupPanelBorderBrush}" BorderThickness="0,1,0,0"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox Grid.Column="0" x:Name="QuickNoteBox"
+                               PlaceholderText="Schnellnotiz eingeben…"
+                               FontSize="13" Background="Transparent"
+                               BorderThickness="0" Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                               CaretBrush="{DynamicResource PopupTextPrimaryBrush}" VerticalAlignment="Center"
+                               KeyDown="QuickNoteBox_KeyDown" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                        <Button Content="Speichern" Style="{StaticResource BulkBtnStyle}"
+                                Click="QuickNoteSave_Click" />
+                        <Button Content="✕" Width="28" Height="28" Padding="0"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
+                                Click="QuickNoteCancel_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                            Width="28" Height="28">
+                                        <TextBlock Text="{TemplateBinding Content}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="{TemplateBinding Foreground}" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ── Bulk-Aktionsleiste ──────────────────────────────────────── -->
+            <Border Grid.Row="3" Padding="12,6"
+                    Background="{DynamicResource PopupPanelBrush}"
+                    BorderBrush="{DynamicResource PopupPanelBorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Visibility="{Binding IsBulkMode, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource PopupTextMutedBrush}" FontSize="11">
+                        <Run Text="{Binding SelectedCount, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource PopupTextSecondaryBrush}" />
+                        <Run Text=" ausgewählt" />
+                    </TextBlock>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                HorizontalAlignment="Center">
+                        <Button Content="Alle" Style="{StaticResource BulkBtnStyle}"
+                                Click="BulkSelectAll_Click" />
+                        <Button Content="Pinnen" Style="{StaticResource BulkBtnStyle}"
+                                Click="BulkPin_Click" />
+                        <Button Content="Lösen" Style="{StaticResource BulkBtnStyle}"
+                                Click="BulkUnpin_Click" />
+                        <Button Content="Exportieren" Style="{StaticResource BulkBtnStyle}"
+                                Click="BulkExport_Click" />
+                        <Button Content="Löschen" Style="{StaticResource BulkBtnStyle}"
+                                Foreground="#FFCC4444"
+                                Click="BulkDelete_Click" />
+                    </StackPanel>
+
+                    <Button Grid.Column="2" Content="✕" FontSize="12"
+                            Width="28" Height="28" Padding="0"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
+                            Click="BulkCancel_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                        Width="28" Height="28">
+                                    <TextBlock Text="{TemplateBinding Content}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Foreground="{TemplateBinding Foreground}" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- ── Footer-Hinweisleiste ───────────────────────────────────── -->
+            <Border Grid.Row="4" Padding="14,8" Background="{DynamicResource PopupPanelBrush}"
+                    CornerRadius="0,0,12,12"
+                    BorderBrush="{DynamicResource PopupPanelBorderBrush}" BorderThickness="0,1,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
+                        <Run Text="↵" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Einfügen" />
+                    </TextBlock>
+                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
+                        <Run Text="Strg+↵" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Plain" />
+                    </TextBlock>
+                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
+                        <Run Text="Strg+P" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Pinnen" />
+                    </TextBlock>
+                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
+                        <Run Text="Entf" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Löschen" />
+                    </TextBlock>
+                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11">
+                        <Run Text="Esc" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Schließen" />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

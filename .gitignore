@@ -1,0 +1,39 @@
+## Build output
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+
+## Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+## .NET
+TestResults/
+*.nupkg
+*.snupkg
+*.vsp
+*.vspx
+*.coverage
+*.coveragexml
+*.trx
+
+## WPF temporary projects
+*_wpftmp.csproj
+
+## Local app data / logs
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+## OS files
+Thumbs.db
+Desktop.ini

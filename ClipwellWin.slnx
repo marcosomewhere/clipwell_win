@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ClipwellWin.Tests/ClipwellWin.Tests.csproj" />
+  <Project Path="ClipwellWin/ClipwellWin.csproj" />
+</Solution>
