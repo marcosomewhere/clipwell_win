@@ -28,6 +28,42 @@ public class UrlPreviewService : IDisposable
                && !t.Contains('\n') && t.Length < 2048;
     }
 
+    /// <summary>
+    /// True, wenn die URL gefahrlos abgerufen werden darf. Loopback, link-local und
+    /// private Adressbereiche werden übersprungen (SSRF-/Datenschutz-Schutz für interne Dienste).
+    /// </summary>
+    public static bool ShouldFetch(string? url)
+    {
+        if (!IsUrl(url)) return false;
+        if (!Uri.TryCreate(url!.Trim(), UriKind.Absolute, out var uri)) return false;
+
+        var host = uri.Host;
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
+        if (IPAddress.TryParse(host, out var ip))
+        {
+            if (IPAddress.IsLoopback(ip)) return false;
+            if (IsPrivate(ip)) return false;
+        }
+        return true;
+    }
+
+    private static bool IsPrivate(IPAddress ip)
+    {
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var b = ip.GetAddressBytes();
+            if (b[0] == 10) return true;                              // 10.0.0.0/8
+            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true; // 172.16.0.0/12
+            if (b[0] == 192 && b[1] == 168) return true;             // 192.168.0.0/16
+            if (b[0] == 169 && b[1] == 254) return true;             // 169.254.0.0/16 link-local
+            return false;
+        }
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal
+                || (ip.GetAddressBytes()[0] & 0xFE) == 0xFC;          // fc00::/7 unique-local
+        return false;
+    }
+
     public async Task<(string? title, byte[]? favicon)> FetchAsync(string url)
     {
         try

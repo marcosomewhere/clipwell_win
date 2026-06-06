@@ -13,6 +13,9 @@ public class SettingsService
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
+    // Save() wird vom UI-Thread und vom Auto-Backup-Hintergrundthread aufgerufen.
+    private readonly object _saveGate = new();
+
     public AppSettings Settings { get; private set; } = new();
 
     public void Load()
@@ -29,7 +32,18 @@ public class SettingsService
 
     public void Save()
     {
-        Directory.CreateDirectory(DataDir);
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(Settings, JsonOpts));
+        lock (_saveGate)
+        {
+            Directory.CreateDirectory(DataDir);
+            var json = JsonSerializer.Serialize(Settings, JsonOpts);
+            // Atomar schreiben: Temp-Datei + Replace, damit ein Crash beim Schreiben
+            // keine halb geschriebene (= unbrauchbare) settings.json hinterlässt.
+            var tmp = SettingsPath + ".tmp";
+            File.WriteAllText(tmp, json);
+            if (File.Exists(SettingsPath))
+                File.Replace(tmp, SettingsPath, null);
+            else
+                File.Move(tmp, SettingsPath);
+        }
     }
 }

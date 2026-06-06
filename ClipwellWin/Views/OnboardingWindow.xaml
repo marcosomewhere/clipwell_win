@@ -1,91 +1,262 @@
 <Window x:Class="ClipwellWin.Views.OnboardingWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clipwell – Willkommen"
-        Width="480" Height="540"
+        Title="Clipwell - Willkommen"
+        Width="760" Height="620"
+        MinWidth="720" MinHeight="580"
         WindowStyle="SingleBorderWindow"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize">
-    <Grid Margin="32">
+        ResizeMode="CanResizeWithGrip"
+        SourceInitialized="Window_SourceInitialized"
+        Background="{DynamicResource OnboardingBackgroundBrush}"
+        Foreground="{DynamicResource OnboardingTextPrimaryBrush}">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+        </Style>
+
+        <Style x:Key="MutedText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource OnboardingTextSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource OnboardingSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource OnboardingBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource OnboardingInputBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource OnboardingBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource OnboardingInputFocusedBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource OnboardingButtonBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource OnboardingButtonTextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource OnboardingButtonBrush}" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource OnboardingButtonHoverBrush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingButtonHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="28">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ── Kopf ───────────────────────────────────────────────────── -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,24">
+        <StackPanel Grid.Row="0" Margin="0,0,0,18">
             <TextBlock Text="Willkommen bei Clipwell"
-                       FontSize="24" FontWeight="Bold"
-                       TextWrapping="Wrap"
-                       Margin="0,0,0,8" />
-            <TextBlock Text="Dein lokaler Clipboard-Manager für Windows. Hier ist ein kurzer Überblick."
-                       FontSize="13" Opacity="0.7"
-                       TextWrapping="Wrap" />
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,6" />
+            <TextBlock Text="Richte den globalen Hotkey ein. Danach läuft Clipwell im Infobereich neben der Uhr."
+                       FontSize="13"
+                       Style="{StaticResource MutedText}" />
         </StackPanel>
 
-        <!-- ── Features ───────────────────────────────────────────────── -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.15*" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="0.85*" />
+            </Grid.ColumnDefinitions>
 
-                <Border Background="#0A000000" CornerRadius="8" Padding="16" Margin="0,0,0,10">
-                    <StackPanel>
-                        <TextBlock x:Name="HotkeyLabel"
-                                   FontSize="14" FontWeight="SemiBold"
-                                   Margin="0,0,0,4" />
-                        <TextBlock Text="Öffnet das Clipboard-Menü von überall."
-                                   FontSize="12" Opacity="0.7" Margin="0,0,0,10" />
+            <Border Grid.Column="0"
+                    Style="{StaticResource CardBorder}"
+                    Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,18">
+                        <TextBlock Text="Hotkey"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,6" />
+                        <TextBlock Text="Klicke ins Feld und drücke die gewünschte Tastenkombination."
+                                   FontSize="12"
+                                   Style="{StaticResource MutedText}" />
+                    </StackPanel>
+
+                    <TextBox x:Name="HotkeyRecorderBox"
+                             Grid.Row="1"
+                             Height="42"
+                             Padding="12,9"
+                             FontSize="15"
+                             FontWeight="SemiBold"
+                             IsReadOnly="True"
+                             PreviewKeyDown="HotkeyRecorderBox_PreviewKeyDown"
+                             GotKeyboardFocus="HotkeyRecorderBox_GotKeyboardFocus"
+                             LostKeyboardFocus="HotkeyRecorderBox_LostKeyboardFocus" />
+
+                    <UniformGrid Grid.Row="2" Columns="4" Margin="0,12,0,0">
+                        <CheckBox x:Name="ModWin" Content="Win" Margin="0,0,8,0" Click="Modifier_Click" />
+                        <CheckBox x:Name="ModShift" Content="Shift" Margin="0,0,8,0" Click="Modifier_Click" />
+                        <CheckBox x:Name="ModCtrl" Content="Ctrl" Margin="0,0,8,0" Click="Modifier_Click" />
+                        <CheckBox x:Name="ModAlt" Content="Alt" Click="Modifier_Click" />
+                    </UniformGrid>
+
+                    <StackPanel Grid.Row="3" Margin="0,22,0,0">
+                        <TextBlock Text="Aktion beim Hotkey"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8" />
+                        <RadioButton x:Name="OpenMenuRadio"
+                                     GroupName="HotkeyAction"
+                                     Content="Clipboard-Menü öffnen"
+                                     Checked="HotkeyAction_Checked" />
+                        <RadioButton x:Name="PasteLatestRadio"
+                                     GroupName="HotkeyAction"
+                                     Content="Neuesten Eintrag direkt einfügen"
+                                     Checked="HotkeyAction_Checked" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="4" VerticalAlignment="Bottom">
+                        <Button x:Name="SaveHotkeyBtn"
+                                Content="Hotkey speichern"
+                                Height="36"
+                                Click="SaveHotkey_Click"
+                                Margin="0,0,0,10" />
                         <Button x:Name="TestHotkeyBtn"
-                                Content="Hotkey testen (jetzt drücken)"
-                                Padding="12,6" FontSize="12"
-                                Click="TestHotkey_Click"
-                                HorizontalAlignment="Left" />
-                        <TextBlock x:Name="HotkeyResultLabel"
-                                   FontSize="12" Margin="0,8,0,0"
-                                   Visibility="Collapsed" />
+                                Content="Hotkey testen"
+                                Height="36"
+                                Click="TestHotkey_Click" />
+                        <TextBlock x:Name="HotkeyStatusLabel"
+                                   Foreground="{DynamicResource OnboardingTextSecondaryBrush}"
+                                   FontSize="12"
+                                   Margin="0,10,0,0"
+                                   TextWrapping="Wrap"
+                                   MinHeight="34" />
                     </StackPanel>
-                </Border>
+                </Grid>
+            </Border>
 
-                <Border Background="#0A000000" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="12" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="12" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{StaticResource CardBorder}">
                     <StackPanel>
-                        <TextBlock Text="&#x2714; Was wird gespeichert?" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
-                        <TextBlock FontSize="12" Opacity="0.75" LineHeight="22" TextWrapping="Wrap">
-Texte, URLs mit Vorschau und Favicon, Code mit Syntax-Highlighting,&#x0a;Farben (#hex) und Bilder mit optionalem OCR-Text.
-                        </TextBlock>
+                        <TextBlock Text="Speichert lokal"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,6" />
+                        <TextBlock Text="Texte, URLs, Code, Farben und Bilder bleiben auf deinem Rechner."
+                                   FontSize="12"
+                                   Style="{StaticResource MutedText}" />
                     </StackPanel>
                 </Border>
 
-                <Border Background="#0A000000" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <Border Grid.Row="2" Style="{StaticResource CardBorder}">
                     <StackPanel>
-                        <TextBlock Text="&#x2714; Suche und Filterung" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
-                        <TextBlock FontSize="12" Opacity="0.75" LineHeight="22" TextWrapping="Wrap">
-Echtzeit-Suche über alle Einhalte.&#x0a;Filter-Chips für Typ (Text/Code/URL/Bild/Farbe).&#x0a;Erweiterte Präfixe: type:url, kind:json, domain:github.com, pinned:true
-                        </TextBlock>
+                        <TextBlock Text="Schneller Zugriff"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,6" />
+                        <TextBlock Text="Der Hotkey öffnet die Suche oder fügt den neuesten Eintrag direkt ein."
+                                   FontSize="12"
+                                   Style="{StaticResource MutedText}" />
                     </StackPanel>
                 </Border>
 
-                <Border Background="#0A000000" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                <Border Grid.Row="4" Style="{StaticResource CardBorder}">
                     <StackPanel>
-                        <TextBlock Text="&#x2714; Datenschutz" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
-                        <TextBlock FontSize="12" Opacity="0.75" LineHeight="22" TextWrapping="Wrap">
-Alles bleibt lokal – keine Cloud, kein Tracking.&#x0a;Inkognito-Modus für Apps oder Domains.&#x0a;Automatisches Erkennen und Überspringen von API-Keys, Tokens und Passwörtern.
-                        </TextBlock>
+                        <TextBlock Text="Tray-App"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,6" />
+                        <TextBlock Text="Nach dem Start findest du Clipwell im Infobereich. Rechtsklick öffnet Menü, Einstellungen und Beenden."
+                                   FontSize="12"
+                                   Style="{StaticResource MutedText}" />
                     </StackPanel>
                 </Border>
+            </Grid>
+        </Grid>
 
+        <Grid Grid.Row="2" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="FooterStatusLabel"
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       Foreground="{DynamicResource OnboardingTextSecondaryBrush}"
+                       TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Einstellungen"
+                        MinWidth="116"
+                        Height="38"
+                        Margin="0,0,10,0"
+                        Click="OpenSettings_Click" />
+                <Button Content="Fertig"
+                        MinWidth="116"
+                        Height="38"
+                        FontWeight="SemiBold"
+                        Click="Finish_Click" />
             </StackPanel>
-        </ScrollViewer>
-
-        <!-- ── Fußzeile ───────────────────────────────────────────────── -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Margin="0,20,0,0">
-            <Button Content="Einstellungen öffnen"
-                    Padding="12,8" FontSize="13" Margin="0,0,12,0"
-                    Click="OpenSettings_Click" />
-            <Button Content="Los geht's!"
-                    Padding="24,8" FontSize="13"
-                    FontWeight="SemiBold"
-                    Click="Finish_Click" />
-        </StackPanel>
+        </Grid>
     </Grid>
 </Window>

@@ -1,11 +1,26 @@
 # Next Features
 
-## P4 – Tests und Release (noch nicht umsetzen)
+Stand: 2026-06-06
 
-- End-to-end UI-Test mit echter App-Instanz, Clipboard-Samples und Screenshot-Pruefung.
-- Tests fuer Datenbank-Recovery und Migration alter Schemata.
-- Mockbarer URL-Preview-Service fuer deterministische Favicon-/Titeltests.
-- Zusaetzliche Unit-/Integrationstests fuer Datenbank-Recovery, Migration alter Schemata, Hotkey-Fallbacks und Clipboard-Schreib-Retry. *(Testprojekt vorhanden, 33/33 gruen)*
-- Installer (MSIX oder NSIS) oder portables ZIP-Release-Paket erstellen.
-- Versionierte Release Notes automatisch aus Git-Log generieren.
-- Code-Signing fuer Installer und Binary.
+## Code Quality / Dead Code
+
+- **Atomic write for selection export**: `PopupWindow.ExportEntriesToJson` uses `File.WriteAllText` directly. The full-history export path uses the safe `WriteFileAtomic` helper in `DatabaseService`. Deduplicate into a shared utility or move the selection export through `DatabaseService`.
+
+## Tests / Quality
+
+- Add DB recovery tests for failed `quick_check` and `BackupAndReset`.
+- Add schema migration tests for `EnsureColumn`.
+- Add tests for hotkey fallback selection.
+- Add tests for clipboard write retry behavior.
+- Put `UrlPreviewService.FetchAsync` behind an interface for deterministic title/favicon tests.
+- Add a concurrency test for the `DatabaseService` lock gate.
+
+## Release
+
+- Decide release format: MSIX, NSIS or portable ZIP.
+- Add versioned release notes.
+- Add code signing for binary and installer.
+
+## Not Planned
+
+- Cloud sync through OneDrive/iCloud for the live SQLite database.

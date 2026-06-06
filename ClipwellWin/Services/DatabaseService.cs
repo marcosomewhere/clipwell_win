@@ -16,11 +16,14 @@ public class DatabaseService : IDisposable
     private readonly SqliteConnection _conn;
     private readonly string _dbPath;
 
+    // SqliteConnection ist nicht thread-safe; alle Zugriffe über dieses Gate serialisieren. Monitor (lock) ist reentrant.
+    private readonly object _gate = new();
+
     public DatabaseService(string? dbPath = null)
     {
         _dbPath = dbPath ?? DbPath;
         Directory.CreateDirectory(Path.GetDirectoryName(_dbPath)!);
-        _conn = new SqliteConnection($"Data Source={_dbPath};Default Timeout=2");
+        _conn = new SqliteConnection($"Data Source={_dbPath};Default Timeout=5");
         _conn.Open();
         InitSchema();
         VerifyDatabase();
@@ -49,7 +52,9 @@ public class DatabaseService : IDisposable
                    Title       TEXT,
                    Favicon     BLOB,
                    CachedAt    TEXT NOT NULL
-               );");
+               );
+               CREATE INDEX IF NOT EXISTS IX_History_Pinned_Timestamp
+                   ON History (IsPinned, Timestamp);");
         EnsureColumn("History", "UrlTitle", "TEXT");
         EnsureColumn("History", "UrlFavicon", "BLOB");
         EnsureColumn("History", "ContentKind", "TEXT");
@@ -81,85 +86,136 @@ public class DatabaseService : IDisposable
 
     public long Insert(ClipboardEntry e)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = @"INSERT INTO History
-            (Type, Content, ImageData, OcrText, Language, UrlTitle, UrlFavicon, HexColor, ContentKind, DetectionReason, IsPinned, Timestamp)
-            VALUES ($type,$content,$img,$ocr,$lang,$urlTitle,$urlFavicon,$hex,$kind,$reason,$pin,$ts);
-            SELECT last_insert_rowid();";
-        cmd.Parameters.AddWithValue("$type", (int)e.Type);
-        cmd.Parameters.AddWithValue("$content", (object?)e.Content ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$img", (object?)e.ImageData ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$ocr", (object?)e.OcrText ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$lang", (object?)e.Language ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$urlTitle", (object?)e.UrlTitle ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$urlFavicon", (object?)e.UrlFavicon ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$hex", (object?)e.HexColor ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$kind", (object?)e.ContentKind ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$reason", (object?)e.DetectionReason ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$pin", e.IsPinned ? 1 : 0);
-        cmd.Parameters.AddWithValue("$ts", e.Timestamp.ToString("o"));
-        return (long)(cmd.ExecuteScalar() ?? 0L);
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = @"INSERT INTO History
+                (Type, Content, ImageData, OcrText, Language, UrlTitle, UrlFavicon, HexColor, ContentKind, DetectionReason, IsPinned, Timestamp)
+                VALUES ($type,$content,$img,$ocr,$lang,$urlTitle,$urlFavicon,$hex,$kind,$reason,$pin,$ts);
+                SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$type", (int)e.Type);
+            cmd.Parameters.AddWithValue("$content", (object?)e.Content ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$img", (object?)e.ImageData ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$ocr", (object?)e.OcrText ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$lang", (object?)e.Language ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$urlTitle", (object?)e.UrlTitle ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$urlFavicon", (object?)e.UrlFavicon ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$hex", (object?)e.HexColor ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$kind", (object?)e.ContentKind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$reason", (object?)e.DetectionReason ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$pin", e.IsPinned ? 1 : 0);
+            cmd.Parameters.AddWithValue("$ts", e.Timestamp.ToString("o"));
+            return (long)(cmd.ExecuteScalar() ?? 0L);
+        }
     }
 
     public void UpdateOcr(long id, string ocrText)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "UPDATE History SET OcrText=$ocr WHERE Id=$id";
-        cmd.Parameters.AddWithValue("$ocr", ocrText);
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE History SET OcrText=$ocr WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$ocr", ocrText);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void SetPinned(long id, bool pinned)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "UPDATE History SET IsPinned=$p WHERE Id=$id";
-        cmd.Parameters.AddWithValue("$p", pinned ? 1 : 0);
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE History SET IsPinned=$p WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$p", pinned ? 1 : 0);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
     }
 
-    public void SetType(long id, EntryType type, string? language, string? reason)
+    public void SetType(long id, EntryType type, string? language, string? kind, string? reason)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "UPDATE History SET Type=$type, Language=$language, ContentKind=$kind, DetectionReason=$reason WHERE Id=$id";
-        cmd.Parameters.AddWithValue("$type", (int)type);
-        cmd.Parameters.AddWithValue("$language", (object?)language ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$kind", (object?)language ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$reason", (object?)reason ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE History SET Type=$type, Language=$language, ContentKind=$kind, DetectionReason=$reason WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$type", (int)type);
+            cmd.Parameters.AddWithValue("$language", (object?)language ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$kind", (object?)kind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$reason", (object?)reason ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public void UpdateContent(long id, string? content, string? kind, string? reason, string? language = null)
+    {
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE History SET Content=$content, Language=$language, ContentKind=$kind, DetectionReason=$reason WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$content", (object?)content ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$language", (object?)language ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$kind", (object?)kind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$reason", (object?)reason ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void Delete(long id)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM History WHERE Id=$id";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM History WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void Purge(int maxItems)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = @"DELETE FROM History
-            WHERE IsPinned=0
-              AND Id NOT IN (
-                  SELECT Id FROM History WHERE IsPinned=0
-                  ORDER BY Timestamp DESC LIMIT $max)";
-        cmd.Parameters.AddWithValue("$max", maxItems);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = @"DELETE FROM History
+                WHERE IsPinned=0
+                  AND Id NOT IN (
+                      SELECT Id FROM History WHERE IsPinned=0
+                      ORDER BY Timestamp DESC LIMIT $max)";
+            cmd.Parameters.AddWithValue("$max", maxItems);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public List<ClipboardEntry> LoadAll()
     {
-        var list = new List<ClipboardEntry>();
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT * FROM History ORDER BY IsPinned DESC, Timestamp DESC";
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-            list.Add(ReadEntry(reader));
-        return list;
+        lock (_gate)
+        {
+            var list = new List<ClipboardEntry>();
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "SELECT * FROM History ORDER BY IsPinned DESC, Timestamp DESC";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                list.Add(ReadEntry(reader));
+            return list;
+        }
+    }
+
+    /// <summary>Nur IDs laden – für günstigen Abgleich nach Purge ohne BLOBs.</summary>
+    public HashSet<long> LoadAllIds()
+    {
+        lock (_gate)
+        {
+            var ids = new HashSet<long>();
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "SELECT Id FROM History";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                ids.Add(reader.GetInt64(0));
+            return ids;
+        }
     }
 
     private static ClipboardEntry ReadEntry(SqliteDataReader r) => new()
@@ -181,48 +237,60 @@ public class DatabaseService : IDisposable
 
     public (string? title, byte[]? favicon) GetUrlCache(string url)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = @"SELECT Title, Favicon FROM UrlCache
-                            WHERE Url=$url AND CachedAt > $ttl";
-        cmd.Parameters.AddWithValue("$url", url);
-        cmd.Parameters.AddWithValue("$ttl", DateTime.UtcNow.AddDays(-7).ToString("o"));
-        using var r = cmd.ExecuteReader();
-        if (!r.Read()) return (null, null);
-        var title = r.IsDBNull(0) ? null : r.GetString(0);
-        var fav = r.IsDBNull(1) ? null : (byte[])r["Favicon"];
-        return (title, fav);
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = @"SELECT Title, Favicon FROM UrlCache
+                                WHERE Url=$url AND CachedAt > $ttl";
+            cmd.Parameters.AddWithValue("$url", url);
+            cmd.Parameters.AddWithValue("$ttl", DateTime.UtcNow.AddDays(-7).ToString("o"));
+            using var r = cmd.ExecuteReader();
+            if (!r.Read()) return (null, null);
+            var title = r.IsDBNull(0) ? null : r.GetString(0);
+            var fav = r.IsDBNull(1) ? null : (byte[])r["Favicon"];
+            return (title, fav);
+        }
     }
 
     public void UpsertUrlCache(string url, string? title, byte[]? favicon)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = @"INSERT OR REPLACE INTO UrlCache (Url, Title, Favicon, CachedAt)
-                            VALUES ($url,$title,$fav,$ts)";
-        cmd.Parameters.AddWithValue("$url", url);
-        cmd.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$fav", (object?)favicon ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$ts", DateTime.UtcNow.ToString("o"));
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = @"INSERT OR REPLACE INTO UrlCache (Url, Title, Favicon, CachedAt)
+                                VALUES ($url,$title,$fav,$ts)";
+            cmd.Parameters.AddWithValue("$url", url);
+            cmd.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$fav", (object?)favicon ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$ts", DateTime.UtcNow.ToString("o"));
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void UpdateUrlMetadata(long entryId, string? title, byte[]? favicon)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "UPDATE History SET UrlTitle=$title, UrlFavicon=$favicon WHERE Id=$id AND Type=2";
-        cmd.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$favicon", (object?)favicon ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$id", entryId);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE History SET UrlTitle=$title, UrlFavicon=$favicon WHERE Id=$id AND Type=2";
+            cmd.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$favicon", (object?)favicon ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$id", entryId);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void PurgeByAge(int maxAgeInDays)
     {
         if (maxAgeInDays <= 0) return;
-        var cutoff = DateTime.Now.AddDays(-maxAgeInDays).ToString("o");
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM History WHERE IsPinned=0 AND Timestamp < $cutoff";
-        cmd.Parameters.AddWithValue("$cutoff", cutoff);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            var cutoff = DateTime.Now.AddDays(-maxAgeInDays).ToString("o");
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM History WHERE IsPinned=0 AND Timestamp < $cutoff";
+            cmd.Parameters.AddWithValue("$cutoff", cutoff);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public long GetDbSizeInBytes()
@@ -237,28 +305,37 @@ public class DatabaseService : IDisposable
         long maxBytes = (long)maxSizeInMb * 1024 * 1024;
         if (GetDbSizeInBytes() <= maxBytes) return;
 
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = @"DELETE FROM History WHERE IsPinned=0 AND Id IN (
-            SELECT Id FROM History WHERE IsPinned=0 ORDER BY Timestamp ASC
-            LIMIT MAX(1, (SELECT COUNT(*) / 10 FROM History WHERE IsPinned=0))
-        )";
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = @"DELETE FROM History WHERE IsPinned=0 AND Id IN (
+                SELECT Id FROM History WHERE IsPinned=0 ORDER BY Timestamp ASC
+                LIMIT MAX(1, (SELECT COUNT(*) / 10 FROM History WHERE IsPinned=0))
+            )";
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void ClearHistory(bool keepPinned = false)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = keepPinned
-            ? "DELETE FROM History WHERE IsPinned=0"
-            : "DELETE FROM History";
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = keepPinned
+                ? "DELETE FROM History WHERE IsPinned=0"
+                : "DELETE FROM History";
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void ClearUrlCache()
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM UrlCache";
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM UrlCache";
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void ExportAsJson(string filePath)
@@ -282,29 +359,38 @@ public class DatabaseService : IDisposable
         }).ToList();
 
         var options = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(filePath, JsonSerializer.Serialize(exportData, options));
+        WriteFileAtomic(filePath, JsonSerializer.Serialize(exportData, options));
     }
 
     public void ExportAsSqliteCopy(string filePath)
     {
-        // WAL-Checkpoint erzwingen, dann Datei kopieren
-        Exec("PRAGMA wal_checkpoint(TRUNCATE)");
-        File.Copy(_dbPath, filePath, overwrite: true);
+        lock (_gate)
+        {
+            // WAL-Checkpoint erzwingen, dann Datei kopieren
+            Exec("PRAGMA wal_checkpoint(TRUNCATE)");
+            File.Copy(_dbPath, filePath, overwrite: true);
+        }
     }
 
     private bool EntryExists(DateTime timestamp, string? content)
     {
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM History WHERE Timestamp=$ts AND Content IS $content";
-        cmd.Parameters.AddWithValue("$ts", timestamp.ToString("o"));
-        cmd.Parameters.AddWithValue("$content", (object?)content ?? DBNull.Value);
-        return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM History WHERE Timestamp=$ts AND Content IS $content";
+            cmd.Parameters.AddWithValue("$ts", timestamp.ToString("o"));
+            cmd.Parameters.AddWithValue("$content", (object?)content ?? DBNull.Value);
+            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
+        }
     }
 
     public void SecureDelete(long id)
     {
-        Delete(id);
-        Exec("VACUUM");
+        lock (_gate)
+        {
+            Delete(id);
+            Exec("VACUUM");
+        }
     }
 
     public int ImportFromJson(string filePath)
@@ -387,6 +473,17 @@ public class DatabaseService : IDisposable
         }
     }
 
+    /// <summary>Schreibt über eine Temp-Datei und ersetzt atomar – kein halb geschriebenes Ziel bei Crash.</summary>
+    private static void WriteFileAtomic(string path, string content)
+    {
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, content);
+        if (File.Exists(path))
+            File.Replace(tmp, path, null);
+        else
+            File.Move(tmp, path);
+    }
+
     private void Exec(string sql)
     {
         using var cmd = _conn.CreateCommand();
@@ -396,7 +493,10 @@ public class DatabaseService : IDisposable
 
     public void Dispose()
     {
-        _conn.Dispose();
-        SqliteConnection.ClearPool(_conn);
+        lock (_gate)
+        {
+            _conn.Dispose();
+            SqliteConnection.ClearPool(_conn);
+        }
     }
 }

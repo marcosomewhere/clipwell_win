@@ -1,3 +1,5 @@
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using ClipwellWin.ViewModels;
@@ -8,17 +10,20 @@ public partial class PinboardWindow : Window
 {
     private readonly PopupViewModel _vm;
     private readonly App _app;
+    private readonly HashSet<EntryViewModel> _observedEntries = [];
 
     public PinboardWindow(PopupViewModel vm, App app)
     {
         _vm  = vm;
         _app = app;
         InitializeComponent();
+        foreach (var entry in _vm.Entries)
+            WatchEntry(entry);
         Refresh();
-        _vm.Entries.CollectionChanged += (_, _) => Dispatcher.Invoke(Refresh);
+        _vm.Entries.CollectionChanged += Entries_CollectionChanged;
     }
 
-    private void Refresh()
+    internal void Refresh()
     {
         var pinned = _vm.Entries
             .Where(e => e.IsPinned)
@@ -37,11 +42,49 @@ public partial class PinboardWindow : Window
             _vm.SelectedEntry = vm;
     }
 
-    private void PasteBtn_Click(object sender, RoutedEventArgs e)
+    private void CopyBtn_Click(object sender, RoutedEventArgs e)
     {
         var vm = (sender as FrameworkElement)?.DataContext as EntryViewModel;
         if (vm == null) return;
-        _app.PasteEntry(vm, plainText: false);
+        _app.CopyEntryToClipboard(vm, plainText: false);
+    }
+
+    private void UnpinBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (sender as FrameworkElement)?.DataContext as EntryViewModel;
+        if (vm == null) return;
+        if (vm.IsPinned)
+            _vm.TogglePin(vm);
+        Refresh();
+    }
+
+    private void Entries_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+            foreach (EntryViewModel entry in e.OldItems)
+                UnwatchEntry(entry);
+        if (e.NewItems != null)
+            foreach (EntryViewModel entry in e.NewItems)
+                WatchEntry(entry);
+        Dispatcher.Invoke(Refresh);
+    }
+
+    private void WatchEntry(EntryViewModel entry)
+    {
+        if (!_observedEntries.Add(entry)) return;
+        entry.PropertyChanged += Entry_PropertyChanged;
+    }
+
+    private void UnwatchEntry(EntryViewModel entry)
+    {
+        if (!_observedEntries.Remove(entry)) return;
+        entry.PropertyChanged -= Entry_PropertyChanged;
+    }
+
+    private void Entry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(EntryViewModel.IsPinned) or nameof(EntryViewModel.RelativeTime))
+            Dispatcher.Invoke(Refresh);
     }
 
     private void Header_MouseDown(object sender, MouseButtonEventArgs e)
@@ -52,5 +95,4 @@ public partial class PinboardWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Hide();
 
-    private void Window_Deactivated(object sender, EventArgs e) { }
 }

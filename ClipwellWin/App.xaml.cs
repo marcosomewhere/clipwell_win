@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application
     private const string SingleInstanceMutexName = "Local\\ClipwellWin.SingleInstance";
     private const string ShowEventName = "Local\\ClipwellWin.ShowPopup";
     private static readonly object LogLock = new();
+    private enum PopupPlacement { Cursor, Taskbar }
 
     private NotifyIcon? _trayIcon;
     private ToolStripMenuItem? _hotkeyStatusItem;
@@ -216,8 +217,11 @@ public partial class App : System.Windows.Application
         _isEffectiveDarkTheme = dark;
         ApplicationThemeManager.Apply(dark ? ApplicationTheme.Dark : ApplicationTheme.Light);
         ApplyPopupResources(dark);
+        ApplyOnboardingResources(dark);
         ApplyCompactResources(mode == ThemeMode.Compact);
         _popup?.ApplyWindowTheme();
+        _onboarding?.ApplyWindowTheme();
+        _pinboard?.Refresh();
     }
 
     internal bool IsEffectiveDarkTheme => _isEffectiveDarkTheme;
@@ -237,41 +241,78 @@ public partial class App : System.Windows.Application
         var res = Current.Resources;
         if (dark)
         {
-            res["PopupBackgroundBrush"] = Brush("#F21E1E2E");
-            res["PopupBorderBrush"] = Brush("#22FFFFFF");
-            res["PopupPanelBrush"] = Brush("#0AFFFFFF");
-            res["PopupPanelBorderBrush"] = Brush("#15FFFFFF");
-            res["PopupTextPrimaryBrush"] = Brush("#FFFFFFFF");
-            res["PopupTextSecondaryBrush"] = Brush("#CCFFFFFF");
-            res["PopupTextMutedBrush"] = Brush("#88FFFFFF");
-            res["PopupTextSubtleBrush"] = Brush("#66FFFFFF");
-            res["PopupTextFaintBrush"] = Brush("#55FFFFFF");
-            res["PopupHoverBrush"] = Brush("#18FFFFFF");
-            res["PopupSelectedBrush"] = Brush("#28FFFFFF");
-            res["PopupChipBrush"] = Brush("#18FFFFFF");
-            res["PopupChipCheckedBrush"] = Brush("#44FFFFFF");
-            res["PopupBadgeBrush"] = Brush("#2AFFFFFF");
-            res["PopupBadgeSecondaryBrush"] = Brush("#18FFFFFF");
+            res["PopupBackgroundBrush"] = Brush("#FF171A1E");
+            res["PopupBorderBrush"] = Brush("#FF3A414A");
+            res["PopupPanelBrush"] = Brush("#FF23272D");
+            res["PopupPanelBorderBrush"] = Brush("#FF3A414A");
+            res["PopupTextPrimaryBrush"] = Brush("#FFF7F8FA");
+            res["PopupTextSecondaryBrush"] = Brush("#D8F7F8FA");
+            res["PopupTextMutedBrush"] = Brush("#A8F7F8FA");
+            res["PopupTextSubtleBrush"] = Brush("#8AF7F8FA");
+            res["PopupTextFaintBrush"] = Brush("#66F7F8FA");
+            res["PopupHoverBrush"] = Brush("#FF2A3037");
+            res["PopupSelectedBrush"] = Brush("#FF303740");
+            res["PopupChipBrush"] = Brush("#FF2B3037");
+            res["PopupChipCheckedBrush"] = Brush("#FF4A535E");
+            res["PopupBadgeBrush"] = Brush("#FF4A535E");
+            res["PopupBadgeSecondaryBrush"] = Brush("#FF343B43");
             res["PopupShadowBrush"] = Brush("#FF000000");
         }
         else
         {
-            res["PopupBackgroundBrush"] = Brush("#F8FAFAF8");
-            res["PopupBorderBrush"] = Brush("#33000000");
-            res["PopupPanelBrush"] = Brush("#0D000000");
-            res["PopupPanelBorderBrush"] = Brush("#16000000");
-            res["PopupTextPrimaryBrush"] = Brush("#F0181818");
-            res["PopupTextSecondaryBrush"] = Brush("#CC202020");
-            res["PopupTextMutedBrush"] = Brush("#8A202020");
-            res["PopupTextSubtleBrush"] = Brush("#66202020");
-            res["PopupTextFaintBrush"] = Brush("#55202020");
-            res["PopupHoverBrush"] = Brush("#10000000");
-            res["PopupSelectedBrush"] = Brush("#18000000");
-            res["PopupChipBrush"] = Brush("#0E000000");
-            res["PopupChipCheckedBrush"] = Brush("#1F000000");
-            res["PopupBadgeBrush"] = Brush("#14000000");
-            res["PopupBadgeSecondaryBrush"] = Brush("#0C000000");
+            res["PopupBackgroundBrush"] = Brush("#FFFAFAF8");
+            res["PopupBorderBrush"] = Brush("#FFE0E2E6");
+            res["PopupPanelBrush"] = Brush("#FFFFFFFF");
+            res["PopupPanelBorderBrush"] = Brush("#FFE0E2E6");
+            res["PopupTextPrimaryBrush"] = Brush("#FF15171A");
+            res["PopupTextSecondaryBrush"] = Brush("#B815171A");
+            res["PopupTextMutedBrush"] = Brush("#8A15171A");
+            res["PopupTextSubtleBrush"] = Brush("#6615171A");
+            res["PopupTextFaintBrush"] = Brush("#5515171A");
+            res["PopupHoverBrush"] = Brush("#FFF3F4F6");
+            res["PopupSelectedBrush"] = Brush("#FFECEEF1");
+            res["PopupChipBrush"] = Brush("#FFF0F1F3");
+            res["PopupChipCheckedBrush"] = Brush("#FFD9DDE3");
+            res["PopupBadgeBrush"] = Brush("#FFE1E4EA");
+            res["PopupBadgeSecondaryBrush"] = Brush("#FFF0F1F3");
             res["PopupShadowBrush"] = Brush("#66000000");
+        }
+    }
+
+    private static void ApplyOnboardingResources(bool dark)
+    {
+        var res = Current.Resources;
+        if (dark)
+        {
+            res["OnboardingBackgroundBrush"] = Brush("#FF171A1E");
+            res["OnboardingSurfaceBrush"] = Brush("#FF23272D");
+            res["OnboardingSurfaceAltBrush"] = Brush("#FF1D2126");
+            res["OnboardingBorderBrush"] = Brush("#FF3A414A");
+            res["OnboardingTextPrimaryBrush"] = Brush("#FFF7F8FA");
+            res["OnboardingTextSecondaryBrush"] = Brush("#D8F7F8FA");
+            res["OnboardingTextMutedBrush"] = Brush("#A8F7F8FA");
+            res["OnboardingInputBrush"] = Brush("#FF111418");
+            res["OnboardingInputFocusedBrush"] = Brush("#FF151A20");
+            res["OnboardingButtonBrush"] = Brush("#FFEEF1F5");
+            res["OnboardingButtonHoverBrush"] = Brush("#FFFFFFFF");
+            res["OnboardingButtonTextBrush"] = Brush("#FF15171A");
+            res["OnboardingAccentBrush"] = Brush("#FF9BCB3F");
+        }
+        else
+        {
+            res["OnboardingBackgroundBrush"] = Brush("#FFFAFAF8");
+            res["OnboardingSurfaceBrush"] = Brush("#FFFFFFFF");
+            res["OnboardingSurfaceAltBrush"] = Brush("#FFF3F4F6");
+            res["OnboardingBorderBrush"] = Brush("#FFE0E2E6");
+            res["OnboardingTextPrimaryBrush"] = Brush("#FF15171A");
+            res["OnboardingTextSecondaryBrush"] = Brush("#B815171A");
+            res["OnboardingTextMutedBrush"] = Brush("#8A15171A");
+            res["OnboardingInputBrush"] = Brush("#FFFFFFFF");
+            res["OnboardingInputFocusedBrush"] = Brush("#FFFFFFFF");
+            res["OnboardingButtonBrush"] = Brush("#FF24282D");
+            res["OnboardingButtonHoverBrush"] = Brush("#FF343A40");
+            res["OnboardingButtonTextBrush"] = Brush("#FFFFFFFF");
+            res["OnboardingAccentBrush"] = Brush("#FF7BA82A");
         }
     }
 
@@ -349,7 +390,7 @@ public partial class App : System.Windows.Application
         menu.Items.Add("Beenden", null, (_, _) => ExitApp());
 
         _trayIcon.ContextMenuStrip = menu;
-        _trayIcon.MouseDoubleClick += (_, _) => ShowPopup();
+        _trayIcon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) TogglePopupFromTray(); };
     }
 
     private void UpdateHotkeyTrayStatus()
@@ -373,7 +414,7 @@ public partial class App : System.Windows.Application
 
     private static Icon CreateTrayIcon()
     {
-        using var bmp = RenderTrayBitmap(64);
+        using var bmp = RenderTrayBitmap(96);
         var hIcon = bmp.GetHicon();
         try
         {
@@ -384,6 +425,22 @@ public partial class App : System.Windows.Application
         {
             NativeMethods.DestroyIcon(hIcon);
         }
+    }
+
+    internal static ImageSource CreateAppIconImageSource(int size)
+    {
+        using var bmp = RenderTrayBitmap(size);
+        using var stream = new MemoryStream();
+        bmp.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+        stream.Position = 0;
+
+        var image = new System.Windows.Media.Imaging.BitmapImage();
+        image.BeginInit();
+        image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        image.StreamSource = stream;
+        image.EndInit();
+        image.Freeze();
+        return image;
     }
 
     private static void FillRoundedRect(Graphics g, System.Drawing.Brush br, float x, float y, float w, float h, float r)
@@ -406,7 +463,8 @@ public partial class App : System.Windows.Application
         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
         g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
 
-        float s = size / 64f;
+        float s = size / 56f;
+        g.TranslateTransform(-4 * s, -4 * s);
         using var shadow = new SolidBrush(System.Drawing.Color.FromArgb(90, 0, 0, 0));
         FillRoundedRect(g, shadow, 13 * s, 15 * s, 40 * s, 42 * s, 8 * s);
 
@@ -527,25 +585,50 @@ public partial class App : System.Windows.Application
         return path;
     }
 
-    private void ShowPopup()
+    private void ShowPopup(PopupPlacement placement = PopupPlacement.Cursor)
     {
         _previousForeground = NativeMethods.GetForegroundWindow();
 
         if (_popup == null || !_popup.IsLoaded)
             _popup = new PopupWindow(_popupVm!, this);
+        _popup.ApplyWindowTheme();
 
         if (_popup.IsVisible)
         {
-            _popup.PositionAtCursor();
+            PositionPopup(placement);
             _popup.FocusSearch();
             _popup.Activate();
             return;
         }
 
-        _popup.PositionAtCursor();
+        PositionPopup(placement);
         _popup.Show();
+        PositionPopup(placement);
         _popup.FocusSearch();
         _popup.Activate();
+    }
+
+    private void TogglePopupFromTray()
+    {
+        if (_popup?.IsVisible == true)
+        {
+            HidePopup();
+            return;
+        }
+
+        if (_popup != null && DateTime.UtcNow - _popup.LastHiddenAtUtc < TimeSpan.FromMilliseconds(500))
+            return;
+
+        ShowPopup(PopupPlacement.Taskbar);
+    }
+
+    private void PositionPopup(PopupPlacement placement)
+    {
+        if (_popup == null) return;
+        if (placement == PopupPlacement.Taskbar)
+            _popup.PositionAboveTaskbar();
+        else
+            _popup.PositionAtCursor();
     }
 
     internal void HidePopup() => _popup?.Hide();
@@ -566,6 +649,12 @@ public partial class App : System.Windows.Application
         return ok;
     }
 
+    internal void SuspendHotkey()
+    {
+        _msgWin?.UnregisterHotkey();
+        UpdateHotkeyTrayStatus();
+    }
+
     internal bool IsHotkeyRegistered => _msgWin?.IsHotkeyRegistered == true;
     internal int LastHotkeyError => _msgWin?.LastHotkeyError ?? 0;
 
@@ -582,7 +671,7 @@ public partial class App : System.Windows.Application
         }
 
         var requested = (s.HotkeyModifiers, s.HotkeyVk);
-        foreach (var fallback in HotkeyFallbacks())
+        foreach (var fallback in HotkeyFallbacks(s.HotkeyVk))
         {
             if (fallback == requested) continue;
             if (!_msgWin.RegisterHotkey(fallback.modifiers, fallback.vk)) continue;
@@ -608,12 +697,12 @@ public partial class App : System.Windows.Application
         return baseModifiers | NativeMethods.MOD_NOREPEAT;
     }
 
-    private static IEnumerable<(uint modifiers, uint vk)> HotkeyFallbacks()
+    private static IEnumerable<(uint modifiers, uint vk)> HotkeyFallbacks(uint vk)
     {
-        yield return (NativeMethods.MOD_WIN | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT, NativeMethods.VK_V);
-        yield return (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT, NativeMethods.VK_V);
-        yield return (NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, NativeMethods.VK_V);
-        yield return (NativeMethods.MOD_WIN | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, NativeMethods.VK_V);
+        yield return (NativeMethods.MOD_WIN | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT, vk);
+        yield return (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT, vk);
+        yield return (NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, vk);
+        yield return (NativeMethods.MOD_WIN | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, vk);
     }
 
     private void OnClipboardChanged(object? sender, EventArgs e)
@@ -658,12 +747,18 @@ public partial class App : System.Windows.Application
             _ = Task.Run(async () =>
             {
                 var text = await OcrService.RecognizeAsync(data);
-                if (!string.IsNullOrEmpty(text))
-                    Dispatcher.Invoke(() => _popupVm.UpdateOcr(id, text));
+                if (string.IsNullOrEmpty(text)) return;
+                // OCR-Text ebenfalls am Sensitiv-Filter prüfen (z.B. Screenshot mit API-Key).
+                if (_settings.Settings.FilterSensitiveContent
+                    && SensitiveContentService.IsSensitive(text, out _))
+                    return;
+                Dispatcher.Invoke(() => _popupVm.UpdateOcr(id, text));
             });
         }
 
-        if (entry.Type == EntryType.Url && entry.Content != null)
+        if (entry.Type == EntryType.Url && entry.Content != null
+            && _settings.Settings.UrlPreviewEnabled
+            && UrlPreviewService.ShouldFetch(entry.Content))
         {
             var id = entry.Id;
             var url = entry.Content;
@@ -711,7 +806,8 @@ public partial class App : System.Windows.Application
 
     private void OnHotkeyPressed(object? sender, EventArgs e)
     {
-        _onboarding?.NotifyHotkeyTriggered();
+        if (_onboarding?.NotifyHotkeyTriggered() == true)
+            return;
 
         if (_settings?.Settings.HotkeyAction == HotkeyAction.PasteLatest)
         {
@@ -728,6 +824,7 @@ public partial class App : System.Windows.Application
     internal void ReloadUrlPreview(EntryViewModel vm)
     {
         if (vm.Type != EntryType.Url || vm.Content == null) return;
+        if (!UrlPreviewService.ShouldFetch(vm.Content)) { vm.UrlState = UrlPreviewState.Failed; return; }
         vm.UrlState = UrlPreviewState.Loading;
         var id = vm.Id;
         var url = vm.Content;
@@ -943,7 +1040,12 @@ public partial class App : System.Windows.Application
         if ((modifiers & NativeMethods.MOD_ALT) != 0) parts.Add("Alt");
         if ((modifiers & NativeMethods.MOD_SHIFT) != 0) parts.Add("Shift");
         if ((modifiers & NativeMethods.MOD_WIN) != 0) parts.Add("Win");
-        parts.Add(vk is >= 0x41 and <= 0x5A ? ((char)vk).ToString() : $"VK {vk:X2}");
+        parts.Add(vk switch
+        {
+            >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A => ((char)vk).ToString(),
+            >= 0x70 and <= 0x87 => $"F{vk - 0x6F}",
+            _ => $"VK {vk:X2}",
+        });
         return string.Join("+", parts);
     }
 }

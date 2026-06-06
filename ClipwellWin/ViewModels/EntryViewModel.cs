@@ -216,15 +216,34 @@ public class EntryViewModel : ViewModelBase
     }
 
     public void RefreshPreview() => OnPropertyChanged(nameof(PreviewText));
-    public void RefreshTimestamp() => OnPropertyChanged(nameof(RelativeTime));
+    public void RefreshTimestamp()
+    {
+        OnPropertyChanged(nameof(RelativeTime));
+        OnPropertyChanged(nameof(GroupLabel));
+    }
 
-    public void SetType(EntryType type, string? language, string reason)
+    public void SetType(EntryType type, string? language, string? kind, string reason)
     {
         Entry.Type = type;
         Entry.Language = language;
-        Entry.ContentKind = language;
+        Entry.ContentKind = kind;
         Entry.DetectionReason = reason;
         OnPropertyChanged(nameof(Type));
+        OnPropertyChanged(nameof(Language));
+        OnPropertyChanged(nameof(ContentKind));
+        OnPropertyChanged(nameof(DetectionReason));
+        OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(BadgeText));
+        OnPropertyChanged(nameof(DetailBadgeText));
+    }
+
+    public void SetContent(string content, string? kind, string reason, string? language = null)
+    {
+        Entry.Content = content;
+        Entry.Language = language;
+        Entry.ContentKind = kind;
+        Entry.DetectionReason = reason;
+        OnPropertyChanged(nameof(Content));
         OnPropertyChanged(nameof(Language));
         OnPropertyChanged(nameof(ContentKind));
         OnPropertyChanged(nameof(DetectionReason));

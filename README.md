@@ -1,30 +1,21 @@
 # Clipwell for Windows
 
-Clipwell is a local-first Windows clipboard history tool built with WPF, .NET 8 and SQLite. It runs from the tray, watches clipboard changes and opens a keyboard-first popup for search, copy and paste.
+Clipwell is a local-first Windows clipboard manager built with WPF, .NET 8 and SQLite. It runs in the tray, records clipboard history and opens a keyboard-first popup for search, copy and paste.
 
 ## Features
 
-- Clipboard history for text, URLs, code/config snippets, colors and images.
-- Global hotkey with status in the tray menu.
-- System tray icon rendered from a clipboard-with-heart motif for small Windows tray sizes.
-- Hotkey registration falls back to usable combinations if the requested global shortcut is blocked.
-- Single-instance mode: launching a second instance opens the running app instead of starting another watcher.
-- Searchable popup with keyboard navigation.
-- Popup follows the Windows light/dark app theme by default and uses a larger, resizable layout.
-- Context menu per entry: copy, plain copy, pin, delete, details and manual type correction.
-- Detail view for long text, code and images.
-- Clipboard writes for text and images are retried and logged instead of crashing the app when Windows temporarily locks the clipboard.
-- Duplicate image clipboard notifications are deduplicated before they reach history.
-- URL previews with persisted title and favicon.
-- Badges for entry type and detected detail type:
-  - `URL`, `IMG`, `CODE`, `COLOR`, `TEXT`
-  - Domains for URLs
-  - Image formats such as `PNG`, `JPG`, `GIF`, `BMP`, `WEBP`, `TIFF`
-  - Code/config types such as `PS1`, `SH`, `SCRIPT`, `JSON`, `XML`, `YAML`, `SQL`, `TOML`, `INI`, `PROPS`, `ENV`, `DOCKER`, `CONFIG`
-- Configurable code detection: conservative, normal or aggressive.
-- Paste test mode in settings for focus restore, `Ctrl+V` and `Win+V`.
-- Crash logging to `%APPDATA%\Clipwell\clipwell.log`.
-- SQLite recovery prompt when the history database is corrupt or locked.
+- Clipboard history for text, notes, URLs, code/config snippets, colors and images.
+- Global hotkey with automatic fallback combinations when the requested shortcut is blocked.
+- Keyboard-first popup with type chips, pinned filter, grouped entries and search prefixes.
+- Bulk actions for pin, unpin, export and delete.
+- Detail window with editable text/code minieditor, image editor, OCR view and color values.
+- Image support with thumbnail, zoom/pan, annotations, crop/resize/expand and duplicate-image suppression.
+- URL previews with title/favicon cache, opt-out setting and loopback/private-network protection.
+- Pinboard window for always-on-top pinned entries.
+- Eyedropper overlay for picking screen colors into history and clipboard.
+- Export/import as JSON, SQLite backup export, auto-backup rotation and secure delete via VACUUM.
+- Privacy controls: incognito mode, excluded apps/domains and sensitive-content filtering.
+- SQLite recovery prompt when `quick_check` fails.
 
 ## Keyboard
 
@@ -37,70 +28,58 @@ Popup shortcuts:
 - `Up` / `Down`: move selection
 - `Ctrl+P`: pin selected entry
 - `Delete`: delete selected entry
+- `Ctrl+B`: toggle pinboard
+- `F2`: open details
 - `Esc`: close popup
 
-## Settings
+## Search
 
-The settings window includes:
+Supported prefixes:
 
-- Hotkey recorder and manual hotkey entry
-- Hotkey action: open menu or paste latest entry immediately
-- Code detection mode
-- Maximum history size
-- Pause monitoring toggle
-- Paste test field
-- Full keyboard help
-
-Note: Windows does not provide a permission prompt to force blocked global hotkeys. If `RegisterHotKey` fails, Clipwell shows the Windows error code and the user must free the combination or choose another one.
+- `type:url`, `type:text`, `type:code`, `type:image`, `type:color`
+- `kind:json`, `kind:note`, `kind:png`
+- `domain:github.com`
+- `pinned:true`, `pinned:false`
 
 ## Data Locations
 
 - Settings: `%APPDATA%\Clipwell\settings.json`
 - History database: `%APPDATA%\Clipwell\history.db`
-- Crash log: `%APPDATA%\Clipwell\clipwell.log`
-- Database recovery backups: next to `history.db` with `.broken-YYYYMMDD-HHMMSS` suffixes
+- Log: `%APPDATA%\Clipwell\clipwell.log`
+- Recovery backups: next to `history.db` with `.broken-YYYYMMDD-HHMMSS` suffix
 
 ## Build
 
 Requirements:
 
 - Windows 10 or newer
-- .NET 8 Windows Desktop runtime / SDK
+- .NET 8 Windows Desktop SDK
 
-Build:
+Build Release:
 
 ```powershell
-dotnet build ClipwellWin\ClipwellWin.csproj
+taskkill /IM Clipwell.exe /F
+dotnet build ClipwellWin\ClipwellWin.csproj -c Release --nologo -v q
 ```
 
-Run:
+Run Release:
 
 ```powershell
-dotnet run --project ClipwellWin\ClipwellWin.csproj
+Start-Process ClipwellWin\bin\Release\net8.0-windows10.0.19041.0\Clipwell.exe
 ```
 
 Test:
 
 ```powershell
-dotnet test ClipwellWin.Tests\ClipwellWin.Tests.csproj
+dotnet test ClipwellWin.Tests\ClipwellWin.Tests.csproj --nologo -v q
 ```
+
+Current suite: 54 xUnit tests.
 
 ## Project Structure
 
-- `ClipwellWin\Models`: persisted app and clipboard data
-- `ClipwellWin\Services`: clipboard processing, database, settings, hotkey window, URL preview, syntax/content detection
+- `ClipwellWin\Models`: persisted settings and clipboard entries
+- `ClipwellWin\Services`: clipboard processing, database, settings, content detection, OCR and URL preview
 - `ClipwellWin\ViewModels`: popup and entry presentation state
-- `ClipwellWin\Views`: popup, settings and detail windows
-- `ClipwellWin.Tests`: syntax, clipboard pipeline, badges and popup smoke tests
-
-## Current Verification
-
-The current implementation has been checked with:
-
-- Unit and integration tests: 33 passing tests
-- Debug build
-- Real app start without new crash log entries
-- Tray icon creation during real app start
-- Clipboard samples for plain text, URL, color, SQL, PowerShell, XML, properties, TOML/INI-style config, ENV, JSON, Dockerfile and PNG image
-- Single-instance popup trigger through a second app launch
-- History inspection confirming type detection, URL cache writes, image storage and detail badges
+- `ClipwellWin\Views`: popup, details, settings, onboarding, pinboard and eyedropper windows
+- `ClipwellWin.Tests`: service, view-model and smoke tests

@@ -4,10 +4,7 @@ using ClipwellWin.Models;
 
 namespace ClipwellWin.Services;
 
-/// <summary>
-/// Reads the current clipboard content and builds a ClipboardEntry.
-/// Must be called on the UI thread (Clipboard API requires it).
-/// </summary>
+// Must be called on the UI thread (Clipboard API requires it).
 public static class ClipboardProcessor
 {
     private static readonly Regex HexColorRx = new(@"#(?:[0-9A-Fa-f]{3,4}){1,2}\b");
@@ -43,12 +40,13 @@ public static class ClipboardProcessor
                 if (src == null) return null;
                 var bytes = OcrService.BitmapSourceToBytes(src);
                 if (bytes == null) return null;
+                var imageKind = ContentKindService.DetectImageKind(bytes);
                 return new ClipboardEntry
                 {
                     Type = EntryType.Image,
                     ImageData = bytes,
-                    ContentKind = ContentKindService.DetectImageKind(bytes),
-                    DetectionReason = $"Clipboard enthaelt Bilddaten ({ContentKindService.DetectImageKind(bytes)}).",
+                    ContentKind = imageKind,
+                    DetectionReason = $"Clipboard enthaelt Bilddaten ({imageKind}).",
                     Timestamp = DateTime.Now,
                 };
             }
@@ -72,6 +70,7 @@ public static class ClipboardProcessor
             string? language = null;
             string? hexColor = null;
             string? contentKind = null;
+            string? codeReason = null;
 
             if (UrlPreviewService.IsUrl(text))
             {
@@ -84,6 +83,7 @@ public static class ClipboardProcessor
             {
                 var analysis = SyntaxService.Analyze(text, codeDetectionMode);
                 language = analysis.language;
+                codeReason = analysis.reason;
                 if (language != null) type = EntryType.Code;
                 contentKind = ContentKindService.DetectTextKind(text, language);
                 if (language == null && contentKind is "TOML" or "INI" or "PROPS" or "ENV" or "DOCKER" or "CONFIG")
@@ -101,7 +101,7 @@ public static class ClipboardProcessor
             {
                 EntryType.Url => "URL erkannt: beginnt mit http:// oder https:// und ist einzeilig.",
                 EntryType.Code when language == null && contentKind != null => $"Als {contentKind} erkannt: typische Konfigurations- oder Dateistruktur.",
-                EntryType.Code => SyntaxService.Analyze(text, codeDetectionMode).reason,
+                EntryType.Code => codeReason ?? "",
                 EntryType.Color => $"Farbwert erkannt: {hexColor}.",
                 _ => "Als Text behandelt: keine URL-, Farb- oder Code-Regel passte.",
             };

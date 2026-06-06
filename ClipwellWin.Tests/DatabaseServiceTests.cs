@@ -123,6 +123,70 @@ public class DatabaseServiceTests
         }
     }
 
+    [Fact]
+    public void LoadAllIds_ReturnsInsertedIdsWithoutBlobs()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var id1 = db.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "a", Timestamp = DateTime.Now });
+            var id2 = db.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "b", Timestamp = DateTime.Now });
+
+            var ids = db.LoadAllIds();
+
+            Assert.Equal(2, ids.Count);
+            Assert.Contains(id1, ids);
+            Assert.Contains(id2, ids);
+        }
+        finally { DeleteDb(dbPath); }
+    }
+
+    [Fact]
+    public void SetType_StoresKindSeparatelyFromLanguage()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var id = db.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "x", Timestamp = DateTime.Now });
+
+            db.SetType(id, EntryType.Code, language: "C#", kind: "SCRIPT", reason: "manual");
+
+            var entry = db.LoadAll().Single();
+            Assert.Equal(EntryType.Code, entry.Type);
+            Assert.Equal("C#", entry.Language);
+            Assert.Equal("SCRIPT", entry.ContentKind);
+        }
+        finally { DeleteDb(dbPath); }
+    }
+
+    [Fact]
+    public void UpdateContent_PersistsEditedTextAndKind()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var id = db.Insert(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "old",
+                Timestamp = DateTime.Now,
+                ContentKind = "TEXT",
+                DetectionReason = "test",
+            });
+
+            db.UpdateContent(id, "edited note", "NOTE", "Notiz manuell bearbeitet.");
+
+            var entry = db.LoadAll().Single();
+            Assert.Equal("edited note", entry.Content);
+            Assert.Equal("NOTE", entry.ContentKind);
+            Assert.Equal("Notiz manuell bearbeitet.", entry.DetectionReason);
+        }
+        finally { DeleteDb(dbPath); }
+    }
+
     private static string TempDbPath()
         => Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
 

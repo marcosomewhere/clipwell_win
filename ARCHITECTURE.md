@@ -1,112 +1,86 @@
-# Clipwell Windows – Architektur
+# Clipwell Windows - Architecture
 
-## Tech-Stack
+## Stack
 
-| Schicht | Technologie |
-|---|---|
-| Framework | .NET 8, WPF (`net8.0-windows10.0.19041.0`) |
-| UI-Bibliothek | WPF-UI 4.3.0 (NuGet-ID: `WPF-UI` mit Dash, Owner: Lepo) |
-| Tray | WinForms `NotifyIcon` (`UseWindowsForms=true`) |
-| Datenbank | SQLite via `Microsoft.Data.Sqlite 8.0.10`, WAL-Mode |
-| OCR | `Windows.Media.Ocr.OcrEngine` (WinRT, requires Windows 10+) |
-| Datenpfade | DB: `%APPDATA%\Clipwell\history.db` – Settings: `%APPDATA%\Clipwell\settings.json` |
+| Layer | Technology |
+| --- | --- |
+| Framework | .NET 8, WPF, `net8.0-windows10.0.19041.0` |
+| UI library | WPF-UI 4.3.0 |
+| Tray | WinForms `NotifyIcon` |
+| Database | `Microsoft.Data.Sqlite 8.0.10`, SQLite WAL |
+| OCR | `Windows.Media.Ocr.OcrEngine` |
+| Tests | xUnit 2.9.2 |
 
-## Schichten
+## Project Layout
 
-```
-┌──────────────────────────────────────────────────┐
-│  Views  (WPF XAML)                               │
-│  PopupWindow · DetailWindow · SettingsWindow     │
-│  OnboardingWindow · PinboardWindow               │
-│  EyedropperWindow                                │
-├──────────────────────────────────────────────────┤
-│  ViewModels  (MVVM)                              │
-│  PopupViewModel · EntryViewModel · ViewModelBase │
-├──────────────────────────────────────────────────┤
-│  Services                                        │
-│  DatabaseService · ClipboardProcessor            │
-│  SyntaxService · ContentKindService              │
-│  SensitiveContentService · OcrService            │
-│  UrlPreviewService · SettingsService             │
-│  MessageWindowService                            │
-├──────────────────────────────────────────────────┤
-│  Models                                          │
-│  ClipboardEntry · AppSettings · EntryType        │
-│  ThemeMode · HotkeyAction · CodeDetectionMode    │
-│  (AppSettings: KeyPin/Details/QuickNote/Pinboard)│
-├──────────────────────────────────────────────────┤
-│  App.xaml.cs  (Anwendungssteuerung)              │
-│  Lifecycle, Tray, Hotkey, Clipboard-Event-Chain  │
-├──────────────────────────────────────────────────┤
-│  NativeMethods.cs  (P/Invoke)                    │
-│  Clipboard-Hook, Hotkey, DWM, SendInput          │
-└──────────────────────────────────────────────────┘
+```text
+ClipwellWin/
+  App.xaml.cs                 lifecycle, tray, hotkeys, clipboard chain
+  NativeMethods.cs            Win32 interop
+  Models/                     persisted settings and entries
+  Services/                   storage, processing, detection, OCR, URL preview
+  ViewModels/                 popup and entry state
+  Views/                      WPF windows
+ClipwellWin.Tests/            unit, integration and smoke tests
 ```
 
-## Bekannte WPF-Fallstricke
+## Main Windows
 
-| Problem | Loesung |
-|---|---|
-| `TextBlock.MaxLines` existiert nicht in WPF | `MaxHeight + ClipToBounds="True"` auf umschliessender `Border` |
-| `StackPanel.Spacing` erst ab .NET 9 | `Margin` auf Child-Elementen |
-| Namespace-Konflikte: `Brush`, `Color`, `Point`, `BitmapDecoder` | `using`-Aliases in betroffenen Dateien |
-| `DataTemplate.Triggers` kann kein `TargetName` | `DataTrigger` mit `TargetName` in `DataTemplate.Triggers` – funktioniert nur mit Named Elements |
-| Hover-Zustand in DataTemplate | `IsHovered` Property im ViewModel + `DataTrigger` |
-| `MouseEventArgs`/`KeyEventArgs` in XAML-Code-behind (WPF + WinForms aktiv) | Vollqualifizierte Typen in Methodensignaturen: `System.Windows.Input.MouseEventArgs` |
-| `FlowDocument` rendert grosse Dateien langsam (kein Virtualisieren) | `SyntaxService.HighlightCore(maxLines)` + `AppendLines` via `Dispatcher.InvokeAsync(Background)` |
+| Window | Purpose |
+| --- | --- |
+| `PopupWindow` | Main history popup, search, filters, bulk actions, quick note, pinboard and eyedropper entry points |
+| `DetailWindow` | Text/code editor, image editor, OCR view and color details |
+| `SettingsWindow` | Hotkey, theme, limits, export/import, privacy, backup and shortcuts |
+| `OnboardingWindow` | First-run flow with hotkey test |
+| `PinboardWindow` | Always-on-top list of pinned entries |
+| `EyedropperWindow` | Transparent full-screen color picker |
 
-## Clipboard-Event-Kette
+## Services
 
-```
-Clipboard-Aenderung (OS)
-  └─> MessageWindowService.WM_CLIPBOARDUPDATE
-        └─> App.OnClipboardChanged
-              ├─> Inkognito-Check (global / App / Domain)
-              ├─> SensitiveContentService.IsSensitive
-              ├─> ClipboardProcessor.BuildEntry
-              ├─> PopupViewModel.AddEntry
-              │     ├─> Purge nach Anzahl
-              │     └─> Purge nach Alter
-              ├─> [Bild] OcrService.RecognizeAsync (async)
-              └─> [URL]  UrlPreviewService.FetchAsync (async)
-                          └─> vm.UrlState = Loading -> Loaded/Failed
-```
+| Service | Responsibility |
+| --- | --- |
+| `DatabaseService` | SQLite schema, CRUD, export/import, URL cache, backups, purge and secure delete |
+| `ClipboardProcessor` | Converts current clipboard data into `ClipboardEntry` |
+| `SyntaxService` | Code-language detection |
+| `ContentKindService` | Badges and content-kind detection |
+| `SensitiveContentService` | API keys, tokens, passwords and private-key patterns |
+| `OcrService` | Async WinRT OCR for images |
+| `UrlPreviewService` | Title/favicon fetch with cache and private-target guard |
+| `SettingsService` | JSON settings load/save |
+| `MessageWindowService` | Hidden window for `WM_CLIPBOARDUPDATE` |
 
-## Eyedropper-Kette
+## Clipboard Flow
 
-```
-PopupWindow „Eyedropper"-Button
-  └─> EyedropperWindow (vollbild-transparent, Topmost)
-        ├─> GDI GetPixel bei MouseMove → Farbvorschau
-        └─> Linksklick → PickedHex gesetzt, DialogResult=true
-              └─> App.CopyColorToClipboard(hex)    // in Clipboard
-              └─> PopupViewModel.AddEntry(Color)   // in History
-```
-
-## Pinboard-Kette
-
-```
-Tray „Pinboard" / Ctrl+B im Popup
-  └─> App.TogglePinboard()
-        └─> PinboardWindow.Show() / Hide()
-              ├─> Entries.CollectionChanged → Refresh()  // live
-              └─> PasteBtn → App.PasteEntry(vm, false)
+```text
+Windows clipboard change
+  -> MessageWindowService.WM_CLIPBOARDUPDATE
+  -> App.OnClipboardChanged
+     -> incognito checks
+     -> ClipboardProcessor.BuildEntry
+     -> PopupViewModel.AddEntry
+        -> duplicate latest image suppression
+        -> purge by count, age and optional DB size
+     -> image OCR async, then sensitive-content filter
+     -> URL preview async only when enabled and safe to fetch
 ```
 
-## Filter-Logik (PopupViewModel.Filter)
+## Popup Filtering
 
-Reihenfolge:
-1. `TypeFilter` (Chip-Auswahl: null = Alle)
-2. `ShowPinnedOnly` (Gepinnt-Chip)
-3. Such-Praefix-Parsing: `type:`, `kind:`, `domain:`, `pinned:`
-4. Volltextsuche: Content, OcrText, UrlTitle, Language
+Filter order in `PopupViewModel.Filter`:
 
-## Datenbankschema (History-Tabelle)
+1. `TypeFilter`
+2. `ShowPinnedOnly`
+3. Prefix parsing: `type:`, `kind:`, `domain:`, `pinned:`
+4. Full-text search across content, OCR text, URL title and language
+
+List groups are calculated by `EntryViewModel.GroupLabel`: pinned, today, yesterday, this week and older.
+
+## Database
 
 ```sql
 CREATE TABLE History (
     Id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    Type            INTEGER NOT NULL,   -- EntryType enum
+    Type            INTEGER NOT NULL,
     Content         TEXT,
     ImageData       BLOB,
     OcrText         TEXT,
@@ -117,13 +91,27 @@ CREATE TABLE History (
     ContentKind     TEXT,
     DetectionReason TEXT,
     IsPinned        INTEGER NOT NULL DEFAULT 0,
-    Timestamp       TEXT NOT NULL      -- ISO 8601
+    Timestamp       TEXT NOT NULL
 );
 
 CREATE TABLE UrlCache (
     Url      TEXT PRIMARY KEY,
     Title    TEXT,
     Favicon  BLOB,
-    CachedAt TEXT NOT NULL             -- 7-Tage-TTL
+    CachedAt TEXT NOT NULL
 );
 ```
+
+Useful index:
+
+```sql
+CREATE INDEX IF NOT EXISTS IX_History_Pinned_Timestamp
+ON History(IsPinned, Timestamp);
+```
+
+## WPF Notes
+
+- Do not use `StackPanel.Spacing`; this project targets .NET 8.
+- Use aliases or fully qualified names where WPF and WinForms types collide.
+- Keep code-behind where the existing windows already use it.
+- Avoid screenshot automation through PowerShell/GDI/WinAPI.

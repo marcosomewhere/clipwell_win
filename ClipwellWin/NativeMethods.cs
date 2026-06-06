@@ -140,6 +140,9 @@ internal static class NativeMethods
 
     // DWM attributes for Win11 Mica/Acrylic
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    public const int DWMWA_BORDER_COLOR = 34;
+    public const int DWMWA_CAPTION_COLOR = 35;
+    public const int DWMWA_TEXT_COLOR = 36;
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
 
     public static void SendCtrlV()
@@ -221,5 +224,12 @@ internal static class NativeMethods
     {
         int value = dark ? 1 : 0;
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
+    }
+
+    public static void SetWindowFrameColors(IntPtr hwnd, int captionColor, int textColor, int borderColor)
+    {
+        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
+        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
+        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
     }
 }

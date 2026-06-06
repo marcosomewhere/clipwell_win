@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using ClipwellWin.Models;
 using ClipwellWin.ViewModels;
 using Microsoft.Win32;
@@ -25,10 +26,14 @@ public partial class PopupWindow : Window
     private const double DefaultPopupHeight = 720;
     private const double MinimumPopupWidth = 500;
     private const double MinimumPopupHeight = 620;
+    private const double TaskbarPopupGap = 8;
 
     private readonly PopupViewModel _vm;
     private readonly App _app = null!;
+    private readonly DispatcherTimer _timestampTimer;
     private ScrollViewer? _entryScrollViewer;
+
+    internal DateTime LastHiddenAtUtc { get; private set; } = DateTime.MinValue;
 
     public PopupWindow(PopupViewModel vm, App app)
     {
@@ -36,6 +41,25 @@ public partial class PopupWindow : Window
         _app = app;
         DataContext = vm;
         InitializeComponent();
+
+        _timestampTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMinutes(1),
+        };
+        _timestampTimer.Tick += (_, _) => RefreshVisibleTimestamps();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible)
+            {
+                RefreshVisibleTimestamps();
+                _timestampTimer.Start();
+            }
+            else
+            {
+                LastHiddenAtUtc = DateTime.UtcNow;
+                _timestampTimer.Stop();
+            }
+        };
 
         var s = _app?.CurrentSettings;
         Width  = Math.Max(MinimumPopupWidth, s?.PopupWidth  > 0 ? s.PopupWidth  : DefaultPopupWidth);
@@ -61,8 +85,8 @@ public partial class PopupWindow : Window
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
         var tint = _app?.IsEffectiveDarkTheme == false
-            ? Color.FromArgb(230, 248, 250, 248)
-            : Color.FromArgb(220, 18, 18, 30);
+            ? Color.FromArgb(240, 250, 250, 248)
+            : Color.FromArgb(238, 23, 26, 30);
         NativeMethods.EnableAcrylic(hwnd, tint);
         NativeMethods.SetImmersiveDarkMode(hwnd, _app?.IsEffectiveDarkTheme == true);
     }
@@ -105,9 +129,23 @@ public partial class PopupWindow : Window
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+        RefreshVisibleTimestamps();
         SearchBox.Focus();
         SelectFirst();
         PlayOpenAnimation();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _timestampTimer.Stop();
+        base.OnClosed(e);
+    }
+
+    private void RefreshVisibleTimestamps()
+    {
+        var visibleEntries = EntryList.Items.OfType<EntryViewModel>().ToList();
+        if (visibleEntries.Count == 0) return;
+        _vm.RefreshTimestamps(visibleEntries);
     }
 
     public void PositionAtCursor()
@@ -151,6 +189,58 @@ public partial class PopupWindow : Window
         if (top  + Height > workBottom) top  = cy - Height - 4;
         if (left < workLeft) left = workLeft + 4;
         if (top  < workTop)  top  = workTop  + 4;
+
+        Left = left;
+        Top  = top;
+    }
+
+    public void PositionAboveTaskbar()
+    {
+        var s = _app?.CurrentSettings;
+        if (s == null) return;
+
+        ClampSizeToCurrentMonitor();
+
+        NativeMethods.GetCursorPos(out var cursor);
+        var monitorHandle = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        var mi = new NativeMethods.MONITORINFO
+            { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        NativeMethods.GetMonitorInfo(monitorHandle, ref mi);
+
+        double scaleX = 1, scaleY = 1;
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget != null)
+        {
+            scaleX = source.CompositionTarget.TransformFromDevice.M11;
+            scaleY = source.CompositionTarget.TransformFromDevice.M22;
+        }
+
+        double workLeft   = mi.rcWork.Left   * scaleX;
+        double workTop    = mi.rcWork.Top    * scaleY;
+        double workRight  = mi.rcWork.Right  * scaleX;
+        double workBottom = mi.rcWork.Bottom * scaleY;
+        double cx = cursor.X * scaleX;
+
+        double minLeft = workLeft + TaskbarPopupGap;
+        double maxLeft = workRight - Width - TaskbarPopupGap;
+        double left = cx - Width / 2;
+        if (maxLeft >= minLeft)
+            left = Math.Min(Math.Max(left, minLeft), maxLeft);
+        else
+            left = workLeft;
+
+        double minTop = workTop + TaskbarPopupGap;
+        double maxTop = workBottom - Height - TaskbarPopupGap;
+        double top = mi.rcWork.Bottom < mi.rcMonitor.Bottom
+            ? workBottom - Height - TaskbarPopupGap
+            : mi.rcWork.Top > mi.rcMonitor.Top
+                ? workTop + TaskbarPopupGap
+                : workBottom - Height - TaskbarPopupGap;
+
+        if (maxTop >= minTop)
+            top = Math.Min(Math.Max(top, minTop), maxTop);
+        else
+            top = workTop;
 
         Left = left;
         Top  = top;
@@ -848,10 +938,9 @@ public partial class PopupWindow : Window
     {
         var details = new DetailWindow(vm)
         {
-            Owner = this,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
         };
-        details.ShowDialog();
+        details.Show();
     }
 
     private void MoveSelection(int delta)

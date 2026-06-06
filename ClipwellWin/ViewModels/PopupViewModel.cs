@@ -102,6 +102,16 @@ public class PopupViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedCount));
     }
 
+    public void UnpinAllPinned()
+    {
+        foreach (var vm in Entries.Where(e => e.IsPinned).ToList())
+        {
+            vm.IsPinned = false;
+            _db.SetPinned(vm.Id, false);
+        }
+        _view.Refresh();
+    }
+
     public List<ClipboardEntry> GetSelectedEntries()
         => Entries.Where(e => e.IsSelected).Select(e => e.Entry).ToList();
 
@@ -148,7 +158,7 @@ public class PopupViewModel : ViewModelBase
         if (_maxAgeInDays() > 0)
             _db.PurgeByAge(_maxAgeInDays());
 
-        var dbIds = _db.LoadAll().Select(e => e.Id).ToHashSet();
+        var dbIds = _db.LoadAllIds();
         var toRemove = Entries.Where(e => !dbIds.Contains(e.Id)).ToList();
         foreach (var r in toRemove) Entries.Remove(r);
     }
@@ -208,9 +218,13 @@ public class PopupViewModel : ViewModelBase
         string? language = type == EntryType.Code
             ? SyntaxService.DetectLanguage(vm.Content ?? "", CodeDetectionMode.Aggressive) ?? "Code"
             : null;
+        // ContentKind ist ein Badge, nicht der Sprachname – separat ableiten.
+        string? kind = type == EntryType.Code
+            ? ContentKindService.DetectTextKind(vm.Content ?? "", language)
+            : null;
         var reason = $"Manuell als {type} behandelt.";
-        vm.SetType(type, language, reason);
-        _db.SetType(vm.Id, type, language, reason);
+        vm.SetType(type, language, kind, reason);
+        _db.SetType(vm.Id, type, language, kind, reason);
         _view.Refresh();
     }
 
@@ -244,6 +258,13 @@ public class PopupViewModel : ViewModelBase
         OnPropertyChanged(nameof(TypeFilter));
         OnPropertyChanged(nameof(ShowPinnedOnly));
         OnPropertyChanged(nameof(SearchText));
+        _view.Refresh();
+    }
+
+    public void RefreshTimestamps(IEnumerable<EntryViewModel>? entries = null)
+    {
+        foreach (var vm in (entries ?? Entries).ToList())
+            vm.RefreshTimestamp();
         _view.Refresh();
     }
 

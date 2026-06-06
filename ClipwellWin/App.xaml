@@ -18,22 +18,36 @@
             <sys:Double x:Key="EntryFontSizeMeta">11</sys:Double>
             <Thickness x:Key="FilterChipPadding">10,4</Thickness>
             <sys:Double x:Key="FilterChipFontSize">11</sys:Double>
-            <SolidColorBrush x:Key="PopupBackgroundBrush" Color="#F21E1E2E" />
-            <SolidColorBrush x:Key="PopupBorderBrush" Color="#22FFFFFF" />
-            <SolidColorBrush x:Key="PopupPanelBrush" Color="#0AFFFFFF" />
-            <SolidColorBrush x:Key="PopupPanelBorderBrush" Color="#15FFFFFF" />
-            <SolidColorBrush x:Key="PopupTextPrimaryBrush" Color="#FFFFFFFF" />
-            <SolidColorBrush x:Key="PopupTextSecondaryBrush" Color="#CCFFFFFF" />
-            <SolidColorBrush x:Key="PopupTextMutedBrush" Color="#88FFFFFF" />
-            <SolidColorBrush x:Key="PopupTextSubtleBrush" Color="#66FFFFFF" />
-            <SolidColorBrush x:Key="PopupTextFaintBrush" Color="#55FFFFFF" />
-            <SolidColorBrush x:Key="PopupHoverBrush" Color="#18FFFFFF" />
-            <SolidColorBrush x:Key="PopupSelectedBrush" Color="#28FFFFFF" />
-            <SolidColorBrush x:Key="PopupChipBrush" Color="#18FFFFFF" />
-            <SolidColorBrush x:Key="PopupChipCheckedBrush" Color="#44FFFFFF" />
-            <SolidColorBrush x:Key="PopupBadgeBrush" Color="#2AFFFFFF" />
-            <SolidColorBrush x:Key="PopupBadgeSecondaryBrush" Color="#18FFFFFF" />
+            <SolidColorBrush x:Key="PopupBackgroundBrush" Color="#FF171A1E" />
+            <SolidColorBrush x:Key="PopupBorderBrush" Color="#FF3A414A" />
+            <SolidColorBrush x:Key="PopupPanelBrush" Color="#FF23272D" />
+            <SolidColorBrush x:Key="PopupPanelBorderBrush" Color="#FF3A414A" />
+            <SolidColorBrush x:Key="PopupTextPrimaryBrush" Color="#FFF7F8FA" />
+            <SolidColorBrush x:Key="PopupTextSecondaryBrush" Color="#D8F7F8FA" />
+            <SolidColorBrush x:Key="PopupTextMutedBrush" Color="#A8F7F8FA" />
+            <SolidColorBrush x:Key="PopupTextSubtleBrush" Color="#8AF7F8FA" />
+            <SolidColorBrush x:Key="PopupTextFaintBrush" Color="#66F7F8FA" />
+            <SolidColorBrush x:Key="PopupHoverBrush" Color="#FF2A3037" />
+            <SolidColorBrush x:Key="PopupSelectedBrush" Color="#FF303740" />
+            <SolidColorBrush x:Key="PopupChipBrush" Color="#FF2B3037" />
+            <SolidColorBrush x:Key="PopupChipCheckedBrush" Color="#FF4A535E" />
+            <SolidColorBrush x:Key="PopupBadgeBrush" Color="#FF4A535E" />
+            <SolidColorBrush x:Key="PopupBadgeSecondaryBrush" Color="#FF343B43" />
             <SolidColorBrush x:Key="PopupShadowBrush" Color="#FF000000" />
+
+            <SolidColorBrush x:Key="OnboardingBackgroundBrush" Color="#FFFAFAF8" />
+            <SolidColorBrush x:Key="OnboardingSurfaceBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="OnboardingSurfaceAltBrush" Color="#FFF3F4F6" />
+            <SolidColorBrush x:Key="OnboardingBorderBrush" Color="#FFE0E2E6" />
+            <SolidColorBrush x:Key="OnboardingTextPrimaryBrush" Color="#FF15171A" />
+            <SolidColorBrush x:Key="OnboardingTextSecondaryBrush" Color="#B815171A" />
+            <SolidColorBrush x:Key="OnboardingTextMutedBrush" Color="#8A15171A" />
+            <SolidColorBrush x:Key="OnboardingInputBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="OnboardingInputFocusedBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="OnboardingButtonBrush" Color="#FF24282D" />
+            <SolidColorBrush x:Key="OnboardingButtonHoverBrush" Color="#FF343A40" />
+            <SolidColorBrush x:Key="OnboardingButtonTextBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="OnboardingAccentBrush" Color="#FF7BA82A" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

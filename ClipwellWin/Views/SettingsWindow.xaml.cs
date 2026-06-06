@@ -25,7 +25,7 @@ public partial class SettingsWindow : FluentWindow
         _app = app;
         InitializeComponent();
         LoadCurrentSettings();
-        VersionLabel.Text = $"Version {Assembly.GetExecutingAssembly().GetName().Version}";
+        PopulateAboutTab();
     }
 
     private void LoadCurrentSettings()
@@ -50,7 +50,7 @@ public partial class SettingsWindow : FluentWindow
             CodeDetectionMode.Aggressive   => 2,
             _                              => 1,
         };
-        MaxItemsBox.Value = s.MaxHistoryItems;
+        MaxItemsBox.Value = ClampInt(s.MaxHistoryItems, 50, 5000, 500);
         PauseSwitch.IsChecked = s.PauseMonitoring;
         RememberPositionSwitch.IsChecked = s.RememberPopupPosition;
 
@@ -58,17 +58,24 @@ public partial class SettingsWindow : FluentWindow
         {
             ThemeMode.Dark    => 1,
             ThemeMode.Light   => 2,
-            ThemeMode.Compact => 3,
             _                 => 0,
         };
+        if (s.Theme == ThemeMode.Compact)
+        {
+            s.Theme = ThemeMode.Light;
+            ThemeBox.SelectedIndex = 2;
+            _app.ApplyTheme(s.Theme);
+            _app.SaveSettings();
+        }
 
         IncognitoSwitch.IsChecked      = s.IncognitoMode;
         FilterSensitiveSwitch.IsChecked = s.FilterSensitiveContent;
+        UrlPreviewSwitch.IsChecked      = s.UrlPreviewEnabled;
         IncognitoAppsBox.Text           = string.Join(", ", s.IncognitoApps);
         IncognitoDomainsBox.Text        = string.Join(", ", s.IncognitoDomains);
 
-        MaxAgeBox.Value  = s.MaxAgeInDays;
-        MaxSizeBox.Value = s.MaxSizeInMb;
+        MaxAgeBox.Value  = ClampInt(s.MaxAgeInDays, 0, 3650, 0);
+        MaxSizeBox.Value = ClampInt(s.MaxSizeInMb, 0, 10240, 0);
 
         AutoBackupSwitch.IsChecked = s.AutoBackupEnabled;
         AutoBackupDirBox.Text = s.AutoBackupDirectory;
@@ -194,7 +201,7 @@ public partial class SettingsWindow : FluentWindow
     private void SaveGeneralSettings()
     {
         var s = _app.CurrentSettings;
-        s.MaxHistoryItems = (int)(MaxItemsBox.Value ?? 500);
+        s.MaxHistoryItems = ClampInt((int)(MaxItemsBox.Value ?? 500), 50, 5000, 500);
         s.HotkeyAction = HotkeyActionBox.SelectedIndex == 1
             ? HotkeyAction.PasteLatest
             : HotkeyAction.OpenMenu;
@@ -223,7 +230,6 @@ public partial class SettingsWindow : FluentWindow
         {
             1 => ThemeMode.Dark,
             2 => ThemeMode.Light,
-            3 => ThemeMode.Compact,
             _ => ThemeMode.System,
         };
         _app.CurrentSettings.Theme = mode;
@@ -240,6 +246,12 @@ public partial class SettingsWindow : FluentWindow
     private void FilterSensitive_Click(object sender, RoutedEventArgs e)
     {
         _app.CurrentSettings.FilterSensitiveContent = FilterSensitiveSwitch.IsChecked == true;
+        _app.SaveSettings();
+    }
+
+    private void UrlPreview_Click(object sender, RoutedEventArgs e)
+    {
+        _app.CurrentSettings.UrlPreviewEnabled = UrlPreviewSwitch.IsChecked == true;
         _app.SaveSettings();
     }
 
@@ -262,10 +274,17 @@ public partial class SettingsWindow : FluentWindow
 
     private void SaveStorageLimits_Click(object sender, RoutedEventArgs e)
     {
-        _app.CurrentSettings.MaxAgeInDays = (int)(MaxAgeBox.Value  ?? 0);
-        _app.CurrentSettings.MaxSizeInMb  = (int)(MaxSizeBox.Value ?? 0);
+        _app.CurrentSettings.MaxAgeInDays = ClampInt((int)(MaxAgeBox.Value ?? 0), 0, 3650, 0);
+        _app.CurrentSettings.MaxSizeInMb  = ClampInt((int)(MaxSizeBox.Value ?? 0), 0, 10240, 0);
         _app.SaveSettings();
         ShowInfo("Gespeichert.");
+    }
+
+    private static int ClampInt(int value, int min, int max, int fallback)
+    {
+        if (value < min || value > max)
+            return fallback;
+        return value;
     }
 
     private void ExportJson_Click(object sender, RoutedEventArgs e)
@@ -394,26 +413,6 @@ public partial class SettingsWindow : FluentWindow
             : "Noch kein automatisches Backup erstellt.";
     }
 
-    private void TestCtrlV_Click(object sender, RoutedEventArgs e)
-    {
-        PreparePasteTest();
-        _ = Task.Delay(140).ContinueWith(_ => Dispatcher.Invoke(NativeMethods.SendCtrlV));
-    }
-
-    private void TestWinV_Click(object sender, RoutedEventArgs e)
-    {
-        PreparePasteTest();
-        _ = Task.Delay(140).ContinueWith(_ => Dispatcher.Invoke(NativeMethods.SendWinV));
-    }
-
-    private void PreparePasteTest()
-    {
-        App.TrySetClipboardText($"Clipwell Paste-Test {DateTime.Now:HH:mm:ss}");
-        PasteTestBox.Focus();
-        Keyboard.Focus(PasteTestBox);
-        PasteTestBox.CaretIndex = PasteTestBox.Text.Length;
-    }
-
     private void SaveShortcuts_Click(object sender, RoutedEventArgs e)
     {
         var s = _app.CurrentSettings;
@@ -448,15 +447,23 @@ public partial class SettingsWindow : FluentWindow
         ShowInfo("Tastenkürzel zurückgesetzt.");
     }
 
-    private void GitHubLink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    private void PopulateAboutTab()
     {
-        Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
-        e.Handled = true;
+        AboutLogoImage.Source = App.CreateAppIconImageSource(192);
+
+        var asm = Assembly.GetExecutingAssembly();
+        var ver = asm.GetName().Version;
+        AboutVersionLabel.Text = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.0.0";
+
+        var buildTime = File.GetLastWriteTime(asm.Location);
+        AboutBuildLabel.Text = buildTime.ToString("yyyy.MM.dd.HHmm");
+
+        var arch = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+        AboutPlatformLabel.Text = $"Windows 10/11 ({arch})";
     }
 
-    private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
-    {
-    }
+    private void AboutGitHub_Click(object sender, RoutedEventArgs e)
+        => Process.Start(new ProcessStartInfo("https://github.com/marcoseefeldt/clipwell-win") { UseShellExecute = true });
 
     private void ShowError(string msg) =>
         MessageBox.Show(msg, "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);

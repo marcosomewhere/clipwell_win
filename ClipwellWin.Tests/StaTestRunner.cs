@@ -23,6 +23,6 @@ internal static class StaTestRunner
         thread.Join();
 
         if (failure != null)
-            throw failure;
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 }

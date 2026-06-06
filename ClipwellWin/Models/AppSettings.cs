@@ -46,6 +46,9 @@ public class AppSettings
     // Sensible Inhalte
     public bool FilterSensitiveContent { get; set; } = true;
 
+    // URL-Vorschau (Netzwerkabruf von Titel/Favicon kopierter URLs)
+    public bool UrlPreviewEnabled { get; set; } = true;
+
     // Popup-Grösse und Position
     public double PopupWidth { get; set; } = 560;
     public double PopupHeight { get; set; } = 720;
@@ -64,7 +67,6 @@ public class AppSettings
     // Konfigurierbare Popup-Tastenkürzel (Taste als VK-Hex-String, z.B. "46" = F, "7B" = F12)
     public string KeyPin { get; set; } = "P";                // Ctrl+P
     public bool   KeyPinCtrl { get; set; } = true;
-    public string KeyDelete { get; set; } = "Delete";        // Delete
     public string KeyDetails { get; set; } = "F2";          // F2 = Details öffnen
     public string KeyQuickNote { get; set; } = "N";          // Ctrl+N
     public bool   KeyQuickNoteCtrl { get; set; } = true;
