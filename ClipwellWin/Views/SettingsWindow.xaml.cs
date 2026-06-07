@@ -479,7 +479,8 @@ public partial class SettingsWindow : FluentWindow
         var ver = asm.GetName().Version;
         AboutVersionLabel.Text = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.0.0";
 
-        var buildTime = File.GetLastWriteTime(asm.Location);
+        var appPath = Environment.ProcessPath ?? AppContext.BaseDirectory;
+        var buildTime = File.GetLastWriteTime(appPath);
         AboutBuildLabel.Text = buildTime.ToString("yyyy.MM.dd.HHmm");
 
     }
