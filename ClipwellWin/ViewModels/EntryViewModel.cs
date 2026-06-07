@@ -104,19 +104,19 @@ public class EntryViewModel : ViewModelBase
         get
         {
             if (_thumbnail != null || Entry.ImageData == null) return _thumbnail;
-            _thumbnail = LoadThumbnail(Entry.ImageData);
+            _thumbnail = LoadBitmapImage(Entry.ImageData, 80);
             return _thumbnail;
         }
     }
 
-    private static BitmapImage? LoadThumbnail(byte[] data)
+    private static BitmapImage? LoadBitmapImage(byte[] data, int decodeWidth)
     {
         try
         {
             var img = new BitmapImage();
             img.BeginInit();
             img.StreamSource = new MemoryStream(data);
-            img.DecodePixelWidth = 80;
+            img.DecodePixelWidth = decodeWidth;
             img.CacheOption = BitmapCacheOption.OnLoad;
             img.EndInit();
             img.Freeze();
@@ -133,7 +133,7 @@ public class EntryViewModel : ViewModelBase
         {
             if (Entry.UrlFavicon == _lastFavicon) return _favicon;
             _lastFavicon = Entry.UrlFavicon;
-            _favicon = Entry.UrlFavicon == null ? null : LoadImage(Entry.UrlFavicon);
+            _favicon = Entry.UrlFavicon == null ? null : LoadBitmapImage(Entry.UrlFavicon, 16);
             return _favicon;
         }
     }
@@ -189,21 +189,6 @@ public class EntryViewModel : ViewModelBase
         }
     }
 
-    private static BitmapImage? LoadImage(byte[] data)
-    {
-        try
-        {
-            var img = new BitmapImage();
-            img.BeginInit();
-            img.StreamSource = new MemoryStream(data);
-            img.DecodePixelWidth = 16;
-            img.CacheOption = BitmapCacheOption.OnLoad;
-            img.EndInit();
-            img.Freeze();
-            return img;
-        }
-        catch { return null; }
-    }
 
     private Brush? _hexBrush;
     private bool _hexBrushLoaded;

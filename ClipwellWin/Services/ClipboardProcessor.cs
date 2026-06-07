@@ -225,7 +225,9 @@ public static class ClipboardProcessor
            && bytes[7] == 0x0A;
 
     private static readonly Regex ScriptStyleRx = new(
-        @"<(script|style)\b[^>]*>[\s\S]*?</\1\s*>", RegexOptions.IgnoreCase);
+        @"<(script|style)\b[^>]*>[\s\S]*?</\1\s*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex HtmlTagRx = new(@"<[^>]*>", RegexOptions.Compiled);
+    private static readonly Regex MultiSpaceRx = new(@"\s{2,}", RegexOptions.Compiled);
 
     private static string? StripHtml(string? html)
     {
@@ -233,7 +235,7 @@ public static class ClipboardProcessor
         var bodyIdx = html.IndexOf("<body", StringComparison.OrdinalIgnoreCase);
         if (bodyIdx >= 0) html = html[bodyIdx..];
         html = ScriptStyleRx.Replace(html, " ");
-        html = Regex.Replace(html, "<[^>]*>", " ");
-        return Regex.Replace(html, @"\s{2,}", " ").Trim();
+        html = HtmlTagRx.Replace(html, " ");
+        return MultiSpaceRx.Replace(html, " ").Trim();
     }
 }

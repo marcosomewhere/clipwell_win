@@ -211,10 +211,10 @@ public class PopupViewModel : ViewModelBase
         Entries.Remove(vm);
     }
 
-    public void SecureDelete(EntryViewModel vm, DatabaseService db)
+    public void SecureDelete(EntryViewModel vm)
     {
         Entries.Remove(vm);
-        _ = System.Threading.Tasks.Task.Run(() => db.SecureDelete(vm.Id));
+        _ = System.Threading.Tasks.Task.Run(() => _db.SecureDelete(vm.Id));
     }
 
     public void AddQuickNote(string text)

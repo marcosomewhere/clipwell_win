@@ -416,7 +416,7 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                         Background="{DynamicResource ControlFillColorDefaultBrush}">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="210" />
+                            <ColumnDefinition Width="300" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
@@ -537,8 +537,6 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <TextBlock Text="Quellcode &amp; Updates"
                                                    FontWeight="SemiBold" FontSize="13" />
-                                        <TextBlock Text="github.com/marcosomewhere/clipwell_win"
-                                                   FontSize="11.5" Opacity="0.50" Margin="0,2,0,0" />
                                     </StackPanel>
                                     <ui:Button Grid.Column="1"
                                                Click="AboutGitHub_Click"

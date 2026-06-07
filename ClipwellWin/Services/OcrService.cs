@@ -53,6 +53,8 @@ public static class OcrService
         catch { return null; }
     }
 
+    private const int MaxImageSizeBytes = 2 * 1024 * 1024;
+
     public static byte[]? BitmapSourceToBytes(BitmapSource src)
     {
         try
@@ -63,7 +65,7 @@ public static class OcrService
             using var ms = new MemoryStream();
             encoder.Save(ms);
             var bytes = ms.ToArray();
-            return bytes.Length <= 2 * 1024 * 1024 ? bytes : null;
+            return bytes.Length <= MaxImageSizeBytes ? bytes : null;
         }
         catch { return null; }
     }

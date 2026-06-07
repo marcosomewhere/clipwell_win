@@ -5,6 +5,14 @@ namespace ClipwellWin.Services;
 
 public static class SyntaxService
 {
+    private static readonly Regex CodeAnchorRx = new(
+        @"^\s*(#!|using\s+[\w.]+;|namespace\s+\w|#include\s+[<""]|package\s+\w+|import\s+[\w.{*]|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+|func\s+\w+\(|fn\s+\w+|\$env:|Get-\w+|Set-\w+)",
+        RegexOptions.Multiline | RegexOptions.Compiled);
+
+    private static readonly Regex StrongCodeSignalRx = new(
+        @"(=>|==|!=|<=|>=|::|;\s*$|^\s*(SELECT|INSERT|UPDATE|DELETE)\b)",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
+
     private static readonly (Regex pattern, string label)[] LangPatterns =
     [
         (new(@"^#!/usr/bin/env python|^import \w|^from \w+ import|^\s*def \w+\(|^\s*class \w+:", RegexOptions.Multiline), "Python"),
@@ -78,7 +86,7 @@ public static class SyntaxService
         if (Regex.IsMatch(text, @"^\s*<(!DOCTYPE|/?[a-zA-Z][\w:-]*)(\s|>|/>)", RegexOptions.Multiline))
             return true;
 
-        if (Regex.IsMatch(text, @"^\s*(#!|using\s+[\w.]+;|namespace\s+\w|#include\s+[<""]|package\s+\w+|import\s+[\w.{*]|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+|func\s+\w+\(|fn\s+\w+|\$env:|Get-\w+|Set-\w+)", RegexOptions.Multiline))
+        if (CodeAnchorRx.IsMatch(text))
             return true;
 
         if (Regex.IsMatch(text, @"\b(SELECT\s+.+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b", RegexOptions.IgnoreCase))
@@ -118,7 +126,7 @@ public static class SyntaxService
         if (!text.Contains('\n') || HasStrongCodeSignal(text))
             return false;
 
-        if (Regex.IsMatch(text, @"^\s*(#!|using\s+[\w.]+;|namespace\s+\w|#include\s+[<""]|package\s+\w+|import\s+[\w.{*]|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+|func\s+\w+\(|fn\s+\w+|\$env:|Get-\w+|Set-\w+)", RegexOptions.Multiline))
+        if (CodeAnchorRx.IsMatch(text))
             return false;
 
         var lines = text.Split('\n')
@@ -147,7 +155,7 @@ public static class SyntaxService
     }
 
     private static bool HasStrongCodeSignal(string text)
-        => Regex.IsMatch(text, @"(=>|==|!=|<=|>=|::|;\s*$|^\s*(SELECT|INSERT|UPDATE|DELETE)\b)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        => StrongCodeSignalRx.IsMatch(text);
 
     private static bool HasLanguageAnchor(string text, string label) => label switch
     {

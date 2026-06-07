@@ -5,6 +5,21 @@ namespace ClipwellWin.Services;
 
 public static class ContentKindService
 {
+    private static readonly Regex TomlSectionRx    = new(@"^\s*\[[\w.-]+\]\s*$",                                                               RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex TomlKeyValueRx   = new(@"^\s*[\w.-]+\s*=\s*.+$",                                                            RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex XmlDeclRx        = new(@"^\s*<\?xml\b",                                                                      RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex XmlOpenTagRx     = new(@"^\s*<[A-Za-z][\w:.-]*(\s|>|/>)",                                                   RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex XmlCloseTagRx    = new(@"</[A-Za-z][\w:.-]*>\s*$",                                                          RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex HtmlDoctypeRx    = new(@"^\s*<!doctype\s+html\b",                                                            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex HtmlRootRx       = new(@"^\s*<html\b",                                                                       RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex HtmlTagRx        = new(@"</?(head|body|main|section|article|header|footer|div|span|button|input|script|style|link|meta|title)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex IniSectionRx     = new(@"^\s*\[[^\]]+\]\s*$",                                                               RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex IniKeyValueRx    = new(@"^\s*[\w.-]+\s*=\s*[^=]+$",                                                        RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex EnvLineRx        = new(@"^\s*[A-Z_][A-Z0-9_]*=.+$",                                                        RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex DockerfileRx     = new(@"^\s*(FROM|RUN|COPY|ADD|CMD|ENTRYPOINT|WORKDIR|ENV|ARG)\b",                         RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex ConfigXmlRx      = new(@"^\s*<configuration\b",                                                             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex KeyValueLineRx   = new(@"^([A-Za-z_][\w.-]{1,40})\s*([:=])\s*(\S.*?)\s*$",                                 RegexOptions.Compiled);
+
     public static string? DetectTextKind(string text, string? language)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
@@ -72,22 +87,19 @@ public static class ContentKindService
     }
 
     private static bool LooksLikeToml(string text)
-        => Regex.IsMatch(text, @"^\s*\[[\w.-]+\]\s*$", RegexOptions.Multiline)
-           && Regex.IsMatch(text, @"^\s*[\w.-]+\s*=\s*.+$", RegexOptions.Multiline);
+        => TomlSectionRx.IsMatch(text) && TomlKeyValueRx.IsMatch(text);
 
     private static bool LooksLikeXml(string text)
-        => Regex.IsMatch(text, @"^\s*<\?xml\b", RegexOptions.IgnoreCase)
-           || Regex.IsMatch(text, @"^\s*<[A-Za-z][\w:.-]*(\s|>|/>)", RegexOptions.Multiline)
-              && Regex.IsMatch(text, @"</[A-Za-z][\w:.-]*>\s*$", RegexOptions.Multiline);
+        => XmlDeclRx.IsMatch(text)
+           || XmlOpenTagRx.IsMatch(text) && XmlCloseTagRx.IsMatch(text);
 
     private static bool LooksLikeHtml(string text)
-        => Regex.IsMatch(text, @"^\s*<!doctype\s+html\b", RegexOptions.IgnoreCase)
-           || Regex.IsMatch(text, @"^\s*<html\b", RegexOptions.IgnoreCase | RegexOptions.Multiline)
-           || Regex.IsMatch(text, @"</?(head|body|main|section|article|header|footer|div|span|button|input|script|style|link|meta|title)\b", RegexOptions.IgnoreCase);
+        => HtmlDoctypeRx.IsMatch(text)
+           || HtmlRootRx.IsMatch(text)
+           || HtmlTagRx.IsMatch(text);
 
     private static bool LooksLikeIni(string text)
-        => Regex.IsMatch(text, @"^\s*\[[^\]]+\]\s*$", RegexOptions.Multiline)
-           && Regex.IsMatch(text, @"^\s*[\w.-]+\s*=\s*[^=]+$", RegexOptions.Multiline);
+        => IniSectionRx.IsMatch(text) && IniKeyValueRx.IsMatch(text);
 
     private static bool LooksLikeProperties(string text)
     {
@@ -101,14 +113,14 @@ public static class ContentKindService
     }
 
     private static bool LooksLikeEnv(string text)
-        => Regex.Matches(text, @"^\s*[A-Z_][A-Z0-9_]*=.+$", RegexOptions.Multiline).Count >= 2;
+        => EnvLineRx.Matches(text).Count >= 2;
 
     private static bool LooksLikeDockerfile(string text)
-        => Regex.IsMatch(text, @"^\s*(FROM|RUN|COPY|ADD|CMD|ENTRYPOINT|WORKDIR|ENV|ARG)\b", RegexOptions.Multiline);
+        => DockerfileRx.IsMatch(text);
 
     private static bool LooksLikeConfig(string text)
     {
-        if (Regex.IsMatch(text, @"^\s*<configuration\b", RegexOptions.IgnoreCase))
+        if (ConfigXmlRx.IsMatch(text))
             return true;
 
         var stats = AnalyzeKeyValueLines(text);
@@ -136,7 +148,7 @@ public static class ContentKindService
             if (line.Length == 0) continue;
             nonEmptyLines++;
 
-            var match = Regex.Match(line, @"^([A-Za-z_][\w.-]{1,40})\s*([:=])\s*(\S.*?)\s*$");
+            var match = KeyValueLineRx.Match(line);
             if (!match.Success) continue;
 
             var key = match.Groups[1].Value;

@@ -28,6 +28,8 @@ public partial class App : System.Windows.Application
     private const string StartupRunValueName = "Clipwell";
     private const string OnboardingSeenFileName = "onboarding.seen";
     private static readonly object LogLock = new();
+    private const int PasteDelayMs = 140;
+    private const string ClipboardBusyMessage = "Clipboard konnte gerade nicht geschrieben werden.";
     private enum PopupPlacement { Cursor, Taskbar }
 
     private NotifyIcon? _trayIcon;
@@ -163,11 +165,11 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            Directory.CreateDirectory(DatabaseService.DataDir);
+            Directory.CreateDirectory(AppPaths.DataDir);
             lock (LogLock)
             {
                 File.AppendAllText(
-                    Path.Combine(DatabaseService.DataDir, "clipwell.log"),
+                    Path.Combine(AppPaths.DataDir, "clipwell.log"),
                     $"[{DateTime.Now:O}] {ex}\r\n\r\n");
             }
         }
@@ -465,12 +467,7 @@ public partial class App : System.Windows.Application
 
     private static void FillRoundedRect(Graphics g, System.Drawing.Brush br, float x, float y, float w, float h, float r)
     {
-        using var path = new System.Drawing.Drawing2D.GraphicsPath();
-        path.AddArc(x, y, r * 2, r * 2, 180, 90);
-        path.AddArc(x + w - r * 2, y, r * 2, r * 2, 270, 90);
-        path.AddArc(x + w - r * 2, y + h - r * 2, r * 2, r * 2, 0, 90);
-        path.AddArc(x, y + h - r * 2, r * 2, r * 2, 90, 90);
-        path.CloseFigure();
+        using var path = RoundedRect(x, y, w, h, r);
         g.FillPath(br, path);
     }
 
@@ -889,35 +886,33 @@ public partial class App : System.Windows.Application
         });
     }
 
-    internal void PasteEntry(EntryViewModel vm, bool plainText)
+    private bool TryWriteEntryToClipboard(EntryViewModel vm, bool plainText)
     {
-        _ignoreNextClipboard = true;
-        bool clipboardWritten;
-
         if (vm.Type == EntryType.Image && vm.Entry.ImageData != null)
         {
             var src = LoadBitmapSource(vm.Entry.ImageData);
-            clipboardWritten = src != null && TrySetClipboardImage(src);
+            return src != null && TrySetClipboardImage(src);
         }
-        else
-        {
-            var text = plainText
-                ? ClipboardProcessor.GetPlainText(vm.Entry)
-                : (vm.Content ?? vm.Entry.OcrText ?? "");
-            clipboardWritten = TrySetClipboardText(text);
-        }
+        var text = plainText
+            ? ClipboardProcessor.GetPlainText(vm.Entry)
+            : (vm.Content ?? vm.Entry.OcrText ?? "");
+        return TrySetClipboardText(text);
+    }
 
-        if (!clipboardWritten)
+    internal void PasteEntry(EntryViewModel vm, bool plainText)
+    {
+        _ignoreNextClipboard = true;
+        if (!TryWriteEntryToClipboard(vm, plainText))
         {
             _ignoreNextClipboard = false;
-            _trayIcon?.ShowBalloonTip(3000, "Clipwell", "Clipboard konnte gerade nicht geschrieben werden.", ToolTipIcon.Warning);
+            _trayIcon?.ShowBalloonTip(3000, "Clipwell", ClipboardBusyMessage, ToolTipIcon.Warning);
             return;
         }
 
         HidePopup();
 
         var target = _previousForeground;
-        _ = Task.Delay(140).ContinueWith(_ => Dispatcher.Invoke(() =>
+        _ = Task.Delay(PasteDelayMs).ContinueWith(_ => Dispatcher.Invoke(() =>
         {
             if (target != IntPtr.Zero) NativeMethods.SetForegroundWindow(target);
             NativeMethods.SendCtrlV();
@@ -934,25 +929,10 @@ public partial class App : System.Windows.Application
     internal void CopyEntryToClipboard(EntryViewModel vm, bool plainText)
     {
         _ignoreNextClipboard = true;
-        bool clipboardWritten;
-
-        if (vm.Type == EntryType.Image && vm.Entry.ImageData != null)
-        {
-            var src = LoadBitmapSource(vm.Entry.ImageData);
-            clipboardWritten = src != null && TrySetClipboardImage(src);
-        }
-        else
-        {
-            var text = plainText
-                ? ClipboardProcessor.GetPlainText(vm.Entry)
-                : (vm.Content ?? vm.Entry.OcrText ?? "");
-            clipboardWritten = TrySetClipboardText(text);
-        }
-
-        if (!clipboardWritten)
+        if (!TryWriteEntryToClipboard(vm, plainText))
         {
             _ignoreNextClipboard = false;
-            _trayIcon?.ShowBalloonTip(3000, "Clipwell", "Clipboard konnte gerade nicht geschrieben werden.", ToolTipIcon.Warning);
+            _trayIcon?.ShowBalloonTip(3000, "Clipwell", ClipboardBusyMessage, ToolTipIcon.Warning);
         }
     }
 

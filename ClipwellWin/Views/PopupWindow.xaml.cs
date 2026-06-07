@@ -148,23 +148,31 @@ public partial class PopupWindow : Window
         _vm.RefreshTimestamps(visibleEntries);
     }
 
-    public void PositionAtCursor()
+    private void GetMonitorAndScale(
+        out NativeMethods.POINT cursor,
+        out NativeMethods.MONITORINFO mi,
+        out double scaleX,
+        out double scaleY)
     {
-        ClampSizeToCurrentMonitor();
-
-        NativeMethods.GetCursorPos(out var cursor);
+        NativeMethods.GetCursorPos(out cursor);
         var monitorHandle = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
-        var mi = new NativeMethods.MONITORINFO
-            { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        mi = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
         NativeMethods.GetMonitorInfo(monitorHandle, ref mi);
 
-        double scaleX = 1, scaleY = 1;
+        scaleX = 1; scaleY = 1;
         var source = PresentationSource.FromVisual(this);
         if (source?.CompositionTarget != null)
         {
             scaleX = source.CompositionTarget.TransformFromDevice.M11;
             scaleY = source.CompositionTarget.TransformFromDevice.M22;
         }
+    }
+
+    public void PositionAtCursor()
+    {
+        ClampSizeToCurrentMonitor();
+
+        GetMonitorAndScale(out var cursor, out var mi, out var scaleX, out var scaleY);
 
         double workLeft   = mi.rcWork.Left   * scaleX;
         double workTop    = mi.rcWork.Top    * scaleY;
@@ -191,19 +199,7 @@ public partial class PopupWindow : Window
 
         ClampSizeToCurrentMonitor();
 
-        NativeMethods.GetCursorPos(out var cursor);
-        var monitorHandle = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
-        var mi = new NativeMethods.MONITORINFO
-            { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
-        NativeMethods.GetMonitorInfo(monitorHandle, ref mi);
-
-        double scaleX = 1, scaleY = 1;
-        var source = PresentationSource.FromVisual(this);
-        if (source?.CompositionTarget != null)
-        {
-            scaleX = source.CompositionTarget.TransformFromDevice.M11;
-            scaleY = source.CompositionTarget.TransformFromDevice.M22;
-        }
+        GetMonitorAndScale(out var cursor, out var mi, out var scaleX, out var scaleY);
 
         double workLeft   = mi.rcWork.Left   * scaleX;
         double workTop    = mi.rcWork.Top    * scaleY;
@@ -238,19 +234,7 @@ public partial class PopupWindow : Window
 
     private void ClampSizeToCurrentMonitor()
     {
-        NativeMethods.GetCursorPos(out var cursor);
-        var monitorHandle = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
-        var mi = new NativeMethods.MONITORINFO
-            { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
-        NativeMethods.GetMonitorInfo(monitorHandle, ref mi);
-
-        double scaleX = 1, scaleY = 1;
-        var source = PresentationSource.FromVisual(this);
-        if (source?.CompositionTarget != null)
-        {
-            scaleX = source.CompositionTarget.TransformFromDevice.M11;
-            scaleY = source.CompositionTarget.TransformFromDevice.M22;
-        }
+        GetMonitorAndScale(out _, out var mi, out var scaleX, out var scaleY);
 
         var maxWidth = Math.Max(MinimumPopupWidth, (mi.rcWork.Right - mi.rcWork.Left) * scaleX - 16);
         var maxHeight = Math.Max(MinimumPopupHeight, (mi.rcWork.Bottom - mi.rcWork.Top) * scaleY - 16);
@@ -866,7 +850,7 @@ public partial class PopupWindow : Window
             "Sicher löschen", System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Warning);
         if (r != System.Windows.MessageBoxResult.Yes) return;
-        _vm.SecureDelete(vm, _app.Database);
+        _vm.SecureDelete(vm);
     }
 
     private void DetailsMenuItem_Click(object sender, RoutedEventArgs e)
