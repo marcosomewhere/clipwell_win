@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ClipwellWin.Services;
@@ -28,11 +29,52 @@ public class UrlPreviewService : IDisposable
                && !t.Contains('\n') && t.Length < 2048;
     }
 
+    // skips loopback, link-local, and private ranges — SSRF/privacy guard
+    public static bool ShouldFetch(string? url)
+    {
+        if (!IsUrl(url)) return false;
+        if (!Uri.TryCreate(url!.Trim(), UriKind.Absolute, out var uri)) return false;
+
+        var host = uri.Host;
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
+        if (IPAddress.TryParse(host, out var ip))
+        {
+            if (IPAddress.IsLoopback(ip)) return false;
+            if (IsPrivate(ip)) return false;
+        }
+        return true;
+    }
+
+    private static bool IsPrivate(IPAddress ip)
+    {
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var b = ip.GetAddressBytes();
+            if (b[0] == 10) return true;                              // 10.0.0.0/8
+            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true; // 172.16.0.0/12
+            if (b[0] == 192 && b[1] == 168) return true;             // 192.168.0.0/16
+            if (b[0] == 169 && b[1] == 254) return true;             // 169.254.0.0/16 link-local
+            return false;
+        }
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal
+                || (ip.GetAddressBytes()[0] & 0xFE) == 0xFC;          // fc00::/7 unique-local
+        return false;
+    }
+
+    private const int MaxHtmlBytes = 512 * 1024;
+
     public async Task<(string? title, byte[]? favicon)> FetchAsync(string url)
     {
         try
         {
-            var html = await _http.GetStringAsync(url);
+            using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            using var stream = await response.Content.ReadAsStreamAsync();
+            var buf = new byte[MaxHtmlBytes];
+            int total = 0, read;
+            while (total < buf.Length && (read = await stream.ReadAsync(buf.AsMemory(total))) > 0)
+                total += read;
+            var html = Encoding.UTF8.GetString(buf, 0, total);
             var title = WebUtility.HtmlDecode(TitleRx.Match(html).Groups[1].Value.Trim());
             if (title.Length == 0) title = null;
 
@@ -48,7 +90,7 @@ public class UrlPreviewService : IDisposable
                         break;
                     }
                 }
-                catch { /* favicon optional */ }
+                catch { }
             }
 
             return (title, favicon?.Length > 0 ? favicon : null);

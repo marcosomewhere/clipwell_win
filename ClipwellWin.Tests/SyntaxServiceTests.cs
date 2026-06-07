@@ -32,4 +32,16 @@ public class SyntaxServiceTests
 
         Assert.Equal("Go", SyntaxService.DetectLanguage(text, CodeDetectionMode.Aggressive));
     }
+
+    [Fact]
+    public void DetectLanguage_AggressiveMode_DoesNotClassifyColonNotesAsCode()
+    {
+        var text = """
+            Problem: The popup sometimes stays open (after focus changes).
+            Action: Restart the app and test the hotkey again.
+            Result: The state is normal and no crash was observed.
+            """;
+
+        Assert.Null(SyntaxService.DetectLanguage(text, CodeDetectionMode.Aggressive));
+    }
 }

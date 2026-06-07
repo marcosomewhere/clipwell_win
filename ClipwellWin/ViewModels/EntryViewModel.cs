@@ -205,26 +205,62 @@ public class EntryViewModel : ViewModelBase
         catch { return null; }
     }
 
+    private Brush? _hexBrush;
+    private bool _hexBrushLoaded;
     public Brush? HexBrush
     {
         get
         {
+            if (_hexBrushLoaded) return _hexBrush;
+            _hexBrushLoaded = true;
             if (string.IsNullOrEmpty(HexColor)) return null;
-            try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(HexColor)); }
-            catch { return null; }
+            try
+            {
+                var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(HexColor));
+                b.Freeze();
+                _hexBrush = b;
+            }
+            catch { }
+            return _hexBrush;
         }
     }
 
     public void RefreshPreview() => OnPropertyChanged(nameof(PreviewText));
-    public void RefreshTimestamp() => OnPropertyChanged(nameof(RelativeTime));
+    public void RefreshTimestamp()
+    {
+        OnPropertyChanged(nameof(Timestamp));
+        OnPropertyChanged(nameof(RelativeTime));
+        OnPropertyChanged(nameof(GroupLabel));
+    }
 
-    public void SetType(EntryType type, string? language, string reason)
+    public void SetTimestamp(DateTime timestamp)
+    {
+        Entry.Timestamp = timestamp;
+        RefreshTimestamp();
+    }
+
+    public void SetType(EntryType type, string? language, string? kind, string reason)
     {
         Entry.Type = type;
         Entry.Language = language;
-        Entry.ContentKind = language;
+        Entry.ContentKind = kind;
         Entry.DetectionReason = reason;
         OnPropertyChanged(nameof(Type));
+        OnPropertyChanged(nameof(Language));
+        OnPropertyChanged(nameof(ContentKind));
+        OnPropertyChanged(nameof(DetectionReason));
+        OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(BadgeText));
+        OnPropertyChanged(nameof(DetailBadgeText));
+    }
+
+    public void SetContent(string content, string? kind, string reason, string? language = null)
+    {
+        Entry.Content = content;
+        Entry.Language = language;
+        Entry.ContentKind = kind;
+        Entry.DetectionReason = reason;
+        OnPropertyChanged(nameof(Content));
         OnPropertyChanged(nameof(Language));
         OnPropertyChanged(nameof(ContentKind));
         OnPropertyChanged(nameof(DetectionReason));

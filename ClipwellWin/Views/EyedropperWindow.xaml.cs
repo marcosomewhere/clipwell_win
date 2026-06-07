@@ -15,6 +15,7 @@ public partial class EyedropperWindow : Window
     public EyedropperWindow()
     {
         InitializeComponent();
+        App.ApplyAppIcon(this);
         Loaded += (_, _) =>
         {
             RootCanvas.Focus();

@@ -9,6 +9,99 @@ namespace ClipwellWin.Tests;
 public class PopupViewModelTests
 {
     [Fact]
+    public void AddEntry_ReusesExistingTextEntryAndMakesItLatest()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var vm = new PopupViewModel(db);
+            var firstTimestamp = new DateTime(2026, 6, 6, 10, 0, 0);
+            var secondTimestamp = firstTimestamp.AddMinutes(1);
+            var duplicateTimestamp = firstTimestamp.AddMinutes(2);
+
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "123",
+                Timestamp = firstTimestamp,
+            });
+            var originalId = vm.Entries.Single().Id;
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "456",
+                Timestamp = secondTimestamp,
+            });
+            var duplicate = new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "123",
+                Timestamp = duplicateTimestamp,
+            };
+
+            vm.AddEntry(duplicate);
+
+            Assert.Equal(2, vm.Entries.Count);
+            Assert.Equal(originalId, duplicate.Id);
+            Assert.Equal("123", vm.LatestEntry()?.Content);
+
+            var entries = db.LoadAll();
+            Assert.Equal(2, entries.Count);
+            Assert.Equal("123", entries[0].Content);
+            Assert.Equal(originalId, entries[0].Id);
+            Assert.Equal(duplicateTimestamp, entries[0].Timestamp);
+        }
+        finally
+        {
+            DeleteIfExists(dbPath);
+            DeleteIfExists($"{dbPath}-wal");
+            DeleteIfExists($"{dbPath}-shm");
+        }
+    }
+
+    [Fact]
+    public void AddEntry_PinsExistingDuplicateWhenIncomingEntryIsPinned()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var vm = new PopupViewModel(db);
+
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "pin me",
+                Timestamp = new DateTime(2026, 6, 6, 10, 0, 0),
+            });
+            var originalId = vm.Entries.Single().Id;
+
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "pin me",
+                IsPinned = true,
+                Timestamp = new DateTime(2026, 6, 6, 10, 1, 0),
+            });
+
+            Assert.Single(vm.Entries);
+            Assert.Equal(originalId, vm.Entries[0].Id);
+            Assert.True(vm.Entries[0].IsPinned);
+
+            var entry = db.LoadAll().Single();
+            Assert.Equal(originalId, entry.Id);
+            Assert.True(entry.IsPinned);
+        }
+        finally
+        {
+            DeleteIfExists(dbPath);
+            DeleteIfExists($"{dbPath}-wal");
+            DeleteIfExists($"{dbPath}-shm");
+        }
+    }
+
+    [Fact]
     public void AddEntry_SkipsDuplicateLatestImage()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");

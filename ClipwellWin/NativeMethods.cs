@@ -4,24 +4,19 @@ namespace ClipwellWin;
 
 internal static class NativeMethods
 {
-    // Window messages
     public const int WM_CLIPBOARDUPDATE = 0x031D;
     public const int WM_HOTKEY = 0x0312;
 
-    // Hotkey modifiers
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_SHIFT = 0x0004;
     public const uint MOD_WIN = 0x0008;
     public const uint MOD_NOREPEAT = 0x4000;
 
-    // Virtual key codes
     public const uint VK_V = 0x56;
 
-    // Monitor flags
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
-    // SendInput constants
     public const uint INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const ushort VK_CONTROL = 0x11;
@@ -138,8 +133,10 @@ internal static class NativeMethods
         WCA_ACCENT_POLICY = 19
     }
 
-    // DWM attributes for Win11 Mica/Acrylic
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    public const int DWMWA_BORDER_COLOR = 34;
+    public const int DWMWA_CAPTION_COLOR = 35;
+    public const int DWMWA_TEXT_COLOR = 36;
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
 
     public static void SendCtrlV()
@@ -156,34 +153,6 @@ internal static class NativeMethods
                 { Keyboard = new KEYBDINPUT { Vk = (ushort)VK_CONTROL, Flags = KEYEVENTF_KEYUP } } },
         };
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-    }
-
-    public static void SendWinV()
-    {
-        var inputs = new INPUT[]
-        {
-            new INPUT { Type = INPUT_KEYBOARD, Data = new MOUSEKEYBDHARDWAREINPUT
-                { Keyboard = new KEYBDINPUT { Vk = VK_LWIN } } },
-            new INPUT { Type = INPUT_KEYBOARD, Data = new MOUSEKEYBDHARDWAREINPUT
-                { Keyboard = new KEYBDINPUT { Vk = (ushort)VK_V } } },
-            new INPUT { Type = INPUT_KEYBOARD, Data = new MOUSEKEYBDHARDWAREINPUT
-                { Keyboard = new KEYBDINPUT { Vk = (ushort)VK_V, Flags = KEYEVENTF_KEYUP } } },
-            new INPUT { Type = INPUT_KEYBOARD, Data = new MOUSEKEYBDHARDWAREINPUT
-                { Keyboard = new KEYBDINPUT { Vk = VK_LWIN, Flags = KEYEVENTF_KEYUP } } },
-        };
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-    }
-
-    public static string? GetForegroundProcessName()
-    {
-        try
-        {
-            var hwnd = GetForegroundWindow();
-            if (hwnd == IntPtr.Zero) return null;
-            GetWindowThreadProcessId(hwnd, out uint pid);
-            return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
-        }
-        catch { return null; }
     }
 
     public static void EnableAcrylic(IntPtr hwnd, System.Windows.Media.Color tint)
@@ -221,5 +190,12 @@ internal static class NativeMethods
     {
         int value = dark ? 1 : 0;
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
+    }
+
+    public static void SetWindowFrameColors(IntPtr hwnd, int captionColor, int textColor, int borderColor)
+    {
+        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
+        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
+        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
     }
 }

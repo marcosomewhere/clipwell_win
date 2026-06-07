@@ -8,6 +8,14 @@ namespace ClipwellWin.Tests;
 public class DatabaseServiceTests
 {
     [Fact]
+    public void AppPaths_UsesAppData()
+    {
+        var dataDir = AppPaths.ResolveDataDir(@"C:\Users\Test\AppData\Roaming");
+
+        Assert.Equal(@"C:\Users\Test\AppData\Roaming\Clipwell", dataDir);
+    }
+
+    [Fact]
     public void ExportAndImportJson_DeduplicatesImportedEntries()
     {
         var sourcePath = TempDbPath();
@@ -32,6 +40,36 @@ public class DatabaseServiceTests
             Assert.Equal(1, target.ImportFromJson(exportPath));
             Assert.Equal(0, target.ImportFromJson(exportPath));
             Assert.Single(target.LoadAll());
+        }
+        finally
+        {
+            DeleteDb(sourcePath);
+            DeleteDb(targetPath);
+            DeleteIfExists(exportPath);
+        }
+    }
+
+    [Fact]
+    public void ExportAsJsonOverload_ExportsOnlyGivenEntries()
+    {
+        var sourcePath = TempDbPath();
+        var targetPath = TempDbPath();
+        var exportPath = Path.Combine(Path.GetTempPath(), $"clipwell-export-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            using (var source = new DatabaseService(sourcePath))
+            {
+                source.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "keep", Timestamp = new DateTime(2026, 6, 5, 12, 0, 0, DateTimeKind.Local) });
+                source.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "skip", Timestamp = new DateTime(2026, 6, 5, 12, 1, 0, DateTimeKind.Local) });
+
+                var subset = source.LoadAll().Where(e => e.Content == "keep").ToList();
+                source.ExportAsJson(subset, exportPath);
+            }
+
+            using var target = new DatabaseService(targetPath);
+            Assert.Equal(1, target.ImportFromJson(exportPath));
+            Assert.Equal("keep", target.LoadAll().Single().Content);
         }
         finally
         {
@@ -121,6 +159,105 @@ public class DatabaseServiceTests
         {
             DeleteDb(dbPath);
         }
+    }
+
+    [Fact]
+    public void UpdateTimestamp_MakesEntryNewest()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var oldTimestamp = new DateTime(2026, 6, 6, 10, 0, 0);
+            var newerTimestamp = oldTimestamp.AddMinutes(1);
+            var newestTimestamp = oldTimestamp.AddMinutes(2);
+            var id = db.Insert(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "old",
+                Timestamp = oldTimestamp,
+            });
+            db.Insert(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "newer",
+                Timestamp = newerTimestamp,
+            });
+
+            db.UpdateTimestamp(id, newestTimestamp);
+
+            var entries = db.LoadAll();
+            Assert.Equal(id, entries[0].Id);
+            Assert.Equal(newestTimestamp, entries[0].Timestamp);
+        }
+        finally
+        {
+            DeleteDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void LoadAllIds_ReturnsInsertedIdsWithoutBlobs()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var id1 = db.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "a", Timestamp = DateTime.Now });
+            var id2 = db.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "b", Timestamp = DateTime.Now });
+
+            var ids = db.LoadAllIds();
+
+            Assert.Equal(2, ids.Count);
+            Assert.Contains(id1, ids);
+            Assert.Contains(id2, ids);
+        }
+        finally { DeleteDb(dbPath); }
+    }
+
+    [Fact]
+    public void SetType_StoresKindSeparatelyFromLanguage()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var id = db.Insert(new ClipboardEntry { Type = EntryType.Text, Content = "x", Timestamp = DateTime.Now });
+
+            db.SetType(id, EntryType.Code, language: "C#", kind: "SCRIPT", reason: "manual");
+
+            var entry = db.LoadAll().Single();
+            Assert.Equal(EntryType.Code, entry.Type);
+            Assert.Equal("C#", entry.Language);
+            Assert.Equal("SCRIPT", entry.ContentKind);
+        }
+        finally { DeleteDb(dbPath); }
+    }
+
+    [Fact]
+    public void UpdateContent_PersistsEditedTextAndKind()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var id = db.Insert(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "old",
+                Timestamp = DateTime.Now,
+                ContentKind = "TEXT",
+                DetectionReason = "test",
+            });
+
+            db.UpdateContent(id, "edited note", "NOTE", "Notiz manuell bearbeitet.");
+
+            var entry = db.LoadAll().Single();
+            Assert.Equal("edited note", entry.Content);
+            Assert.Equal("NOTE", entry.ContentKind);
+            Assert.Equal("Notiz manuell bearbeitet.", entry.DetectionReason);
+        }
+        finally { DeleteDb(dbPath); }
     }
 
     private static string TempDbPath()

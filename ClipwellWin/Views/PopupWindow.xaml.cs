@@ -1,4 +1,3 @@
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using ClipwellWin.Models;
 using ClipwellWin.ViewModels;
 using Microsoft.Win32;
@@ -25,10 +25,14 @@ public partial class PopupWindow : Window
     private const double DefaultPopupHeight = 720;
     private const double MinimumPopupWidth = 500;
     private const double MinimumPopupHeight = 620;
+    private const double TaskbarPopupGap = 8;
 
     private readonly PopupViewModel _vm;
     private readonly App _app = null!;
+    private readonly DispatcherTimer _timestampTimer;
     private ScrollViewer? _entryScrollViewer;
+
+    internal DateTime LastHiddenAtUtc { get; private set; } = DateTime.MinValue;
 
     public PopupWindow(PopupViewModel vm, App app)
     {
@@ -36,6 +40,26 @@ public partial class PopupWindow : Window
         _app = app;
         DataContext = vm;
         InitializeComponent();
+        App.ApplyAppIcon(this);
+
+        _timestampTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMinutes(1),
+        };
+        _timestampTimer.Tick += (_, _) => RefreshVisibleTimestamps();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible)
+            {
+                RefreshVisibleTimestamps();
+                _timestampTimer.Start();
+            }
+            else
+            {
+                LastHiddenAtUtc = DateTime.UtcNow;
+                _timestampTimer.Stop();
+            }
+        };
 
         var s = _app?.CurrentSettings;
         Width  = Math.Max(MinimumPopupWidth, s?.PopupWidth  > 0 ? s.PopupWidth  : DefaultPopupWidth);
@@ -61,8 +85,8 @@ public partial class PopupWindow : Window
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
         var tint = _app?.IsEffectiveDarkTheme == false
-            ? Color.FromArgb(230, 248, 250, 248)
-            : Color.FromArgb(220, 18, 18, 30);
+            ? Color.FromArgb(240, 250, 250, 248)
+            : Color.FromArgb(238, 23, 26, 30);
         NativeMethods.EnableAcrylic(hwnd, tint);
         NativeMethods.SetImmersiveDarkMode(hwnd, _app?.IsEffectiveDarkTheme == true);
     }
@@ -105,24 +129,28 @@ public partial class PopupWindow : Window
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+        RefreshVisibleTimestamps();
         SearchBox.Focus();
         SelectFirst();
         PlayOpenAnimation();
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        _timestampTimer.Stop();
+        base.OnClosed(e);
+    }
+
+    private void RefreshVisibleTimestamps()
+    {
+        var visibleEntries = EntryList.Items.OfType<EntryViewModel>().ToList();
+        if (visibleEntries.Count == 0) return;
+        _vm.RefreshTimestamps(visibleEntries);
+    }
+
     public void PositionAtCursor()
     {
-        var s = _app?.CurrentSettings;
-        if (s == null) return;
-
         ClampSizeToCurrentMonitor();
-
-        if (s.RememberPopupPosition && s.PopupLeft >= 0 && s.PopupTop >= 0)
-        {
-            Left = s.PopupLeft;
-            Top  = s.PopupTop;
-            return;
-        }
 
         NativeMethods.GetCursorPos(out var cursor);
         var monitorHandle = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
@@ -151,6 +179,58 @@ public partial class PopupWindow : Window
         if (top  + Height > workBottom) top  = cy - Height - 4;
         if (left < workLeft) left = workLeft + 4;
         if (top  < workTop)  top  = workTop  + 4;
+
+        Left = left;
+        Top  = top;
+    }
+
+    public void PositionAboveTaskbar()
+    {
+        var s = _app?.CurrentSettings;
+        if (s == null) return;
+
+        ClampSizeToCurrentMonitor();
+
+        NativeMethods.GetCursorPos(out var cursor);
+        var monitorHandle = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        var mi = new NativeMethods.MONITORINFO
+            { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        NativeMethods.GetMonitorInfo(monitorHandle, ref mi);
+
+        double scaleX = 1, scaleY = 1;
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget != null)
+        {
+            scaleX = source.CompositionTarget.TransformFromDevice.M11;
+            scaleY = source.CompositionTarget.TransformFromDevice.M22;
+        }
+
+        double workLeft   = mi.rcWork.Left   * scaleX;
+        double workTop    = mi.rcWork.Top    * scaleY;
+        double workRight  = mi.rcWork.Right  * scaleX;
+        double workBottom = mi.rcWork.Bottom * scaleY;
+        double cx = cursor.X * scaleX;
+
+        double minLeft = workLeft + TaskbarPopupGap;
+        double maxLeft = workRight - Width - TaskbarPopupGap;
+        double left = cx - Width / 2;
+        if (maxLeft >= minLeft)
+            left = Math.Min(Math.Max(left, minLeft), maxLeft);
+        else
+            left = workLeft;
+
+        double minTop = workTop + TaskbarPopupGap;
+        double maxTop = workBottom - Height - TaskbarPopupGap;
+        double top = mi.rcWork.Bottom < mi.rcMonitor.Bottom
+            ? workBottom - Height - TaskbarPopupGap
+            : mi.rcWork.Top > mi.rcMonitor.Top
+                ? workTop + TaskbarPopupGap
+                : workBottom - Height - TaskbarPopupGap;
+
+        if (maxTop >= minTop)
+            top = Math.Min(Math.Max(top, minTop), maxTop);
+        else
+            top = workTop;
 
         Left = left;
         Top  = top;
@@ -226,11 +306,6 @@ public partial class PopupWindow : Window
         var s = _app.CurrentSettings;
         s.PopupWidth  = Width;
         s.PopupHeight = Height;
-        if (s.RememberPopupPosition)
-        {
-            s.PopupLeft = Left;
-            s.PopupTop  = Top;
-        }
         _app.SaveSettings();
     }
 
@@ -241,13 +316,6 @@ public partial class PopupWindow : Window
         try
         {
             DragMove();
-            var s = _app?.CurrentSettings;
-            if (s?.RememberPopupPosition == true)
-            {
-                s.PopupLeft = Left;
-                s.PopupTop  = Top;
-                _app!.SaveSettings();
-            }
         }
         catch { }
     }
@@ -314,7 +382,7 @@ public partial class PopupWindow : Window
             else
             {
                 var entries = _vm.GetSelectedEntries();
-                ExportEntriesToJson(entries, dlg.FileName);
+                _app.Database.ExportAsJson(entries, dlg.FileName);
                 System.Windows.MessageBox.Show(
                     $"{entries.Count} Einträge exportiert.", "Clipwell",
                     System.Windows.MessageBoxButton.OK,
@@ -328,29 +396,6 @@ public partial class PopupWindow : Window
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Error);
         }
-    }
-
-    private static void ExportEntriesToJson(List<ClipboardEntry> entries, string filePath)
-    {
-        var data = entries.Select(e => new
-        {
-            e.Id,
-            Type = e.Type.ToString(),
-            e.Content,
-            e.OcrText,
-            e.Language,
-            e.UrlTitle,
-            e.HexColor,
-            e.ContentKind,
-            e.DetectionReason,
-            e.IsPinned,
-            Timestamp = e.Timestamp.ToString("o"),
-            ImageDataBase64 = e.ImageData != null ? Convert.ToBase64String(e.ImageData) : null,
-            FaviconBase64   = e.UrlFavicon != null ? Convert.ToBase64String(e.UrlFavicon) : null,
-        }).ToList();
-        var json = System.Text.Json.JsonSerializer.Serialize(data,
-            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(filePath, json);
     }
 
     private void BulkCancel_Click(object sender, RoutedEventArgs e)
@@ -721,28 +766,28 @@ public partial class PopupWindow : Window
             return;
         }
 
-        if (s != null && MatchShortcut(e, s.KeyPin, s.KeyPinCtrl))
+        if (s != null && MatchShortcut(e, s.KeyPin, s.KeyPinCtrl, s.KeyPinAlt, s.KeyPinShift, s.KeyPinWin))
         {
             if (_vm.SelectedEntry != null) _vm.TogglePin(_vm.SelectedEntry);
             e.Handled = true;
             return;
         }
 
-        if (s != null && MatchShortcut(e, s.KeyDetails, requireCtrl: false))
+        if (s != null && MatchShortcut(e, s.KeyDetails, s.KeyDetailsCtrl, s.KeyDetailsAlt, s.KeyDetailsShift, s.KeyDetailsWin))
         {
             if (_vm.SelectedEntry != null) OpenDetails(_vm.SelectedEntry);
             e.Handled = true;
             return;
         }
 
-        if (s != null && MatchShortcut(e, s.KeyQuickNote, s.KeyQuickNoteCtrl))
+        if (s != null && MatchShortcut(e, s.KeyQuickNote, s.KeyQuickNoteCtrl, s.KeyQuickNoteAlt, s.KeyQuickNoteShift, s.KeyQuickNoteWin))
         {
             ToggleQuickNote_Click(sender, e);
             e.Handled = true;
             return;
         }
 
-        if (s != null && MatchShortcut(e, s.KeyPinboard, s.KeyPinboardCtrl))
+        if (s != null && MatchShortcut(e, s.KeyPinboard, s.KeyPinboardCtrl, s.KeyPinboardAlt, s.KeyPinboardShift, s.KeyPinboardWin))
         {
             _app?.TogglePinboard();
             e.Handled = true;
@@ -761,10 +806,13 @@ public partial class PopupWindow : Window
         }
     }
 
-    private static bool MatchShortcut(KeyEventArgs e, string keyStr, bool requireCtrl)
+    private static bool MatchShortcut(KeyEventArgs e, string keyStr, bool ctrl, bool alt = false, bool shift = false, bool win = false)
     {
-        bool hasCtrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-        if (requireCtrl != hasCtrl) return false;
+        bool hasCtrl  = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        bool hasAlt   = (Keyboard.Modifiers & ModifierKeys.Alt)     != 0;
+        bool hasShift = (Keyboard.Modifiers & ModifierKeys.Shift)   != 0;
+        bool hasWin   = Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin);
+        if (ctrl != hasCtrl || alt != hasAlt || shift != hasShift || win != hasWin) return false;
 
         return keyStr switch
         {
@@ -848,10 +896,9 @@ public partial class PopupWindow : Window
     {
         var details = new DetailWindow(vm)
         {
-            Owner = this,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
         };
-        details.ShowDialog();
+        details.Show();
     }
 
     private void MoveSelection(int delta)

@@ -3,23 +3,26 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Clipwell – Pinboard"
-        Width="300" MinWidth="220" MaxWidth="480"
+        Width="300" MinWidth="240" MaxWidth="480"
         Height="520" MinHeight="200"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
         Topmost="True"
         ResizeMode="CanResizeWithGrip"
-        ShowInTaskbar="False"
-        Deactivated="Window_Deactivated">
+        ShowInTaskbar="False">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </Window.Resources>
 
     <Border x:Name="RootBorder" CornerRadius="10"
-            Background="#E8121220"
-            BorderBrush="#33FFFFFF" BorderThickness="1">
+            Background="{DynamicResource PopupBackgroundBrush}"
+            BorderBrush="{DynamicResource PopupBorderBrush}" BorderThickness="1"
+            AllowDrop="True"
+            DragEnter="Pinboard_DragEnter"
+            DragOver="Pinboard_DragOver"
+            Drop="Pinboard_Drop">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -29,17 +32,30 @@
 
             <!-- Header (Drag-Handle) -->
             <Border Grid.Row="0" CornerRadius="10,10,0,0"
-                    Background="#22FFFFFF" Cursor="SizeAll"
+                    Background="{DynamicResource PopupPanelBrush}" Cursor="SizeAll"
                     MouseLeftButtonDown="Header_MouseDown"
                     Padding="10,6">
                 <Grid>
-                    <TextBlock Text="📌 Gepinnte Einträge"
-                               FontWeight="SemiBold" FontSize="13"
-                               Foreground="White" VerticalAlignment="Center" />
-                    <Button Content="✕" HorizontalAlignment="Right"
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE840;" FontFamily="Segoe Fluent Icons"
+                                   FontSize="13" Margin="0,0,7,0"
+                                   Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="Gepinnte Einträge"
+                                   FontWeight="SemiBold" FontSize="13"
+                                   Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Grid.Column="1" ToolTip="Schließen"
                             Background="Transparent" BorderThickness="0"
-                            Foreground="#88FFFFFF" FontSize="13" Padding="6,2"
-                            Click="Close_Click" Cursor="Hand" />
+                            Foreground="{DynamicResource PopupTextMutedBrush}" FontSize="13" Padding="6,2"
+                            Click="Close_Click" Cursor="Hand">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" />
+                    </Button>
                 </Grid>
             </Border>
 
@@ -47,7 +63,9 @@
             <ListBox x:Name="PinList" Grid.Row="1"
                      Background="Transparent" BorderThickness="0"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     SelectionChanged="PinList_SelectionChanged">
+                     SelectionChanged="PinList_SelectionChanged"
+                     PreviewMouseLeftButtonDown="PinList_PreviewMouseLeftButtonDown"
+                     PreviewMouseMove="PinList_PreviewMouseMove">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Padding" Value="0" />
@@ -63,10 +81,10 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#22FFFFFF" />
+                                            <Setter Property="Background" Value="{DynamicResource PopupHoverBrush}" />
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="#33FFFFFF" />
+                                            <Setter Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -80,21 +98,31 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="{Binding PreviewText}"
-                                           Foreground="White" FontSize="12"
+                                           Foreground="{DynamicResource PopupTextPrimaryBrush}" FontSize="12"
                                            TextTrimming="CharacterEllipsis"
                                            MaxHeight="36" ClipToBounds="True" />
                                 <TextBlock Text="{Binding RelativeTime}"
-                                           Foreground="#88FFFFFF" FontSize="10"
+                                           Foreground="{DynamicResource PopupTextSubtleBrush}" FontSize="10"
                                            Margin="0,2,0,0" />
                             </StackPanel>
-                            <Button Grid.Column="1" Content="↩" ToolTip="Einfügen"
+                            <Button Grid.Column="1" ToolTip="Abdocken"
                                     Background="Transparent" BorderThickness="0"
-                                    Foreground="#88FFFFFF" FontSize="14" Padding="6,0"
-                                    Click="PasteBtn_Click" Cursor="Hand"
-                                    VerticalAlignment="Center" />
+                                    Foreground="{DynamicResource PopupTextMutedBrush}" FontSize="14" Padding="6,0"
+                                    Click="UnpinBtn_Click" Cursor="Hand"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="&#xE840;" FontFamily="Segoe Fluent Icons" />
+                            </Button>
+                            <Button Grid.Column="2" ToolTip="Kopieren"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{DynamicResource PopupTextMutedBrush}" FontSize="14" Padding="6,0"
+                                    Click="CopyBtn_Click" Cursor="Hand"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="&#xE8C8;" FontFamily="Segoe Fluent Icons" />
+                            </Button>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -102,9 +130,9 @@
 
             <!-- Fusszeile -->
             <Border Grid.Row="2" Padding="8,6"
-                    BorderBrush="#22FFFFFF" BorderThickness="0,1,0,0">
+                    BorderBrush="{DynamicResource PopupPanelBorderBrush}" BorderThickness="0,1,0,0">
                 <TextBlock x:Name="CountLabel"
-                           Foreground="#88FFFFFF" FontSize="11"
+                           Foreground="{DynamicResource PopupTextSubtleBrush}" FontSize="11"
                            HorizontalAlignment="Center" />
             </Border>
         </Grid>

@@ -31,6 +31,16 @@
         <conv:TypeToVisibilityConverter x:Key="IsUrl" TargetType="Url" />
         <conv:TypeToVisibilityConverter x:Key="IsNotImage" TargetType="Image" Invert="True" />
 
+        <Style TargetType="ToolTip">
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PopupPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PopupBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+
         <!-- ── Filter-Chip-Stil ──────────────────────────────────────────── -->
         <Style x:Key="FilterChipStyle" TargetType="RadioButton">
             <Setter Property="Margin" Value="0,0,4,0" />
@@ -157,14 +167,9 @@
         <DataTemplate DataType="{x:Type vm:EntryViewModel}">
             <Grid Margin="{DynamicResource EntryContentMargin}"
                   MinHeight="{DynamicResource EntryMinHeight}"
+                  Background="Transparent"
                   MouseEnter="Item_MouseEnter"
                   MouseLeave="Item_MouseLeave">
-                <Grid.ToolTip>
-                    <StackPanel MaxWidth="320">
-                        <TextBlock Text="{Binding Type}" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding DetectionReason}" TextWrapping="Wrap" Opacity="0.8" />
-                    </StackPanel>
-                </Grid.ToolTip>
                 <Grid.ContextMenu>
                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                         <MenuItem Header="Kopieren" Click="CopyMenuItem_Click" />
@@ -334,12 +339,14 @@
                 <Grid Grid.Column="3" Width="128">
                     <!-- Badges (Normalzustand) -->
                     <StackPanel x:Name="BadgesPanel" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,4,0,0" MaxWidth="86">
-                        <Border CornerRadius="4" Padding="5,2" Background="{DynamicResource PopupBadgeBrush}" Margin="0,0,0,3">
+                        <Border CornerRadius="4" Padding="5,2" Background="{DynamicResource PopupBadgeBrush}" Margin="0,0,0,3"
+                                ToolTip="{Binding DetectionReason}">
                             <TextBlock Text="{Binding BadgeText}" FontSize="10" FontWeight="SemiBold"
                                        Foreground="{DynamicResource PopupTextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                         </Border>
                         <Border CornerRadius="4" Padding="5,2" Background="{DynamicResource PopupBadgeSecondaryBrush}" Margin="0,0,0,5"
-                                Visibility="{Binding DetailBadgeText, Converter={StaticResource NullToVis}}">
+                                Visibility="{Binding DetailBadgeText, Converter={StaticResource NullToVis}}"
+                                ToolTip="{Binding DetailBadgeText}">
                             <TextBlock Text="{Binding DetailBadgeText}" FontSize="10" FontWeight="SemiBold"
                                        Foreground="{DynamicResource PopupTextMutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="74" />
                         </Border>
@@ -362,7 +369,9 @@
                     <!-- Hover-Aktionsleiste -->
                     <StackPanel x:Name="HoverActions" Orientation="Horizontal"
                                 VerticalAlignment="Center"
-                                Visibility="Hidden"
+                                HorizontalAlignment="Right"
+                                Opacity="0"
+                                IsHitTestVisible="False"
                                 Margin="0,0,2,0">
                         <Button Content="&#xE8C8;" ToolTip="Kopieren"
                                 Style="{StaticResource HoverActionBtnStyle}"
@@ -381,8 +390,10 @@
             </Grid>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsHovered}" Value="True">
-                    <Setter TargetName="HoverActions" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="BadgesPanel" Property="Visibility" Value="Hidden" />
+                    <Setter TargetName="HoverActions" Property="Opacity" Value="1" />
+                    <Setter TargetName="HoverActions" Property="IsHitTestVisible" Value="True" />
+                    <Setter TargetName="BadgesPanel" Property="Opacity" Value="0" />
+                    <Setter TargetName="BadgesPanel" Property="IsHitTestVisible" Value="False" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -494,16 +505,17 @@
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
-                            <Button Content="+" FontSize="18"
+                            <Button Content="&#xE70F;" FontFamily="Segoe Fluent Icons" FontSize="16"
                                     Width="32" Height="32"
                                     Background="Transparent" BorderThickness="0"
                                     Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
-                                    ToolTip="Schnellnotiz" Click="ToggleQuickNote_Click">
+                                    ToolTip="Schnellnotiz erstellen" Click="ToggleQuickNote_Click">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
-                                                Width="32" Height="32">
+                                                Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
                                             <TextBlock Text="{TemplateBinding Content}"
+                                                       FontFamily="{TemplateBinding FontFamily}"
                                                        FontSize="{TemplateBinding FontSize}"
                                                        Foreground="{TemplateBinding Foreground}"
                                                        HorizontalAlignment="Center"

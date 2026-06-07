@@ -27,4 +27,22 @@ public class EntryBadgeTests
         Assert.Equal(expectedBadge, vm.BadgeText);
         Assert.Equal(expectedDetail, vm.DetailBadgeText);
     }
+
+    [Fact]
+    public void RefreshTimestamp_NotifiesRelativeTimeAndGroupLabel()
+    {
+        var vm = new EntryViewModel(new ClipboardEntry
+        {
+            Type = EntryType.Text,
+            Content = "note",
+            Timestamp = DateTime.Now,
+        });
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.RefreshTimestamp();
+
+        Assert.Contains(nameof(EntryViewModel.RelativeTime), changed);
+        Assert.Contains(nameof(EntryViewModel.GroupLabel), changed);
+    }
 }

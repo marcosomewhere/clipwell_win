@@ -3,11 +3,17 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Clipwell – Einstellungen"
-        Width="600" Height="700"
+        Width="760" Height="760"
+        MinWidth="640" MinHeight="560"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
-        WindowStartupLocation="CenterScreen"
-        Closing="Window_Closing">
+        WindowStartupLocation="CenterScreen">
+
+    <ui:FluentWindow.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </ui:FluentWindow.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -23,7 +29,7 @@
 
             <!-- ═══════════════════════════════ Allgemein ══════════════════ -->
             <TabItem Header="Allgemein">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer VerticalScrollBarVisibility="Visible">
                     <StackPanel Margin="0,12,0,0">
 
                         <ui:CardExpander Margin="0,0,0,8" IsExpanded="True">
@@ -69,32 +75,44 @@
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Erkennung" FontWeight="SemiBold" />
-                                    <TextBlock Text="Code-Erkennung und Inhaltsdetails" FontSize="12" Opacity="0.6" />
+                                    <TextBlock Text="Farbschema" FontWeight="SemiBold" />
+                                    <TextBlock Text="Welches Theme soll Clipwell verwenden?" FontSize="12" Opacity="0.6" />
                                 </StackPanel>
                             </ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Text="Code-Erkennung:" Margin="0,0,0,6" />
-                                <ComboBox x:Name="CodeModeBox" Width="180" HorizontalAlignment="Left">
-                                    <ComboBoxItem Content="Konservativ" />
-                                    <ComboBoxItem Content="Normal" />
-                                    <ComboBoxItem Content="Aggressiv" />
-                                </ComboBox>
-                            </StackPanel>
+                            <ComboBox x:Name="ThemeBox" Width="150"
+                                      SelectionChanged="ThemeBox_SelectionChanged">
+                                <ComboBoxItem Content="System" />
+                                <ComboBoxItem Content="Dunkel" />
+                                <ComboBoxItem Content="Hell" />
+                            </ComboBox>
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,8">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Erkennung" FontWeight="SemiBold" />
+                                    <TextBlock Text="Wie aggressiv soll Code in kopierten Texten erkannt werden?" FontSize="12" Opacity="0.6" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ComboBox x:Name="CodeModeBox" Width="180" HorizontalAlignment="Left">
+                                <ComboBoxItem Content="Konservativ" />
+                                <ComboBoxItem Content="Normal" />
+                                <ComboBoxItem Content="Aggressiv" />
+                            </ComboBox>
                         </ui:CardControl>
 
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
                                     <TextBlock Text="History-Limit" FontWeight="SemiBold" />
-                                    <TextBlock Text="Maximale Anzahl gespeicherter Einträge" FontSize="12" Opacity="0.6" />
+                                    <TextBlock Text="Maximale Anzahl gespeicherter Einträge (50–5000)" FontSize="12" Opacity="0.6" />
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <ui:NumberBox x:Name="MaxItemsBox" Value="500"
-                                              Minimum="50" Maximum="5000"
-                                              Width="100" Margin="0,0,8,0" />
-                                <ui:Button Content="Speichern" Click="SaveGeneral_Click" />
+                                <ui:TextBox x:Name="MaxItemsBox"
+                                            Text="500"
+                                            PlaceholderText="500"
+                                            Width="100" />
                             </StackPanel>
                         </ui:CardControl>
 
@@ -111,203 +129,106 @@
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Popup-Position merken" FontWeight="SemiBold" />
-                                    <TextBlock Text="Fenster-Grösse und -Position beim nächsten Öffnen wiederherstellen" FontSize="12" Opacity="0.6" />
+                                    <TextBlock Text="Windows-Autostart" FontWeight="SemiBold" />
+                                    <TextBlock Text="Clipwell beim Anmelden automatisch starten" FontSize="12" Opacity="0.6" />
                                 </StackPanel>
                             </ui:CardControl.Header>
-                            <ui:ToggleSwitch x:Name="RememberPositionSwitch" Click="RememberPosition_Click" />
+                            <ui:ToggleSwitch x:Name="StartWithWindowsSwitch" Click="StartWithWindows_Click" />
                         </ui:CardControl>
-
-                        <ui:CardControl>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Paste-Testmodus" FontWeight="SemiBold" />
-                                    <TextBlock Text="Fokus-Restore, Ctrl+V und Win+V in einem Testfeld prüfen" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBox x:Name="PasteTestBox" MinHeight="80"
-                                         AcceptsReturn="True" TextWrapping="Wrap"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Margin="0,0,0,8" />
-                                <StackPanel Orientation="Horizontal">
-                                    <ui:Button Content="Ctrl+V testen" Click="TestCtrlV_Click" Margin="0,0,8,0" />
-                                    <ui:Button Content="Win+V testen"  Click="TestWinV_Click" />
-                                </StackPanel>
-                            </StackPanel>
-                        </ui:CardControl>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- ═══════════════════════════════ Darstellung ═══════════════ -->
-            <TabItem Header="Darstellung">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,12,0,0">
 
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Farbschema" FontWeight="SemiBold" />
-                                    <TextBlock Text="Welches Theme soll Clipwell verwenden?" FontSize="12" Opacity="0.6" />
+                                    <TextBlock Text="URL-Vorschau laden" FontWeight="SemiBold" />
+                                    <TextBlock Text="Titel und Favicon kopierter URLs aus dem Netz abrufen. Aus = kein Netzwerkzugriff beim Kopieren." FontSize="12" Opacity="0.6" />
                                 </StackPanel>
                             </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <ComboBox x:Name="ThemeBox" Width="150" Margin="0,0,8,0"
-                                          SelectionChanged="ThemeBox_SelectionChanged">
-                                    <ComboBoxItem Content="System" />
-                                    <ComboBoxItem Content="Dunkel" />
-                                    <ComboBoxItem Content="Hell" />
-                                    <ComboBoxItem Content="Kompakt (Hell)" />
-                                </ComboBox>
-                            </StackPanel>
-                        </ui:CardControl>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- ═══════════════════════════════ Privatsphäre ══════════════ -->
-            <TabItem Header="Privatsphäre">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,12,0,0">
-
-                        <ui:CardControl Margin="0,0,0,8">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Inkognito-Modus" FontWeight="SemiBold" />
-                                    <TextBlock Text="Nichts speichern – alle Clipboard-Änderungen ignorieren" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch x:Name="IncognitoSwitch" Click="IncognitoSwitch_Click" />
+                            <ui:ToggleSwitch x:Name="UrlPreviewSwitch" Click="UrlPreview_Click" />
                         </ui:CardControl>
 
                         <ui:CardExpander Margin="0,0,0,8" IsExpanded="False">
-                            <ui:CardExpander.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Apps ausschliessen" FontWeight="SemiBold" />
-                                    <TextBlock Text="Prozessnamen kommagetrennt – Clipboard wird für diese Apps nicht gespeichert" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardExpander.Header>
-                            <StackPanel Margin="0,8,0,0">
-                                <ui:TextBox x:Name="IncognitoAppsBox"
-                                            PlaceholderText="z.B. KeePass, 1Password, bitwarden"
-                                            AcceptsReturn="False" TextWrapping="Wrap"
-                                            Margin="0,0,0,8" />
-                                <ui:Button Content="Speichern" Click="SaveIncognitoApps_Click" />
-                            </StackPanel>
-                        </ui:CardExpander>
-
-                        <ui:CardExpander Margin="0,0,0,8" IsExpanded="False">
-                            <ui:CardExpander.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Domains ausschliessen" FontWeight="SemiBold" />
-                                    <TextBlock Text="URLs dieser Domains werden nicht gespeichert (kommagetrennt)" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardExpander.Header>
-                            <StackPanel Margin="0,8,0,0">
-                                <ui:TextBox x:Name="IncognitoDomainsBox"
-                                            PlaceholderText="z.B. bank.de, paypal.com"
-                                            AcceptsReturn="False" TextWrapping="Wrap"
-                                            Margin="0,0,0,8" />
-                                <ui:Button Content="Speichern" Click="SaveIncognitoDomains_Click" />
-                            </StackPanel>
-                        </ui:CardExpander>
-
-                        <ui:CardControl Margin="0,0,0,8">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Sensible Inhalte filtern" FontWeight="SemiBold" />
-                                    <TextBlock Text="API-Keys, Tokens, Passwörter und Private Keys automatisch nicht speichern" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch x:Name="FilterSensitiveSwitch" Click="FilterSensitive_Click" />
-                        </ui:CardControl>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- ═══════════════════════════════ Daten ════════════════════ -->
-            <TabItem Header="Daten">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,12,0,0">
-
-                        <ui:CardExpander Margin="0,0,0,8" IsExpanded="True">
                             <ui:CardExpander.Header>
                                 <StackPanel>
                                     <TextBlock Text="Speicherlimits" FontWeight="SemiBold" />
-                                    <TextBlock Text="Ältere oder zu viele Einträge automatisch löschen" FontSize="12" Opacity="0.6" />
+                                    <TextBlock Text="Ältere oder zu viele Einträge automatisch löschen (0 = deaktiviert)" FontSize="12" Opacity="0.6" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <StackPanel Margin="0,8,0,0">
-                                <TextBlock Text="Maximales Alter (Tage, 0 = deaktiviert):" Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                    <ui:NumberBox x:Name="MaxAgeBox" Value="0" Minimum="0" Maximum="3650"
-                                                  Width="100" Margin="0,0,8,0" />
-                                </StackPanel>
-                                <TextBlock Text="Maximale DB-Grösse in MB (0 = deaktiviert):" Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                    <ui:NumberBox x:Name="MaxSizeBox" Value="0" Minimum="0" Maximum="10240"
-                                                  Width="100" Margin="0,0,8,0" />
-                                </StackPanel>
-                                <ui:Button Content="Speichern" Click="SaveStorageLimits_Click" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="Maximales Alter (Tage)" FontWeight="SemiBold" />
+                                        <TextBlock Text="Einträge älter als N Tage werden beim nächsten Start gelöscht" FontSize="12" Opacity="0.6" />
+                                    </StackPanel>
+                                    <ui:TextBox x:Name="MaxAgeBox" Grid.Column="1"
+                                                Text="0"
+                                                PlaceholderText="0" Width="100"
+                                                VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="Maximale DB-Grösse (MB)" FontWeight="SemiBold" />
+                                        <TextBlock Text="Älteste Einträge werden entfernt, wenn Datenbankgrösse überschritten" FontSize="12" Opacity="0.6" />
+                                    </StackPanel>
+                                    <ui:TextBox x:Name="MaxSizeBox" Grid.Column="1"
+                                                Text="0"
+                                                PlaceholderText="0" Width="100"
+                                                VerticalAlignment="Center" />
+                                </Grid>
                             </StackPanel>
                         </ui:CardExpander>
 
-                        <ui:CardExpander Margin="0,0,0,8" IsExpanded="False">
+                        <ui:CardExpander Margin="0,0,0,8" IsExpanded="False" x:Name="BackupExpander">
                             <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Export" FontWeight="SemiBold" />
-                                    <TextBlock Text="History als JSON oder SQLite-Backup speichern" FontSize="12" Opacity="0.6" />
+                                    <TextBlock Text="Sichern &amp; Wiederherstellen" FontWeight="SemiBold" />
+                                    <TextBlock Text="Export, Import und automatische Backups verwalten" FontSize="12" Opacity="0.6" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <StackPanel Margin="0,8,0,0">
-                                <StackPanel Orientation="Horizontal">
+
+                                <TextBlock Text="Manueller Export" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                     <ui:Button Content="Als JSON exportieren" Click="ExportJson_Click" Margin="0,0,8,0" />
-                                    <ui:Button Content="Als SQLite-Backup exportieren" Click="ExportSqlite_Click" />
+                                    <ui:Button Content="SQLite-Backup exportieren" Click="ExportSqlite_Click" />
                                 </StackPanel>
-                            </StackPanel>
-                        </ui:CardExpander>
 
-                        <ui:CardExpander Margin="0,0,0,8" IsExpanded="False">
-                            <ui:CardExpander.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Import" FontWeight="SemiBold" />
-                                    <TextBlock Text="History aus JSON-Datei importieren" FontSize="12" Opacity="0.6" />
+                                <TextBlock Text="Import" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <ui:Button Content="Aus JSON importieren" Click="ImportJson_Click" />
                                 </StackPanel>
-                            </ui:CardExpander.Header>
-                            <StackPanel Margin="0,8,0,0">
-                                <ui:Button Content="Aus JSON importieren" Click="ImportJson_Click" />
-                            </StackPanel>
-                        </ui:CardExpander>
 
-                        <ui:CardExpander Margin="0,0,0,8" IsExpanded="False" x:Name="AutoBackupExpander">
-                            <ui:CardExpander.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Automatisches Backup" FontWeight="SemiBold" />
-                                    <TextBlock Text="Täglich einen JSON-Export automatisch erstellen" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardExpander.Header>
-                            <StackPanel Margin="0,8,0,0">
-                                <ui:CardControl Margin="0,0,0,10">
-                                    <ui:CardControl.Header>
-                                        <StackPanel>
-                                            <TextBlock Text="Auto-Backup aktivieren" FontWeight="SemiBold" />
-                                            <TextBlock Text="Einmal täglich beim Start einen JSON-Export anlegen" FontSize="12" Opacity="0.6" />
-                                        </StackPanel>
-                                    </ui:CardControl.Header>
-                                    <ui:ToggleSwitch x:Name="AutoBackupSwitch" Click="AutoBackupSwitch_Click" />
-                                </ui:CardControl>
+                                <Separator Margin="0,0,0,12" />
+
+                                <TextBlock Text="Automatisches tägliches Backup" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="Einmal täglich beim Start einen JSON-Export anlegen" FontSize="12" Opacity="0.6" Margin="0,0,0,10" />
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Auto-Backup aktivieren" VerticalAlignment="Center" />
+                                    <ui:ToggleSwitch x:Name="AutoBackupSwitch" Grid.Column="1"
+                                                     Click="AutoBackupSwitch_Click" />
+                                </Grid>
+
                                 <TextBlock Text="Backup-Verzeichnis:" Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <ui:TextBox x:Name="AutoBackupDirBox" IsReadOnly="True" Width="260"
                                                 PlaceholderText="Noch kein Verzeichnis gewählt"
                                                 Margin="0,0,8,0" />
                                     <ui:Button Content="Durchsuchen…" Click="AutoBackupBrowse_Click" />
                                 </StackPanel>
                                 <TextBlock x:Name="AutoBackupStatusLabel" FontSize="12" Opacity="0.65" />
+
                             </StackPanel>
                         </ui:CardExpander>
 
@@ -334,125 +255,306 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══════════════════════════════ Tastaturhilfe ════════════ -->
-            <TabItem Header="Tastaturhilfe">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,12,0,0">
-                        <TextBlock Text="Popup" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,8" />
-                        <TextBlock LineHeight="22" TextWrapping="Wrap">
-Enter: Eintrag einfügen&#x0a;Ctrl+Enter: Plain Text einfügen&#x0a;Pfeil hoch/runter: Auswahl bewegen&#x0a;Ctrl+P: Eintrag pinnen&#x0a;Entf: Eintrag löschen&#x0a;Esc: Popup schließen</TextBlock>
-                        <Separator Margin="0,16,0,16" />
-                        <TextBlock Text="Erweiterte Suche" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,8" />
-                        <TextBlock LineHeight="22" TextWrapping="Wrap">
-type:url  – nur URLs anzeigen&#x0a;kind:json  – nur JSON-Einträge&#x0a;domain:github.com  – URLs einer Domain&#x0a;pinned:true / pinned:false  – nach Pin-Status filtern</TextBlock>
-                        <Separator Margin="0,16,0,16" />
-                        <TextBlock Text="Kontextmenü" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,8" />
-                        <TextBlock LineHeight="22" TextWrapping="Wrap">
-Rechtsklick auf einen Eintrag: Kopieren, Plain Copy, Pinnen, Löschen, URL neu laden, Detailansicht und manuelle Typkorrektur.</TextBlock>
-                        <Separator Margin="0,16,0,16" />
-                        <TextBlock Text="Hotkey" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,8" />
-                        <TextBlock LineHeight="22" TextWrapping="Wrap">
-Der globale Hotkey kann das Menü öffnen oder den neuesten Eintrag direkt einfügen. Wenn Windows die Kombination blockiert, zeigt Clipwell den Fehlercode an.</TextBlock>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
             <!-- ═══════════════════════════════ Tastenkürzel ══════════════ -->
             <TabItem Header="Tastenkürzel">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer VerticalScrollBarVisibility="Visible">
                     <StackPanel Margin="0,12,0,0">
                         <TextBlock Text="Popup-Aktionen konfigurieren" FontWeight="SemiBold"
-                                   FontSize="14" Margin="0,0,0,8" />
-                        <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12">
-Die folgenden Tastenkombinationen gelten für das Popup-Fenster. Enter, Esc und Pfeiltasten sind fest belegt.</TextBlock>
+                                   FontSize="14" Margin="0,0,0,6" />
+                        <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16">
+Diese Tastenkombinationen wirken im Popup-Fenster. Enter, Esc und Pfeiltasten sind fest belegt.
+Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBlock>
 
-                        <ui:CardControl Margin="0,0,0,8">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Eintrag pinnen" FontWeight="SemiBold" />
-                                    <TextBlock Text="Standard: Ctrl+P" FontSize="12" Opacity="0.6" />
+                        <!-- Eintrag pinnen -->
+                        <Border Margin="0,0,0,8" Padding="16,14" CornerRadius="8" BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Eintrag pinnen" FontWeight="SemiBold" FontSize="14" />
+                                    <TextBlock Grid.Column="1" Text="Standard: Ctrl+P"
+                                               FontSize="12" Opacity="0.5" VerticalAlignment="Center" />
+                                </Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:ToggleSwitch x:Name="PinCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
+                                                     IsChecked="True" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="PinAltSwitch" OffContent="Alt" OnContent="Alt"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="PinShiftSwitch" OffContent="Shift" OnContent="Shift"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="PinWinSwitch" OffContent="Win" OnContent="Win"
+                                                     IsChecked="False" Margin="0,0,0,0" />
+                                    <Rectangle Width="1" Height="28" Margin="16,0"
+                                               Fill="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="Taste" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" Opacity="0.65" FontSize="12" />
+                                    <ui:TextBox x:Name="PinKeyBox" MaxLength="1" Width="64" FontSize="14"
+                                                HorizontalContentAlignment="Center" />
                                 </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:ToggleSwitch x:Name="PinCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
-                                                 IsChecked="True" Margin="0,0,8,0" />
-                                <ui:TextBox x:Name="PinKeyBox" MaxLength="1" Width="50"
-                                            HorizontalContentAlignment="Center" />
                             </StackPanel>
-                        </ui:CardControl>
+                        </Border>
 
-                        <ui:CardControl Margin="0,0,0,8">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Details öffnen" FontWeight="SemiBold" />
-                                    <TextBlock Text="Standard: F2" FontSize="12" Opacity="0.6" />
+                        <!-- Details öffnen -->
+                        <Border Margin="0,0,0,8" Padding="16,14" CornerRadius="8" BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Details öffnen" FontWeight="SemiBold" FontSize="14" />
+                                    <TextBlock Grid.Column="1" Text="Standard: F2"
+                                               FontSize="12" Opacity="0.5" VerticalAlignment="Center" />
+                                </Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:ToggleSwitch x:Name="DetailsCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="DetailsAltSwitch" OffContent="Alt" OnContent="Alt"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="DetailsShiftSwitch" OffContent="Shift" OnContent="Shift"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="DetailsWinSwitch" OffContent="Win" OnContent="Win"
+                                                     IsChecked="False" Margin="0,0,0,0" />
+                                    <Rectangle Width="1" Height="28" Margin="16,0"
+                                               Fill="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="Taste" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" Opacity="0.65" FontSize="12" />
+                                    <ui:TextBox x:Name="DetailsKeyBox" MaxLength="3" Width="64" FontSize="14"
+                                                PlaceholderText="F2" HorizontalContentAlignment="Center" />
                                 </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:TextBox x:Name="DetailsKeyBox" Width="80"
-                                        PlaceholderText="F2" HorizontalContentAlignment="Center" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="0,0,0,8">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Schnellnotiz" FontWeight="SemiBold" />
-                                    <TextBlock Text="Standard: Ctrl+N" FontSize="12" Opacity="0.6" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:ToggleSwitch x:Name="QuickNoteCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
-                                                 IsChecked="True" Margin="0,0,8,0" />
-                                <ui:TextBox x:Name="QuickNoteKeyBox" MaxLength="1" Width="50"
-                                            HorizontalContentAlignment="Center" />
                             </StackPanel>
-                        </ui:CardControl>
+                        </Border>
 
-                        <ui:CardControl Margin="0,0,0,8">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Pinboard öffnen/schließen" FontWeight="SemiBold" />
-                                    <TextBlock Text="Standard: Ctrl+B" FontSize="12" Opacity="0.6" />
+                        <!-- Schnellnotiz -->
+                        <Border Margin="0,0,0,8" Padding="16,14" CornerRadius="8" BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Schnellnotiz" FontWeight="SemiBold" FontSize="14" />
+                                    <TextBlock Grid.Column="1" Text="Standard: Ctrl+N"
+                                               FontSize="12" Opacity="0.5" VerticalAlignment="Center" />
+                                </Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:ToggleSwitch x:Name="QuickNoteCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
+                                                     IsChecked="True" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="QuickNoteAltSwitch" OffContent="Alt" OnContent="Alt"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="QuickNoteShiftSwitch" OffContent="Shift" OnContent="Shift"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="QuickNoteWinSwitch" OffContent="Win" OnContent="Win"
+                                                     IsChecked="False" Margin="0,0,0,0" />
+                                    <Rectangle Width="1" Height="28" Margin="16,0"
+                                               Fill="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="Taste" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" Opacity="0.65" FontSize="12" />
+                                    <ui:TextBox x:Name="QuickNoteKeyBox" MaxLength="1" Width="64" FontSize="14"
+                                                HorizontalContentAlignment="Center" />
                                 </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:ToggleSwitch x:Name="PinboardCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
-                                                 IsChecked="True" Margin="0,0,8,0" />
-                                <ui:TextBox x:Name="PinboardKeyBox" MaxLength="1" Width="50"
-                                            HorizontalContentAlignment="Center" />
                             </StackPanel>
-                        </ui:CardControl>
+                        </Border>
 
-                        <ui:Button Content="Tastenkürzel speichern" Appearance="Primary"
-                                   Click="SaveShortcuts_Click" Margin="0,8,0,0" />
+                        <!-- Pinboard öffnen/schließen -->
+                        <Border Margin="0,0,0,8" Padding="16,14" CornerRadius="8" BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Pinboard öffnen/schließen" FontWeight="SemiBold" FontSize="14" />
+                                    <TextBlock Grid.Column="1" Text="Standard: Ctrl+B"
+                                               FontSize="12" Opacity="0.5" VerticalAlignment="Center" />
+                                </Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:ToggleSwitch x:Name="PinboardCtrlSwitch" OffContent="Ctrl" OnContent="Ctrl"
+                                                     IsChecked="True" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="PinboardAltSwitch" OffContent="Alt" OnContent="Alt"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="PinboardShiftSwitch" OffContent="Shift" OnContent="Shift"
+                                                     IsChecked="False" Margin="0,0,10,0" />
+                                    <ui:ToggleSwitch x:Name="PinboardWinSwitch" OffContent="Win" OnContent="Win"
+                                                     IsChecked="False" Margin="0,0,0,0" />
+                                    <Rectangle Width="1" Height="28" Margin="16,0"
+                                               Fill="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="Taste" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" Opacity="0.65" FontSize="12" />
+                                    <ui:TextBox x:Name="PinboardKeyBox" MaxLength="1" Width="64" FontSize="14"
+                                                HorizontalContentAlignment="Center" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                         <ui:Button Content="Auf Standard zurücksetzen"
-                                   Click="ResetShortcuts_Click" Margin="0,8,0,0" />
+                                   Click="ResetShortcuts_Click" Margin="0,8,0,16" />
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══════════════════════════════ Über ═════════════════════ -->
             <TabItem Header="Über">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
-                    <TextBlock Text="Clipwell für Windows" FontSize="22" FontWeight="Bold"
-                               HorizontalAlignment="Center" Margin="0,0,0,4" />
-                    <TextBlock x:Name="VersionLabel" FontSize="13" Opacity="0.6"
-                               HorizontalAlignment="Center" Margin="0,0,0,12" />
-                    <Separator Margin="0,0,0,12" />
-                    <TextBlock Text="Copyright 2026 Marco Seefeldt"
-                               HorizontalAlignment="Center" Opacity="0.7" Margin="0,0,0,8" />
-                    <TextBlock HorizontalAlignment="Center" Margin="0,0,0,12">
-                        <Hyperlink x:Name="GitHubLink"
-                                   RequestNavigate="GitHubLink_RequestNavigate"
-                                   NavigateUri="https://github.com/marcoseefeldt/clipwell-win">
-                            github.com/marcoseefeldt/clipwell-win
-                        </Hyperlink>
-                    </TextBlock>
-                    <Separator Margin="0,0,0,12" />
-                    <TextBlock FontSize="11" Opacity="0.45" HorizontalAlignment="Center"
-                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="340">
-                        Native Windows, local-first, WPF / .NET 8, SQLite, Windows 10+
-                    </TextBlock>
-                </StackPanel>
+                <Border Margin="0,12,0,0"
+                        CornerRadius="8"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="210" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0"
+                                Padding="20"
+                                CornerRadius="8,0,0,8"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,1,0">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#28313D" Offset="0" />
+                                    <GradientStop Color="#111820" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Image x:Name="AboutLogoImage"
+                                           Width="100" Height="100"
+                                           Stretch="Uniform"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,16" />
+                                    <TextBlock Text="Clipwell"
+                                               FontSize="26"
+                                               FontWeight="Bold"
+                                               HorizontalAlignment="Center"
+                                               Foreground="#FFFFFFFF"
+                                               Margin="0,0,0,4" />
+                                    <TextBlock Text="für Windows"
+                                               FontSize="13"
+                                               Opacity="0.66"
+                                               HorizontalAlignment="Center"
+                                               Foreground="#FFFFFFFF" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1">
+                                    <Grid Margin="12,0,12,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Height="1" VerticalAlignment="Center" Background="#40FFFFFF" />
+                                        <TextBlock Grid.Column="1" Text="♥" FontSize="14"
+                                                   Foreground="#FFE34A4A" Margin="10,0" />
+                                        <Border Grid.Column="2" Height="1" VerticalAlignment="Center"
+                                                Background="#40FFFFFF" />
+                                    </Grid>
+                                    <TextBlock TextAlignment="Center" FontSize="11.5" Foreground="#CCFFFFFF">
+                                        <Run Text="Made with " />
+                                        <Run Text="♥" Foreground="#FFE34A4A" />
+                                        <Run Text=" from Marco Seefeldt" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Column="1" Margin="26,22,26,22">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Margin="0,0,0,18">
+                                <TextBlock Text="Dein stiller Begleiter"
+                                           FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,8" />
+                                <TextBlock TextWrapping="Wrap"
+                                           Opacity="0.70"
+                                           FontSize="13.5"
+                                           LineHeight="21">
+                                    Alles, was du kopierst, wartet auf dich. Clipwell läuft im Hintergrund, ohne dich zu stören, und bringt deine History mit einem Tastendruck zurück – egal ob Text, Bild oder Link.
+                                </TextBlock>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,0">
+                                <Border Padding="14,10"
+                                        CornerRadius="6"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        Margin="0,0,10,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Version" Opacity="0.55" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBlock x:Name="AboutVersionLabel" FontSize="16" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Padding="14,10"
+                                        CornerRadius="6"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                    <StackPanel>
+                                        <TextBlock Text="Build" Opacity="0.55" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBlock x:Name="AboutBuildLabel" FontSize="16" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <Border Grid.Row="3"
+                                    Padding="14,12"
+                                    CornerRadius="8"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="Quellcode &amp; Updates"
+                                                   FontWeight="SemiBold" FontSize="13" />
+                                        <TextBlock Text="github.com/marcosomewhere/clipwell_win"
+                                                   FontSize="11.5" Opacity="0.50" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1"
+                                               Click="AboutGitHub_Click"
+                                               MinWidth="100"
+                                               Height="34"
+                                               Margin="16,0,0,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Globe24" FontSize="15" Margin="0,0,7,0" />
+                                            <TextBlock Text="GitHub" />
+                                        </StackPanel>
+                                    </ui:Button>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
             </TabItem>
 
         </TabControl>

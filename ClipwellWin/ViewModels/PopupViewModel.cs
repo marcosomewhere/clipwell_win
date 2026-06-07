@@ -102,6 +102,16 @@ public class PopupViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedCount));
     }
 
+    public void UnpinAllPinned()
+    {
+        foreach (var vm in Entries.Where(e => e.IsPinned).ToList())
+        {
+            vm.IsPinned = false;
+            _db.SetPinned(vm.Id, false);
+        }
+        _view.Refresh();
+    }
+
     public List<ClipboardEntry> GetSelectedEntries()
         => Entries.Where(e => e.IsSelected).Select(e => e.Entry).ToList();
 
@@ -133,35 +143,59 @@ public class PopupViewModel : ViewModelBase
 
     public void AddEntry(ClipboardEntry entry)
     {
-        if (Entries.Count > 0)
+        var duplicates = Entries
+            .Where(e => IsDuplicate(e.Entry, entry))
+            .OrderByDescending(e => e.IsPinned)
+            .ThenByDescending(e => e.Timestamp)
+            .ToList();
+        if (duplicates.Count > 0)
         {
-            var last = Entries.OrderByDescending(e => e.Timestamp).First();
-            if (IsDuplicateOfLatest(last.Entry, entry)) return;
+            var kept = duplicates[0];
+            entry.Id = kept.Id;
+            if (entry.IsPinned && !kept.IsPinned)
+            {
+                kept.IsPinned = true;
+                _db.SetPinned(kept.Id, true);
+            }
+            kept.SetTimestamp(entry.Timestamp);
+            _db.UpdateTimestamp(kept.Id, entry.Timestamp);
+
+            foreach (var duplicate in duplicates.Skip(1))
+            {
+                _db.Delete(duplicate.Id);
+                Entries.Remove(duplicate);
+            }
+
+            _view.Refresh();
+            return;
         }
 
         var id = _db.Insert(entry);
         entry.Id = id;
         Entries.Insert(0, new EntryViewModel(entry));
 
-        _db.Purge(_maxHistoryItems());
+        var purged = _db.Purge(_maxHistoryItems());
+        var agePurged = _maxAgeInDays() > 0 ? _db.PurgeByAge(_maxAgeInDays()) : 0;
 
-        if (_maxAgeInDays() > 0)
-            _db.PurgeByAge(_maxAgeInDays());
-
-        var dbIds = _db.LoadAll().Select(e => e.Id).ToHashSet();
-        var toRemove = Entries.Where(e => !dbIds.Contains(e.Id)).ToList();
-        foreach (var r in toRemove) Entries.Remove(r);
+        if (purged + agePurged > 0)
+        {
+            var dbIds = _db.LoadAllIds();
+            var toRemove = Entries.Where(e => !dbIds.Contains(e.Id)).ToList();
+            foreach (var r in toRemove) Entries.Remove(r);
+        }
     }
 
-    private static bool IsDuplicateOfLatest(ClipboardEntry latest, ClipboardEntry next)
+    private static bool IsDuplicate(ClipboardEntry existing, ClipboardEntry next)
     {
-        if (latest.Type != next.Type) return false;
+        if (existing.Type != next.Type) return false;
         if (next.Type == EntryType.Image)
-            return latest.ImageData != null
+            return existing.ImageData != null
                 && next.ImageData != null
-                && latest.ImageData.SequenceEqual(next.ImageData);
+                && existing.ImageData.SequenceEqual(next.ImageData);
 
-        return string.Equals(latest.Content, next.Content, StringComparison.Ordinal);
+        return existing.Content != null
+            && next.Content != null
+            && string.Equals(existing.Content, next.Content, StringComparison.Ordinal);
     }
 
     public void TogglePin(EntryViewModel vm)
@@ -208,9 +242,13 @@ public class PopupViewModel : ViewModelBase
         string? language = type == EntryType.Code
             ? SyntaxService.DetectLanguage(vm.Content ?? "", CodeDetectionMode.Aggressive) ?? "Code"
             : null;
+        // ContentKind ist ein Badge, nicht der Sprachname – separat ableiten.
+        string? kind = type == EntryType.Code
+            ? ContentKindService.DetectTextKind(vm.Content ?? "", language)
+            : null;
         var reason = $"Manuell als {type} behandelt.";
-        vm.SetType(type, language, reason);
-        _db.SetType(vm.Id, type, language, reason);
+        vm.SetType(type, language, kind, reason);
+        _db.SetType(vm.Id, type, language, kind, reason);
         _view.Refresh();
     }
 
@@ -247,6 +285,13 @@ public class PopupViewModel : ViewModelBase
         _view.Refresh();
     }
 
+    public void RefreshTimestamps(IEnumerable<EntryViewModel>? entries = null)
+    {
+        foreach (var vm in (entries ?? Entries).ToList())
+            vm.RefreshTimestamp();
+        _view.Refresh();
+    }
+
     private bool Filter(object obj)
     {
         if (obj is not EntryViewModel vm) return false;
@@ -258,7 +303,6 @@ public class PopupViewModel : ViewModelBase
         var q = _searchText.Trim();
         if (string.IsNullOrWhiteSpace(q)) return true;
 
-        // Präfix-Syntax: type:url  kind:json  domain:github.com  pinned:true
         if (q.StartsWith("type:", StringComparison.OrdinalIgnoreCase))
         {
             var typeStr = q[5..];

@@ -2,10 +2,7 @@ using System.Windows.Interop;
 
 namespace ClipwellWin.Services;
 
-/// <summary>
-/// Message-only window that receives WM_CLIPBOARDUPDATE and WM_HOTKEY.
-/// Must be created on the UI thread.
-/// </summary>
+// Must be created on the UI thread.
 public sealed class MessageWindowService : IDisposable
 {
     private const int HotkeyId = 9001;

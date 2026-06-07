@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
@@ -12,17 +13,27 @@ namespace ClipwellWin.Services;
 public static class OcrService
 {
     private static OcrEngine? _engine;
+    private static readonly object _engineLock = new();
 
     public static bool IsAvailable()
     {
-        _engine ??= OcrEngine.TryCreateFromUserProfileLanguages();
+        if (_engine != null) return true;
+        lock (_engineLock) { _engine ??= OcrEngine.TryCreateFromUserProfileLanguages(); }
         return _engine != null;
     }
 
     public static async Task<string?> RecognizeAsync(byte[] pngBytes)
     {
-        _engine ??= OcrEngine.TryCreateFromUserProfileLanguages();
-        if (_engine == null || pngBytes.Length == 0) return null;
+        OcrEngine? engine = _engine;
+        if (engine == null)
+        {
+            lock (_engineLock)
+            {
+                _engine ??= OcrEngine.TryCreateFromUserProfileLanguages();
+                engine = _engine;
+            }
+        }
+        if (engine == null || pngBytes.Length == 0) return null;
 
         try
         {
@@ -36,7 +47,7 @@ public static class OcrService
             var softBitmap = await decoder.GetSoftwareBitmapAsync(
                 BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
 
-            var result = await _engine.RecognizeAsync(softBitmap);
+            var result = await engine.RecognizeAsync(softBitmap);
             return result.Text;
         }
         catch { return null; }
@@ -46,14 +57,56 @@ public static class OcrService
     {
         try
         {
+            src = RepairFullyTransparentColorBitmap(src);
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(WpfBitmapFrame.Create(src));
             using var ms = new MemoryStream();
             encoder.Save(ms);
             var bytes = ms.ToArray();
-            // Discard if > 2 MB
             return bytes.Length <= 2 * 1024 * 1024 ? bytes : null;
         }
         catch { return null; }
+    }
+
+    private static BitmapSource RepairFullyTransparentColorBitmap(BitmapSource src)
+    {
+        if (src.PixelWidth <= 0 || src.PixelHeight <= 0) return src;
+
+        var converted = src.Format == PixelFormats.Bgra32 || src.Format == PixelFormats.Pbgra32
+            ? src
+            : new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+        var stride = converted.PixelWidth * 4;
+        var pixels = new byte[stride * converted.PixelHeight];
+        converted.CopyPixels(pixels, stride, 0);
+
+        var hasColor = false;
+        var hasVisibleAlpha = false;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            if (pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0)
+                hasColor = true;
+            if (pixels[i + 3] != 0)
+            {
+                hasVisibleAlpha = true;
+                break;
+            }
+        }
+
+        if (!hasColor || hasVisibleAlpha) return src;
+
+        for (var i = 3; i < pixels.Length; i += 4)
+            pixels[i] = 255;
+
+        var repaired = BitmapSource.Create(
+            converted.PixelWidth,
+            converted.PixelHeight,
+            converted.DpiX,
+            converted.DpiY,
+            PixelFormats.Bgra32,
+            null,
+            pixels,
+            stride);
+        repaired.Freeze();
+        return repaired;
     }
 }
