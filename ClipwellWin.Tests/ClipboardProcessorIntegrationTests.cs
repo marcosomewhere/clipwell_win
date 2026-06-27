@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -40,6 +41,36 @@ public class ClipboardProcessorIntegrationTests
             Assert.Equal(EntryType.Url, entry!.Type);
             Assert.Contains("URL erkannt", entry.DetectionReason);
             Assert.Equal("example.com", entry.ContentKind);
+        });
+    }
+
+    [Fact]
+    public void BuildEntry_ExtractsWindowsHtmlClipboardFragment()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var data = new DataObject();
+            data.SetData(DataFormats.Html, BuildWindowsHtmlClipboard("Hallo <b>Welt</b>"));
+
+            var entry = ClipboardProcessor.BuildEntry(data);
+
+            Assert.NotNull(entry);
+            Assert.Equal("Hallo Welt", entry!.Content);
+        });
+    }
+
+    [Fact]
+    public void BuildEntry_StripsRtfWhenNoPlainTextExists()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var data = new DataObject();
+            data.SetData(DataFormats.Rtf, @"{\rtf1\ansi Hallo \b Welt\b0}");
+
+            var entry = ClipboardProcessor.BuildEntry(data);
+
+            Assert.NotNull(entry);
+            Assert.Equal("Hallo Welt", entry!.Content);
         });
     }
 
@@ -86,11 +117,11 @@ public class ClipboardProcessorIntegrationTests
     }
 
     [Theory]
-    [InlineData("$env:CLIPWELL='1'\nGet-ChildItem | Select-Object Name", "PS1")]
-    [InlineData("<configuration><appSettings><add key=\"mode\" value=\"test\" /></appSettings></configuration>", "XML")]
-    [InlineData("server.port=8080\napp.name=Clipwell", "PROPS")]
-    [InlineData("API_KEY=test\nFEATURE_FLAG=true", "ENV")]
-    public void BuildEntry_AddsDetailedBadgesForKnownTextKinds(string text, string expectedKind)
+    [InlineData("$env:CLIPWELL='1'\nGet-ChildItem | Select-Object Name")]
+    [InlineData("<configuration><appSettings><add key=\"mode\" value=\"test\" /></appSettings></configuration>")]
+    [InlineData("server.port=8080\napp.name=Clipwell")]
+    [InlineData("API_KEY=test\nFEATURE_FLAG=true\nCLIPWELL_MODE=dev")]
+    public void BuildEntry_LabelsCodeAsGenericCode(string text)
     {
         StaTestRunner.Run(() =>
         {
@@ -100,7 +131,7 @@ public class ClipboardProcessorIntegrationTests
             var entry = ClipboardProcessor.BuildEntry(data, CodeDetectionMode.Aggressive);
 
             Assert.NotNull(entry);
-            Assert.Equal(expectedKind, entry!.ContentKind);
+            Assert.Equal("CODE", entry!.ContentKind);
         });
     }
 
@@ -112,5 +143,19 @@ public class ClipboardProcessorIntegrationTests
         var pixel = new byte[4];
         converted.CopyPixels(pixel, 4, 0);
         return (pixel[0], pixel[1], pixel[2], pixel[3]);
+    }
+
+    private static string BuildWindowsHtmlClipboard(string fragment)
+    {
+        const string headerFormat = "Version:1.0\r\nStartHTML:{0:D8}\r\nEndHTML:{1:D8}\r\nStartFragment:{2:D8}\r\nEndFragment:{3:D8}\r\n";
+        var emptyHeader = string.Format(headerFormat, 0, 0, 0, 0);
+        var htmlPrefix = "<html><body><!--StartFragment-->";
+        var htmlSuffix = "<!--EndFragment--></body></html>";
+        var startHtml = Encoding.UTF8.GetByteCount(emptyHeader);
+        var startFragment = startHtml + Encoding.UTF8.GetByteCount(htmlPrefix);
+        var endFragment = startFragment + Encoding.UTF8.GetByteCount(fragment);
+        var endHtml = endFragment + Encoding.UTF8.GetByteCount(htmlSuffix);
+        return string.Format(headerFormat, startHtml, endHtml, startFragment, endFragment)
+               + htmlPrefix + fragment + htmlSuffix;
     }
 }

@@ -146,6 +146,20 @@
                             <ui:ToggleSwitch x:Name="UrlPreviewSwitch" Click="UrlPreview_Click" />
                         </ui:CardControl>
 
+                        <ui:CardControl Margin="0,0,0,8">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="URL-Cache-Dauer" FontWeight="SemiBold" />
+                                    <TextBlock Text="Tage, bis Titel und Favicons neu geladen werden" FontSize="12" Opacity="0.6" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:TextBox x:Name="UrlCacheTtlBox"
+                                        Text="7"
+                                        PlaceholderText="7"
+                                        Width="90"
+                                        VerticalAlignment="Center" />
+                        </ui:CardControl>
+
                         <ui:CardExpander Margin="0,0,0,8" IsExpanded="False">
                             <ui:CardExpander.Header>
                                 <StackPanel>
@@ -195,9 +209,13 @@
                             <StackPanel Margin="0,8,0,0">
 
                                 <TextBlock Text="Manueller Export" FontWeight="SemiBold" Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <ui:Button Content="Als JSON exportieren" Click="ExportJson_Click" Margin="0,0,8,0" />
                                     <ui:Button Content="SQLite-Backup exportieren" Click="ExportSqlite_Click" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <ui:Button Content="Als CSV exportieren" Click="ExportCsv_Click" Margin="0,0,8,0" />
+                                    <ui:Button Content="Als Markdown exportieren" Click="ExportMarkdown_Click" />
                                 </StackPanel>
 
                                 <TextBlock Text="Import" FontWeight="SemiBold" Margin="0,0,0,6" />
@@ -241,8 +259,10 @@
                             </ui:CardExpander.Header>
                             <StackPanel Margin="0,8,0,0">
                                 <WrapPanel>
-                                    <ui:Button Content="History löschen" Appearance="Caution"
+                                    <ui:Button Content="Ungepinnte History löschen" Appearance="Caution"
                                                Click="ResetHistory_Click" Margin="0,0,8,8" />
+                                    <ui:Button Content="Gesamte History löschen" Appearance="Caution"
+                                               Click="ResetAllHistory_Click" Margin="0,0,8,8" />
                                     <ui:Button Content="URL-Cache löschen" Appearance="Caution"
                                                Click="ResetUrlCache_Click" Margin="0,0,8,8" />
                                     <ui:Button Content="Einstellungen zurücksetzen" Appearance="Caution"

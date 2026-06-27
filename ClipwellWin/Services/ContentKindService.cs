@@ -19,30 +19,46 @@ public static class ContentKindService
     private static readonly Regex DockerfileRx     = new(@"^\s*(FROM|RUN|COPY|ADD|CMD|ENTRYPOINT|WORKDIR|ENV|ARG)\b",                         RegexOptions.Multiline | RegexOptions.Compiled);
     private static readonly Regex ConfigXmlRx      = new(@"^\s*<configuration\b",                                                             RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex KeyValueLineRx   = new(@"^([A-Za-z_][\w.-]{1,40})\s*([:=])\s*(\S.*?)\s*$",                                 RegexOptions.Compiled);
+    private static readonly Regex MarkdownHeaderRx  = new(@"^#{1,6}\s+\S",                                                                    RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex MarkdownListRx    = new(@"^(\s*[-*+]|\s*\d+\.)\s+\S",                                                      RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex MarkdownFenceRx   = new(@"^```",                                                                            RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex MarkdownLinkRx    = new(@"\[.+?\]\(.+?\)",                                                                  RegexOptions.Compiled);
+    private static readonly Regex MarkdownEmphRx    = new(@"(\*\*|__|_|\*).+?\1",                                                             RegexOptions.Compiled);
+    private static readonly Regex YamlDocSepRx      = new(@"^---\s*$",                                                                        RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex YamlMappingRx     = new(@"^[ \t]*[a-zA-Z_][\w.-]*\s*:\s*\S",                                               RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex YamlListItemRx    = new(@"^[ \t]*-[ \t]+\S",                                                               RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex YamlIndentedRx    = new(@"^  +[a-zA-Z_][\w.-]*\s*:",                                                       RegexOptions.Multiline | RegexOptions.Compiled);
 
     public static string? DetectTextKind(string text, string? language)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
         var t = text.Trim();
 
-        if (language == "PowerShell") return "PS1";
-        if (language == "Bash") return "SH";
-        if (language is "Python" or "JavaScript" or "TypeScript" or "PHP" or "Ruby") return "SCRIPT";
-        if (language == "JSON") return "JSON";
-        if (language == "HTML") return LooksLikeHtml(t) ? "HTML" : LooksLikeXml(t) ? "XML" : "HTML";
-        if (language == "XML") return "XML";
-        if (language == "YAML") return "YAML";
-        if (language == "SQL") return "SQL";
+        if (!string.IsNullOrWhiteSpace(language)) return "CODE";
 
-        if (LooksLikeXml(t)) return "XML";
-        if (LooksLikeEnv(t)) return "ENV";
-        if (LooksLikeToml(t)) return "TOML";
-        if (LooksLikeIni(t)) return "INI";
-        if (LooksLikeProperties(t)) return "PROPS";
-        if (LooksLikeDockerfile(t)) return "DOCKER";
-        if (LooksLikeConfig(t)) return "CONFIG";
+        if (LooksLikeXml(t)) return "CODE";
+        if (LooksLikeYaml(t)) return "YAML";
+        if (LooksLikeEnv(t)) return "CODE";
+        if (LooksLikeToml(t)) return "CODE";
+        if (LooksLikeIni(t)) return "CODE";
+        if (LooksLikeProperties(t)) return "CODE";
+        if (LooksLikeDockerfile(t)) return "CODE";
+        if (LooksLikeConfig(t)) return "CODE";
+        if (LooksLikeMarkdown(t)) return "MARKDOWN";
 
         return language;
+    }
+
+    public static bool LooksLikeMarkdown(string text)
+    {
+        int signals = 0;
+        if (MarkdownHeaderRx.IsMatch(text))  signals++;
+        if (MarkdownListRx.IsMatch(text))    signals++;
+        if (MarkdownFenceRx.IsMatch(text))   signals++;
+        if (MarkdownLinkRx.IsMatch(text))    signals++;
+        if (MarkdownEmphRx.IsMatch(text))    signals++;
+        // Needs at least 2 independent Markdown signals to avoid false positives
+        return signals >= 2;
     }
 
     public static string? DetectImageKind(byte[]? data)
@@ -86,17 +102,27 @@ public static class ContentKindService
         return true;
     }
 
+    private static bool LooksLikeYaml(string text)
+    {
+        bool hasSep      = YamlDocSepRx.IsMatch(text);
+        bool hasMapping  = YamlMappingRx.Matches(text).Count >= 2;
+        bool hasList     = YamlListItemRx.IsMatch(text);
+        bool hasIndented = YamlIndentedRx.IsMatch(text);
+        // Strong: document separator + any structure
+        if (hasSep && (hasMapping || hasList)) return true;
+        // Indented nested structure + mappings
+        if (hasIndented && hasMapping) return true;
+        // Mappings + list items (compact YAML without separator)
+        if (hasMapping && hasList) return true;
+        return false;
+    }
+
     private static bool LooksLikeToml(string text)
         => TomlSectionRx.IsMatch(text) && TomlKeyValueRx.IsMatch(text);
 
     private static bool LooksLikeXml(string text)
         => XmlDeclRx.IsMatch(text)
            || XmlOpenTagRx.IsMatch(text) && XmlCloseTagRx.IsMatch(text);
-
-    private static bool LooksLikeHtml(string text)
-        => HtmlDoctypeRx.IsMatch(text)
-           || HtmlRootRx.IsMatch(text)
-           || HtmlTagRx.IsMatch(text);
 
     private static bool LooksLikeIni(string text)
         => IniSectionRx.IsMatch(text) && IniKeyValueRx.IsMatch(text);
@@ -105,6 +131,7 @@ public static class ContentKindService
     {
         var stats = AnalyzeKeyValueLines(text);
         if (stats.KeyValueLines < 2 || !HasConfigLineRatio(stats)) return false;
+        if (stats.EnvLines == stats.KeyValueLines && stats.EnvLines < 3) return false;
 
         return stats.EqualsLines >= 2
                || stats.DottedKeys >= 1
@@ -113,7 +140,7 @@ public static class ContentKindService
     }
 
     private static bool LooksLikeEnv(string text)
-        => EnvLineRx.Matches(text).Count >= 2;
+        => EnvLineRx.Matches(text).Count >= 3;
 
     private static bool LooksLikeDockerfile(string text)
         => DockerfileRx.IsMatch(text);
@@ -141,6 +168,7 @@ public static class ContentKindService
         var dashedKeys = 0;
         var underscoredKeys = 0;
         var knownConfigKeys = 0;
+        var envLines = 0;
 
         foreach (var rawLine in text.Split('\n'))
         {
@@ -158,6 +186,7 @@ public static class ContentKindService
                 continue;
 
             keyValueLines++;
+            if (EnvLineRx.IsMatch(line)) envLines++;
             if (separator == "=") equalsLines++;
             if (key.Contains('.')) dottedKeys++;
             if (key.Contains('-')) dashedKeys++;
@@ -172,7 +201,8 @@ public static class ContentKindService
             dottedKeys,
             dashedKeys,
             underscoredKeys,
-            knownConfigKeys);
+            knownConfigKeys,
+            envLines);
     }
 
     private static bool IsKnownConfigKey(string key)
@@ -190,5 +220,6 @@ public static class ContentKindService
         int DottedKeys,
         int DashedKeys,
         int UnderscoredKeys,
-        int KnownConfigKeys);
+        int KnownConfigKeys,
+        int EnvLines);
 }

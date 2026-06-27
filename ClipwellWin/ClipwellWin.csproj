@@ -10,16 +10,17 @@
     <AssemblyName>Clipwell</AssemblyName>
     <RootNamespace>ClipwellWin</RootNamespace>
     <Version>1.0.0</Version>
-    <Copyright>© 2026 Marco Seefeldt</Copyright>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Copyright>(c) 2026 Marco Seefeldt</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
 
 </Project>

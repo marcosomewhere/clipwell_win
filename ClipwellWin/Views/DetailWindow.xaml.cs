@@ -1,5 +1,10 @@
 using System.IO;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using YamlDotNet.Core;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -42,12 +47,15 @@ public partial class DetailWindow : Window
     private readonly List<EditorAnnotation> _annotations = [];
     private readonly Stack<EditorSnapshot> _undo = new();
     private readonly Stack<EditorSnapshot> _redo = new();
+    private bool _ocrRequested;
     private EditorAnnotation? _selectedAnnotation;
     private Point? _drawStart;
     private Point? _moveStart;
     private EditorAnnotation? _movingAnnotation;
     private bool _didMove;
     private Shape? _draftShape;
+    private Rect? _pendingCropRect;
+    private readonly List<UIElement> _cropOverlayElements = [];
     private Brush _editorBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E53935"));
     private string _currentColor = "#E53935";
     private int _nextMarkerNumber = 1;
@@ -59,11 +67,18 @@ public partial class DetailWindow : Window
     private string _savedTextPreview = "";
     private bool _isCodeEditor;
     private string? _editorLanguage;
+    private string? _savedEditorLanguage;
     private bool _loadingTextEditor;
     private double _activeInlineTextSize = 18;
     private bool _textEditorSyncQueued;
     private double _textScrollX;
     private double _textScrollY;
+    private bool _isMarkdownPreviewActive;
+    private static readonly TimeSpan UiRegexTimeout = TimeSpan.FromMilliseconds(100);
+
+    private sealed record StyleMemory(string Color, double Thickness);
+    private static readonly string StyleMemoryPath = System.IO.Path.Combine(AppPaths.DataDir, "editor-styles.json");
+    private readonly List<StyleMemory> _recentStyles = [];
 
     private enum EditorTool
     {
@@ -81,6 +96,8 @@ public partial class DetailWindow : Window
         Blur,
         Crop,
     }
+
+    public sealed record ExportFormat(string Label, string Extension);
 
     private sealed class EditorAnnotation
     {
@@ -127,9 +144,92 @@ public partial class DetailWindow : Window
         _vm = vm;
         InitializeComponent();
         App.ApplyAppIcon(this);
+        ApplyDetailTheme();
         TextPreview.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(TextPreview_ScrollChanged));
         InitializeTextEditorControls();
         Populate(vm);
+        LoadStyleMemory();
+        RestoreDetailWindowSize();
+        _vm.PropertyChanged += Entry_PropertyChanged;
+        Closing += DetailWindow_Closing;
+        Closed += (_, _) =>
+        {
+            _vm.PropertyChanged -= Entry_PropertyChanged;
+            SaveDetailWindowSize();
+        };
+    }
+
+    private void DetailWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (System.Windows.Application.Current is not App)
+            return;
+
+        if (HasUnsavedImageChanges())
+        {
+            var r = System.Windows.MessageBox.Show(
+                "Bildaenderungen gehen verloren. Trotzdem schliessen?",
+                "Ungespeicherte Aenderungen",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning);
+            if (r != MessageBoxResult.OK) { e.Cancel = true; return; }
+        }
+
+        if (!HasUnsavedTextChanges()) return;
+
+        var result = System.Windows.MessageBox.Show(
+            "Textaenderungen vor dem Schliessen speichern?",
+            "Ungespeicherte Aenderungen",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+
+        if (result == MessageBoxResult.Cancel)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (result == MessageBoxResult.Yes)
+            SaveText();
+    }
+
+    private bool HasUnsavedImageChanges()
+        => ImageBorder.Visibility == Visibility.Visible && _baseImage != null && _undo.Count > 0;
+
+    private void RestoreDetailWindowSize()
+    {
+        if (System.Windows.Application.Current is not App app) return;
+        var s = app.CurrentSettings;
+        Width  = s.DetailWindowWidth  > 0 ? s.DetailWindowWidth  : 1250;
+        Height = s.DetailWindowHeight > 0 ? s.DetailWindowHeight : 1020;
+        if (s.DetailWindowMaximized)
+            WindowState = WindowState.Maximized;
+    }
+
+    private void SaveDetailWindowSize()
+    {
+        if (System.Windows.Application.Current is not App app) return;
+        app.CurrentSettings.DetailWindowMaximized = WindowState == WindowState.Maximized;
+        if (WindowState == WindowState.Normal)
+        {
+            app.CurrentSettings.DetailWindowWidth  = Width;
+            app.CurrentSettings.DetailWindowHeight = Height;
+        }
+        app.SaveSettings();
+    }
+
+    private void Entry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_vm.Type != EntryType.Image) return;
+        if (e.PropertyName is not (nameof(EntryViewModel.PreviewText) or nameof(EntryViewModel.SublineText)))
+            return;
+
+        Dispatcher.Invoke(() =>
+        {
+            _ocrText = _vm.Entry.OcrText;
+            if (_showingOcr)
+                ShowOcrTextView();
+            UpdateOcrButtonState();
+        });
     }
 
     private void InitializeTextEditorControls()
@@ -157,6 +257,54 @@ public partial class DetailWindow : Window
         }
     }
 
+    private void ApplyDetailTheme()
+    {
+        var light = System.Windows.Application.Current is App app && !app.IsEffectiveDarkTheme;
+        if (light)
+        {
+            SetBrushResource("EditorChromeBrush", Color.FromRgb(247, 249, 252));
+            SetBrushResource("EditorPanelBrush", Color.FromRgb(255, 255, 255));
+            SetBrushResource("EditorPanelAltBrush", Color.FromRgb(239, 243, 247));
+            SetBrushResource("EditorCanvasBackBrush", Color.FromRgb(229, 234, 241));
+            SetBrushResource("EditorBorderBrush", Color.FromRgb(207, 216, 226));
+            SetBrushResource("EditorMutedBrush", Color.FromRgb(96, 105, 118));
+            SetBrushResource("EditorHoverBrush", Color.FromRgb(226, 232, 240));
+            SetBrushResource("EditorPressedBrush", Color.FromRgb(216, 224, 235));
+            SetBrushResource("EditorTextPanelBrush", Color.FromRgb(255, 255, 255));
+            SetBrushResource("EditorTextHeaderBrush", Color.FromRgb(244, 247, 251));
+            SetBrushResource("EditorTextBodyBrush", Color.FromRgb(255, 255, 255));
+            SetBrushResource("EditorTextLineBrush", Color.FromRgb(241, 245, 249));
+            SetBrushResource("EditorTextBrush", Color.FromRgb(17, 24, 39));
+            SetBrushResource("EditorTextMutedBrush", Color.FromRgb(100, 116, 139));
+            SetBrushResource("EditorSelectionTextBrush", Color.FromRgb(17, 20, 24));
+            EditorCanvas.Background = new SolidColorBrush(Color.FromRgb(248, 250, 252));
+        }
+        else
+        {
+            SetBrushResource("EditorChromeBrush", Color.FromRgb(16, 20, 24));
+            SetBrushResource("EditorPanelBrush", Color.FromRgb(23, 29, 34));
+            SetBrushResource("EditorPanelAltBrush", Color.FromRgb(31, 38, 45));
+            SetBrushResource("EditorCanvasBackBrush", Color.FromRgb(35, 42, 49));
+            SetBrushResource("EditorBorderBrush", Color.FromRgb(48, 57, 67));
+            SetBrushResource("EditorMutedBrush", Color.FromRgb(154, 166, 178));
+            SetBrushResource("EditorHoverBrush", Color.FromRgb(40, 49, 58));
+            SetBrushResource("EditorPressedBrush", Color.FromRgb(50, 60, 69));
+            SetBrushResource("EditorTextPanelBrush", Color.FromRgb(16, 24, 32));
+            SetBrushResource("EditorTextHeaderBrush", Color.FromRgb(20, 28, 36));
+            SetBrushResource("EditorTextBodyBrush", Color.FromRgb(11, 17, 23));
+            SetBrushResource("EditorTextLineBrush", Color.FromRgb(14, 21, 28));
+            SetBrushResource("EditorTextBrush", Color.FromRgb(244, 246, 248));
+            SetBrushResource("EditorTextMutedBrush", Color.FromRgb(135, 145, 156));
+            SetBrushResource("EditorSelectionTextBrush", Color.FromRgb(17, 20, 24));
+            EditorCanvas.Background = new SolidColorBrush(Color.FromRgb(239, 239, 239));
+        }
+    }
+
+    private void SetBrushResource(string key, Color color)
+    {
+        Resources[key] = new SolidColorBrush(color);
+    }
+
     private void Populate(EntryViewModel vm)
     {
         TitleLabel.Text = vm.Type switch
@@ -170,6 +318,9 @@ public partial class DetailWindow : Window
         ReasonLabel.Text = "";
         ReasonLabel.Visibility = Visibility.Collapsed;
         TitleSeparator.Visibility = Visibility.Collapsed;
+        OpenUrlBtn.Visibility = vm.Type == EntryType.Url && UrlPreviewService.IsUrl(vm.Content)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         if (vm.Type == EntryType.Image && vm.Entry.ImageData != null)
         {
@@ -200,6 +351,7 @@ public partial class DetailWindow : Window
         _editorLanguage = _isCodeEditor
             ? vm.Language ?? SyntaxService.DetectLanguage(text) ?? "Code"
             : null;
+        _savedEditorLanguage = _editorLanguage;
 
         _loadingTextEditor = true;
         TextPreview.IsUndoEnabled = false;
@@ -213,7 +365,7 @@ public partial class DetailWindow : Window
             ? ScrollBarVisibility.Disabled
             : ScrollBarVisibility.Auto;
         CodeHighlightOverlay.Visibility = _isCodeEditor ? Visibility.Visible : Visibility.Collapsed;
-        TextPreview.Foreground = _isCodeEditor ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(244, 246, 248));
+        TextPreview.Foreground = _isCodeEditor ? Brushes.Transparent : (Brush)Resources["EditorTextBrush"];
         TextPreview.CaretBrush = new SolidColorBrush(Color.FromRgb(168, 230, 35));
         TextEditorTitleLabel.Text = _isCodeEditor
             ? "Skripteditor"
@@ -233,6 +385,12 @@ public partial class DetailWindow : Window
         UpdateCodeHighlightOverlay();
         QueueTextEditorSync();
         ApplyEditorTheme();
+
+        var isMarkdown = string.Equals(vm.ContentKind, "MARKDOWN", StringComparison.OrdinalIgnoreCase);
+        if (MarkdownPreviewToggle != null)
+            MarkdownPreviewToggle.Visibility = isMarkdown ? Visibility.Visible : Visibility.Collapsed;
+
+        ValidateStructuredContent(text, _editorLanguage, vm.ContentKind);
     }
 
     private void ShowColor(string hex)
@@ -366,16 +524,64 @@ public partial class DetailWindow : Window
 
         ImageFormatLabel.Text = vm.ContentKind ?? vm.Entry.ContentKind ?? "Bild";
 
-        var ocr = vm.Entry.OcrText;
-        if (!string.IsNullOrEmpty(ocr))
-        {
-            _ocrText = ocr;
-            ShowOcrBtn.Visibility = Visibility.Visible;
-        }
-        else
+        _ocrText = vm.Entry.OcrText;
+        UpdateOcrButtonState();
+        StartOcrIfNeeded();
+    }
+
+    private void UpdateOcrButtonState()
+    {
+        if (_vm.Type != EntryType.Image)
         {
             ShowOcrBtn.Visibility = Visibility.Collapsed;
+            OcrStatusLabel.Visibility = Visibility.Collapsed;
+            return;
         }
+
+        ShowOcrBtn.Visibility = Visibility.Visible;
+        var hasOcr = !string.IsNullOrWhiteSpace(_ocrText);
+        ShowOcrBtn.IsEnabled = true;
+        ShowOcrBtnLabel.Text = _showingOcr
+            ? "Bild anzeigen"
+            : "OCR-Text anzeigen";
+
+        OcrStatusLabel.Visibility = Visibility.Visible;
+        OcrStatusLabel.Text = hasOcr ? "OCR bereit" : "OCR läuft...";
+    }
+
+    private void StartOcrIfNeeded()
+    {
+        if (_ocrRequested || _vm.Type != EntryType.Image || _vm.Entry.ImageData == null) return;
+        if (!string.IsNullOrWhiteSpace(_vm.Entry.OcrText)) return;
+        if (!OcrService.IsAvailable()) return;
+
+        _ocrRequested = true;
+        var data = _vm.Entry.ImageData;
+        _ = Task.Run(async () =>
+        {
+            var text = await OcrService.RecognizeAsync(data);
+            Dispatcher.Invoke(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    _ocrText = text;
+                    _vm.Entry.OcrText = text;
+                    if (System.Windows.Application.Current is App app)
+                        app.Database.UpdateOcr(_vm.Id, text);
+                    _vm.RefreshPreview();
+                }
+                else if (string.IsNullOrWhiteSpace(_vm.Entry.OcrText))
+                {
+                    _ocrText = "";
+                    if (_showingOcr)
+                    {
+                        TextPreview.Text = "Kein OCR-Text erkannt.";
+                        UpdateTextEditorStats();
+                    }
+                }
+                UpdateOcrButtonState();
+            });
+        });
     }
 
     private void EditorTool_Click(object sender, RoutedEventArgs e)
@@ -383,10 +589,13 @@ public partial class DetailWindow : Window
         if ((sender as FrameworkElement)?.Tag is string tag &&
             Enum.TryParse(tag, out EditorTool tool))
         {
+            ClearCropOverlay();
             CommitInlineTextEditor();
             _activeTool = tool;
             if (PixelateOptions != null)
                 PixelateOptions.Visibility = tool == EditorTool.Pixelate ? Visibility.Visible : Visibility.Collapsed;
+            if (BlurOptions != null)
+                BlurOptions.Visibility = tool == EditorTool.Blur ? Visibility.Visible : Visibility.Collapsed;
             if (EditorCanvas != null)
                 EditorCanvas.Cursor = tool switch
                 {
@@ -413,6 +622,7 @@ public partial class DetailWindow : Window
         if (!IsLoaded) return;
         StrokeValueLabel.Text = $"{(int)StrokeSlider.Value} px";
         if (_selectedAnnotation == null) return;
+        if (_selectedAnnotation.Tool is EditorTool.Text or EditorTool.Pixelate or EditorTool.Blur) return;
         PushUndo();
         _selectedAnnotation.Thickness = StrokeSlider.Value;
         RenderAnnotations();
@@ -439,10 +649,21 @@ public partial class DetailWindow : Window
         RenderAnnotations();
     }
 
+    private void BlurSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!IsLoaded) return;
+        BlurValueLabel.Text = $"{(int)BlurSlider.Value} px";
+        if (_selectedAnnotation?.Tool != EditorTool.Blur) return;
+        PushUndo();
+        _selectedAnnotation.Thickness = BlurSlider.Value;
+        RenderAnnotations();
+    }
+
     private void EditorCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_baseImage == null) return;
-        var point = ClampPoint(e.GetPosition(EditorCanvas));
+        if (_pendingCropRect.HasValue) return;
+        var point = EditorPoint(e);
         _selectedAnnotation = null;
 
         if (_activeTool == EditorTool.Select)
@@ -472,6 +693,7 @@ public partial class DetailWindow : Window
                 Color = CurrentColor(),
                 Number = _nextMarkerNumber++,
             });
+            SaveCurrentStyle();
             RenderAnnotations();
             return;
         }
@@ -490,8 +712,15 @@ public partial class DetailWindow : Window
             }
             else
             {
-                Canvas.SetLeft(_draftShape, point.X);
-                Canvas.SetTop(_draftShape, point.Y);
+                Canvas.SetLeft(_draftShape, 0);
+                Canvas.SetTop(_draftShape, 0);
+                if (_draftShape is Polyline polyline)
+                    polyline.Points.Add(point);
+                else
+                {
+                    Canvas.SetLeft(_draftShape, point.X);
+                    Canvas.SetTop(_draftShape, point.Y);
+                }
             }
         }
         EditorCanvas.CaptureMouse();
@@ -499,7 +728,7 @@ public partial class DetailWindow : Window
 
     private void EditorCanvas_MouseMove(object sender, MouseEventArgs e)
     {
-        var point = ClampPoint(e.GetPosition(EditorCanvas));
+        var point = EditorPoint(e);
 
         if (_movingAnnotation != null && _moveStart.HasValue)
         {
@@ -552,7 +781,7 @@ public partial class DetailWindow : Window
         }
 
         if (_drawStart == null) return;
-        var end = ClampPoint(e.GetPosition(EditorCanvas));
+        var end = EditorPoint(e);
         var start = _drawStart.Value;
         var penPoints = _draftShape is Polyline draftPolyline
             ? draftPolyline.Points.ToList()
@@ -570,9 +799,7 @@ public partial class DetailWindow : Window
 
         if (_activeTool == EditorTool.Crop)
         {
-            PushUndo();
-            CropCanvas(rect);
-            RenderAnnotations();
+            ShowCropPreview(rect);
             return;
         }
 
@@ -589,6 +816,8 @@ public partial class DetailWindow : Window
         };
         if (_activeTool == EditorTool.Pixelate)
             annotation.Thickness = PixelateSlider.Value;
+        else if (_activeTool == EditorTool.Blur)
+            annotation.Thickness = BlurSlider.Value;
 
         if (_activeTool is EditorTool.Arrow or EditorTool.Line)
         {
@@ -599,11 +828,13 @@ public partial class DetailWindow : Window
         }
         else if (_activeTool == EditorTool.Pen)
         {
-            annotation.Points = penPoints ?? [];
+            annotation.Points = penPoints != null ? SimplifyPath(penPoints) : [];
             if (annotation.Points.Count < 2) return;
         }
 
         _annotations.Add(annotation);
+        if (_activeTool is not (EditorTool.Pixelate or EditorTool.Blur or EditorTool.Highlight or EditorTool.Redact or EditorTool.Crop))
+            SaveCurrentStyle();
         RenderAnnotations();
     }
 
@@ -614,12 +845,12 @@ public partial class DetailWindow : Window
         return tool switch
         {
             EditorTool.Arrow or EditorTool.Line => new Line { Stroke = stroke, StrokeThickness = thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round },
-            EditorTool.Rectangle or EditorTool.Crop => new Rectangle { Stroke = stroke, StrokeThickness = thickness, StrokeDashArray = tool == EditorTool.Crop ? new DoubleCollection([4, 3]) : null, Fill = Brushes.Transparent },
+            EditorTool.Rectangle or EditorTool.Crop => new Rectangle { RadiusX = tool == EditorTool.Rectangle ? 7 : 0, RadiusY = tool == EditorTool.Rectangle ? 7 : 0, Stroke = stroke, StrokeThickness = thickness, StrokeDashArray = tool == EditorTool.Crop ? new DoubleCollection([4, 3]) : null, Fill = Brushes.Transparent, Effect = tool == EditorTool.Rectangle ? AnnotationShadow(thickness) : null },
             EditorTool.Ellipse => new Ellipse { Stroke = stroke, StrokeThickness = thickness, Fill = Brushes.Transparent },
             EditorTool.Highlight => new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(90, 255, 235, 59)), Stroke = Brushes.Transparent },
             EditorTool.Redact => new Rectangle { Fill = Brushes.Black, Stroke = Brushes.Black },
             EditorTool.Pixelate => new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(170, 80, 80, 80)), Stroke = Brushes.Black, StrokeDashArray = new DoubleCollection([2, 2]) },
-            EditorTool.Blur => new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(150, 220, 220, 220)) },
+            EditorTool.Blur => new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(40, 80, 160, 220)), Stroke = stroke, StrokeThickness = 1, StrokeDashArray = new DoubleCollection([4, 3]) },
             EditorTool.Pen => new Polyline { Stroke = stroke, StrokeThickness = thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round },
             _ => new Rectangle { Stroke = stroke, StrokeThickness = thickness, Fill = Brushes.Transparent },
         };
@@ -630,8 +861,9 @@ public partial class DetailWindow : Window
         for (var i = EditorCanvas.Children.Count - 1; i >= 0; i--)
         {
             var child = EditorCanvas.Children[i];
-            if (ReferenceEquals(child, ImagePreview) || ReferenceEquals(child, _inlineTextEditor))
-                continue;
+            if (ReferenceEquals(child, ImagePreview)) continue;
+            if (ReferenceEquals(child, _inlineTextEditor)) continue;
+            if (_cropOverlayElements.Count > 0 && _cropOverlayElements.Contains((UIElement)child)) continue;
             EditorCanvas.Children.RemoveAt(i);
         }
 
@@ -662,11 +894,11 @@ public partial class DetailWindow : Window
         switch (a.Tool)
         {
             case EditorTool.Rectangle:
-                element = new Rectangle { Width = a.W, Height = a.H, Stroke = color, StrokeThickness = a.Thickness, Fill = Brushes.Transparent };
+                element = new Rectangle { Width = a.W, Height = a.H, RadiusX = 7, RadiusY = 7, Stroke = color, StrokeThickness = a.Thickness, Fill = Brushes.Transparent, Effect = AnnotationShadow(a.Thickness) };
                 Canvas.SetLeft(element, a.X); Canvas.SetTop(element, a.Y);
                 break;
             case EditorTool.Ellipse:
-                element = new Ellipse { Width = a.W, Height = a.H, Stroke = color, StrokeThickness = a.Thickness, Fill = Brushes.Transparent };
+                element = new Ellipse { Width = a.W, Height = a.H, Stroke = color, StrokeThickness = a.Thickness, Fill = Brushes.Transparent, Effect = AnnotationShadow(a.Thickness) };
                 Canvas.SetLeft(element, a.X); Canvas.SetTop(element, a.Y);
                 break;
             case EditorTool.Highlight:
@@ -682,22 +914,16 @@ public partial class DetailWindow : Window
                 Canvas.SetLeft(element, a.X); Canvas.SetTop(element, a.Y);
                 break;
             case EditorTool.Blur:
-                element = new Rectangle
-                {
-                    Width = a.W,
-                    Height = a.H,
-                    Fill = new SolidColorBrush(Color.FromArgb(180, 200, 200, 200)),
-                };
-                Canvas.SetLeft(element, a.X); Canvas.SetTop(element, a.Y);
+                element = BlurBlock(a);
                 break;
             case EditorTool.Line:
-                element = new Line { X1 = a.X, Y1 = a.Y, X2 = a.X + a.W, Y2 = a.Y + a.H, Stroke = color, StrokeThickness = a.Thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
+                element = new Line { X1 = a.X, Y1 = a.Y, X2 = a.X + a.W, Y2 = a.Y + a.H, Stroke = color, StrokeThickness = a.Thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Effect = AnnotationShadow(a.Thickness) };
                 break;
             case EditorTool.Arrow:
                 element = ArrowPath(a, color);
                 break;
             case EditorTool.Pen:
-                element = new Polyline { Points = new PointCollection(a.Points), Stroke = color, StrokeThickness = a.Thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round };
+                element = new Polyline { Points = new PointCollection(a.Points), Stroke = color, StrokeThickness = a.Thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Effect = AnnotationShadow(a.Thickness) };
                 break;
             case EditorTool.Text:
                 element = new Border
@@ -709,6 +935,7 @@ public partial class DetailWindow : Window
                     BorderThickness = new Thickness(2),
                     Padding = new Thickness(8, 5, 8, 5),
                     Child = new TextBlock { Text = a.Text, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, FontSize = Math.Max(10, a.Thickness) },
+                    Effect = AnnotationShadow(4),
                 };
                 element.MouseLeftButtonDown += (_, e) =>
                 {
@@ -730,6 +957,7 @@ public partial class DetailWindow : Window
                     BorderBrush = Brushes.White,
                     BorderThickness = new Thickness(2),
                     Child = new TextBlock { Text = a.Number.ToString(), Foreground = ContrastBrush(a.Color), FontWeight = FontWeights.Bold, HorizontalAlignment = WpfHorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    Effect = AnnotationShadow(4),
                 };
                 Canvas.SetLeft(element, a.X); Canvas.SetTop(element, a.Y);
                 break;
@@ -739,7 +967,7 @@ public partial class DetailWindow : Window
                 break;
         }
 
-        if (ReferenceEquals(a, _selectedAnnotation))
+        if (ReferenceEquals(a, _selectedAnnotation) && a.Tool != EditorTool.Blur)
             element.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.DeepSkyBlue, BlurRadius = 10, ShadowDepth = 0, Opacity = 0.95 };
         return element;
     }
@@ -764,29 +992,117 @@ public partial class DetailWindow : Window
         return canvas;
     }
 
+    private FrameworkElement BlurBlock(EditorAnnotation a)
+    {
+        var imageRect = new Rect(Canvas.GetLeft(ImagePreview), Canvas.GetTop(ImagePreview), ImagePreview.Width, ImagePreview.Height);
+        var annotationRect = new Rect(a.X, a.Y, a.W, a.H);
+        var visibleRect = annotationRect;
+        visibleRect.Intersect(imageRect);
+        if (_baseImage == null || visibleRect.IsEmpty || ImagePreview.Width <= 0 || ImagePreview.Height <= 0)
+        {
+            var fallback = new Rectangle
+            {
+                Width = a.W,
+                Height = a.H,
+                Fill = new SolidColorBrush(Color.FromArgb(90, 180, 190, 200)),
+            };
+            Canvas.SetLeft(fallback, a.X);
+            Canvas.SetTop(fallback, a.Y);
+            return fallback;
+        }
+
+        var scaleX = _baseImage.PixelWidth / ImagePreview.Width;
+        var scaleY = _baseImage.PixelHeight / ImagePreview.Height;
+        var sourceX = (visibleRect.X - imageRect.X) * scaleX;
+        var sourceY = (visibleRect.Y - imageRect.Y) * scaleY;
+        var sourceW = visibleRect.Width * scaleX;
+        var sourceH = visibleRect.Height * scaleY;
+        var crop = new Int32Rect(
+            Math.Clamp((int)Math.Floor(sourceX), 0, _baseImage.PixelWidth - 1),
+            Math.Clamp((int)Math.Floor(sourceY), 0, _baseImage.PixelHeight - 1),
+            Math.Max(1, Math.Min(_baseImage.PixelWidth - (int)Math.Floor(sourceX), (int)Math.Ceiling(sourceW))),
+            Math.Max(1, Math.Min(_baseImage.PixelHeight - (int)Math.Floor(sourceY), (int)Math.Ceiling(sourceH))));
+
+        var source = new CroppedBitmap(_baseImage, crop);
+        var img = new System.Windows.Controls.Image
+        {
+            Source = source,
+            Width = visibleRect.Width,
+            Height = visibleRect.Height,
+            Stretch = Stretch.Fill,
+            Effect = new System.Windows.Media.Effects.BlurEffect
+            {
+                Radius = Math.Clamp(a.Thickness, 3, 32),
+                KernelType = System.Windows.Media.Effects.KernelType.Gaussian,
+                RenderingBias = System.Windows.Media.Effects.RenderingBias.Quality,
+            },
+            Clip = new RectangleGeometry(new Rect(0, 0, visibleRect.Width, visibleRect.Height)),
+        };
+        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+        Canvas.SetLeft(img, visibleRect.X);
+        Canvas.SetTop(img, visibleRect.Y);
+        return img;
+    }
+
+    private static System.Windows.Media.Effects.DropShadowEffect AnnotationShadow(double thickness)
+        => new()
+        {
+            Color = Colors.Black,
+            BlurRadius = Math.Max(8, thickness * 2.8),
+            ShadowDepth = Math.Max(2, thickness * 0.65),
+            Opacity = 0.28,
+        };
+
     private static Path ArrowPath(EditorAnnotation a, Brush color)
     {
         var start = new Point(a.X, a.Y);
         var end = new Point(a.X + a.W, a.Y + a.H);
         var angle = Math.Atan2(end.Y - start.Y, end.X - start.X);
-        var head = Math.Max(12, a.Thickness * 4);
-        var left = new Point(end.X - head * Math.Cos(angle - Math.PI / 6), end.Y - head * Math.Sin(angle - Math.PI / 6));
-        var right = new Point(end.X - head * Math.Cos(angle + Math.PI / 6), end.Y - head * Math.Sin(angle + Math.PI / 6));
-        var geo = new StreamGeometry();
-        using (var ctx = geo.Open())
+        var length = Math.Max(1, Math.Sqrt(a.W * a.W + a.H * a.H));
+        var ux = Math.Cos(angle);
+        var uy = Math.Sin(angle);
+        var nx = -uy;
+        var ny = ux;
+        var head = Math.Clamp(length * 0.22, Math.Max(16, a.Thickness * 4), Math.Max(22, a.Thickness * 7));
+        var bodyEnd = new Point(end.X - ux * head * 0.35, end.Y - uy * head * 0.35);
+        var curve = Math.Clamp(length * 0.14, 0, 34) * (a.W * a.H >= 0 ? -1 : 1);
+        var control = new Point(
+            start.X + a.W * 0.52 + nx * curve,
+            start.Y + a.H * 0.52 + ny * curve);
+        var baseCenter = new Point(end.X - ux * head, end.Y - uy * head);
+        var left = new Point(baseCenter.X + nx * head * 0.42, baseCenter.Y + ny * head * 0.42);
+        var right = new Point(baseCenter.X - nx * head * 0.42, baseCenter.Y - ny * head * 0.42);
+
+        var geo = new GeometryGroup();
+        var body = new PathGeometry();
+        var bodyFigure = new PathFigure { StartPoint = start, IsClosed = false, IsFilled = false };
+        bodyFigure.Segments.Add(new QuadraticBezierSegment(control, bodyEnd, true));
+        body.Figures.Add(bodyFigure);
+        geo.Children.Add(body);
+
+        var headGeometry = new PathGeometry();
+        var headFigure = new PathFigure { StartPoint = end, IsClosed = true, IsFilled = true };
+        headFigure.Segments.Add(new LineSegment(left, true));
+        headFigure.Segments.Add(new LineSegment(right, true));
+        headGeometry.Figures.Add(headFigure);
+        geo.Children.Add(headGeometry);
+
+        return new Path
         {
-            ctx.BeginFigure(start, false, false);
-            ctx.LineTo(end, true, false);
-            ctx.BeginFigure(left, false, false);
-            ctx.LineTo(end, true, false);
-            ctx.LineTo(right, true, false);
-        }
-        geo.Freeze();
-        return new Path { Data = geo, Stroke = color, StrokeThickness = a.Thickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round };
+            Data = geo,
+            Stroke = color,
+            Fill = color,
+            StrokeThickness = a.Thickness,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Effect = AnnotationShadow(a.Thickness),
+        };
     }
 
     private void Annotation_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.Handled) return;
         if (_activeTool != EditorTool.Select || (sender as FrameworkElement)?.Tag is not EditorAnnotation annotation)
             return;
 
@@ -794,7 +1110,7 @@ public partial class DetailWindow : Window
             _selectedAnnotation = annotation;
         PushUndo();
         _movingAnnotation = annotation;
-        _moveStart = ClampPoint(e.GetPosition(EditorCanvas));
+        _moveStart = EditorPoint(e);
         _didMove = false;
         EditorCanvas.CaptureMouse();
         RenderAnnotations();
@@ -823,9 +1139,26 @@ public partial class DetailWindow : Window
         a.Y += dy;
     }
 
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (ImageBorder.Visibility != Visibility.Visible) return;
+        if (_inlineTextBox != null) return;
+
+        if (_pendingCropRect.HasValue)
+        {
+            if (e.Key == Key.Return) { CommitCropPreview(); e.Handled = true; return; }
+            if (e.Key == Key.Escape) { CancelCropPreview(); e.Handled = true; return; }
+        }
+
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+        if (e.Key == Key.Z) { EditorUndo_Click(sender, e); e.Handled = true; }
+        else if (e.Key == Key.Y) { EditorRedo_Click(sender, e); e.Handled = true; }
+    }
+
     private void EditorUndo_Click(object sender, RoutedEventArgs e)
     {
         CancelInlineTextEditor();
+        ClearCropOverlay();
         if (_undo.Count == 0) return;
         _redo.Push(CreateSnapshot());
         RestoreSnapshot(_undo.Pop());
@@ -834,6 +1167,7 @@ public partial class DetailWindow : Window
     private void EditorRedo_Click(object sender, RoutedEventArgs e)
     {
         CancelInlineTextEditor();
+        ClearCropOverlay();
         if (_redo.Count == 0) return;
         _undo.Push(CreateSnapshot());
         RestoreSnapshot(_redo.Pop());
@@ -857,35 +1191,6 @@ public partial class DetailWindow : Window
         PushUndo();
         _annotations.Remove(_selectedAnnotation);
         _selectedAnnotation = null;
-        RenderAnnotations();
-    }
-
-    private void EditorSmaller_Click(object sender, RoutedEventArgs e) => ScaleSelected(0.9);
-    private void EditorLarger_Click(object sender, RoutedEventArgs e) => ScaleSelected(1.1);
-
-    private void ScaleSelected(double factor)
-    {
-        if (_selectedAnnotation == null) return;
-        PushUndo();
-        if (_selectedAnnotation.Tool == EditorTool.Pen)
-        {
-            var bounds = BoundsOf(_selectedAnnotation);
-            var center = new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
-            for (var i = 0; i < _selectedAnnotation.Points.Count; i++)
-            {
-                var p = _selectedAnnotation.Points[i];
-                _selectedAnnotation.Points[i] = new Point(center.X + (p.X - center.X) * factor, center.Y + (p.Y - center.Y) * factor);
-            }
-        }
-        else
-        {
-            var cx = _selectedAnnotation.X + _selectedAnnotation.W / 2;
-            var cy = _selectedAnnotation.Y + _selectedAnnotation.H / 2;
-            _selectedAnnotation.W *= factor;
-            _selectedAnnotation.H *= factor;
-            _selectedAnnotation.X = cx - _selectedAnnotation.W / 2;
-            _selectedAnnotation.Y = cy - _selectedAnnotation.H / 2;
-        }
         RenderAnnotations();
     }
 
@@ -918,39 +1223,47 @@ public partial class DetailWindow : Window
     {
         var size = PromptSize("Skalieren", Math.Round(EditorCanvas.Width).ToString(), Math.Round(EditorCanvas.Height).ToString());
         if (size == null) return;
-        var (newWidth, newHeight) = size.Value;
-        if (newWidth < 64 || newHeight < 64) return;
-        var factorX = newWidth / EditorCanvas.Width;
-        var factorY = newHeight / EditorCanvas.Height;
-        var thicknessFactor = (factorX + factorY) / 2;
-        PushUndo();
-        EditorCanvas.Width = newWidth;
-        EditorCanvas.Height = newHeight;
-        UpdateCanvasClip();
-        ImagePreview.Width *= factorX;
-        ImagePreview.Height *= factorY;
-        Canvas.SetLeft(ImagePreview, Canvas.GetLeft(ImagePreview) * factorX);
-        Canvas.SetTop(ImagePreview, Canvas.GetTop(ImagePreview) * factorY);
-        foreach (var a in _annotations)
-        {
-            a.X *= factorX; a.Y *= factorY; a.W *= factorX; a.H *= factorY;
-            if (a.Tool is not EditorTool.Text and not EditorTool.Pixelate)
-                a.Thickness *= thicknessFactor;
-            for (var i = 0; i < a.Points.Count; i++)
-                a.Points[i] = new Point(a.Points[i].X * factorX, a.Points[i].Y * factorY);
-        }
-        RenderAnnotations();
+        ApplyResize(size.Value.Width, size.Value.Height);
     }
 
     private RenderTargetBitmap? RenderEditedImage()
     {
         CommitInlineTextEditor();
-        if (EditorCanvas.Width <= 0 || EditorCanvas.Height <= 0) return null;
-        EditorCanvas.UpdateLayout();
+        if (_baseImage == null || EditorCanvas.Width <= 0 || EditorCanvas.Height <= 0) return null;
         var width = Math.Max(1, (int)Math.Ceiling(EditorCanvas.Width));
         var height = Math.Max(1, (int)Math.Ceiling(EditorCanvas.Height));
+        var exportCanvas = new Canvas
+        {
+            Width = width,
+            Height = height,
+            Background = Brushes.White,
+            Clip = new RectangleGeometry(new Rect(0, 0, width, height)),
+        };
+
+        var image = new System.Windows.Controls.Image
+        {
+            Source = ImageUtils.RepairFullyTransparentColorBitmap(_baseImage),
+            Width = ImagePreview.Width,
+            Height = ImagePreview.Height,
+            Stretch = Stretch.Fill,
+        };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        Canvas.SetLeft(image, Canvas.GetLeft(ImagePreview));
+        Canvas.SetTop(image, Canvas.GetTop(ImagePreview));
+        exportCanvas.Children.Add(image);
+
+        foreach (var annotation in _annotations)
+        {
+            var element = CreateElement(annotation);
+            exportCanvas.Children.Add(element);
+        }
+
+        exportCanvas.Measure(new System.Windows.Size(width, height));
+        exportCanvas.Arrange(new Rect(0, 0, width, height));
+        exportCanvas.UpdateLayout();
+
         var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(EditorCanvas);
+        rtb.Render(exportCanvas);
         rtb.Freeze();
         return rtb;
     }
@@ -965,6 +1278,150 @@ public partial class DetailWindow : Window
         EditorCanvas.Width = rect.Width;
         EditorCanvas.Height = rect.Height;
         UpdateCanvasClip();
+    }
+
+    private void ShowCropPreview(Rect cropRect)
+    {
+        ClearCropOverlay();
+        _pendingCropRect = cropRect;
+
+        var cw = EditorCanvas.Width;
+        var ch = EditorCanvas.Height;
+        var overlay = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0));
+
+        void AddDim(double x, double y, double w, double h)
+        {
+            if (w <= 0 || h <= 0) return;
+            var r = new Rectangle { Width = w, Height = h, Fill = overlay };
+            Canvas.SetLeft(r, x);
+            Canvas.SetTop(r, y);
+            System.Windows.Controls.Panel.SetZIndex(r, 900);
+            EditorCanvas.Children.Add(r);
+            _cropOverlayElements.Add(r);
+        }
+
+        AddDim(0, 0, cw, cropRect.Top);
+        AddDim(0, cropRect.Bottom, cw, ch - cropRect.Bottom);
+        AddDim(0, cropRect.Top, cropRect.Left, cropRect.Height);
+        AddDim(cropRect.Right, cropRect.Top, cw - cropRect.Right, cropRect.Height);
+
+        var border = new Rectangle
+        {
+            Width = cropRect.Width,
+            Height = cropRect.Height,
+            Stroke = Brushes.White,
+            StrokeThickness = 1.5,
+            StrokeDashArray = new DoubleCollection([5, 3]),
+            Fill = Brushes.Transparent,
+        };
+        Canvas.SetLeft(border, cropRect.Left);
+        Canvas.SetTop(border, cropRect.Top);
+        System.Windows.Controls.Panel.SetZIndex(border, 901);
+        EditorCanvas.Children.Add(border);
+        _cropOverlayElements.Add(border);
+
+        var confirmBtn = new WpfButton
+        {
+            Content = "Zuschneiden",
+            Padding = new Thickness(12, 5, 12, 5),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Cursor = WpfCursors.Hand,
+        };
+        confirmBtn.Click += (_, _) => CommitCropPreview();
+
+        var cancelBtn = new WpfButton
+        {
+            Content = "Abbrechen",
+            Padding = new Thickness(10, 5, 10, 5),
+            FontSize = 12,
+            Cursor = WpfCursors.Hand,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        cancelBtn.Click += (_, _) => CancelCropPreview();
+
+        var btnBorder = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(235, 16, 20, 24)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(5),
+            Child = new StackPanel
+            {
+                Orientation = WpfOrientation.Horizontal,
+                Children = { confirmBtn, cancelBtn },
+            },
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 10, ShadowDepth = 2, Opacity = 0.55 },
+        };
+
+        var btnX = Math.Clamp(cropRect.X + cropRect.Width / 2 - 90, 4, Math.Max(4, cw - 200));
+        var btnY = cropRect.Bottom + 10 < ch - 44
+            ? cropRect.Bottom + 10
+            : cropRect.Top > 50
+                ? cropRect.Top - 48
+                : Math.Clamp(cropRect.Y + cropRect.Height / 2 - 18, 4, ch - 44);
+
+        Canvas.SetLeft(btnBorder, btnX);
+        Canvas.SetTop(btnBorder, btnY);
+        System.Windows.Controls.Panel.SetZIndex(btnBorder, 902);
+        EditorCanvas.Children.Add(btnBorder);
+        _cropOverlayElements.Add(btnBorder);
+    }
+
+    private void CommitCropPreview()
+    {
+        if (!_pendingCropRect.HasValue) return;
+        var rect = _pendingCropRect.Value;
+        ClearCropOverlay();
+        PushUndo();
+        CropCanvas(rect);
+        RenderAnnotations();
+    }
+
+    private void CancelCropPreview()
+    {
+        if (!_pendingCropRect.HasValue) return;
+        ClearCropOverlay();
+        RenderAnnotations();
+    }
+
+    private void ClearCropOverlay()
+    {
+        foreach (var el in _cropOverlayElements)
+            EditorCanvas.Children.Remove(el);
+        _cropOverlayElements.Clear();
+        _pendingCropRect = null;
+    }
+
+    private static List<Point> SimplifyPath(List<Point> points, double epsilon = 2.0)
+    {
+        if (points.Count <= 2) return points;
+        var maxDist = 0.0;
+        var maxIdx = 0;
+        var start = points[0];
+        var end = points[^1];
+        for (var i = 1; i < points.Count - 1; i++)
+        {
+            var d = PerpendicularDistance(points[i], start, end);
+            if (d > maxDist) { maxDist = d; maxIdx = i; }
+        }
+        if (maxDist <= epsilon) return [start, end];
+        var left = SimplifyPath(points[..(maxIdx + 1)], epsilon);
+        var right = SimplifyPath(points[maxIdx..], epsilon);
+        return [.. left[..^1], .. right];
+    }
+
+    private static double PerpendicularDistance(Point p, Point a, Point b)
+    {
+        var dx = b.X - a.X;
+        var dy = b.Y - a.Y;
+        if (dx == 0 && dy == 0)
+            return Math.Sqrt((p.X - a.X) * (p.X - a.X) + (p.Y - a.Y) * (p.Y - a.Y));
+        var t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / (dx * dx + dy * dy);
+        var nx = a.X + t * dx;
+        var ny = a.Y + t * dy;
+        return Math.Sqrt((p.X - nx) * (p.X - nx) + (p.Y - ny) * (p.Y - ny));
     }
 
     private void UpdateCanvasClip()
@@ -1012,6 +1469,23 @@ public partial class DetailWindow : Window
 
     private Point ClampPoint(Point p)
         => new(Math.Clamp(p.X, 0, EditorCanvas.Width), Math.Clamp(p.Y, 0, EditorCanvas.Height));
+
+    private Point EditorPoint(MouseEventArgs e)
+    {
+        try
+        {
+            var transform = EditorCanvas.TransformToAncestor(ImageScrollViewer);
+            var inverse = transform.Inverse;
+            if (inverse != null)
+                return ClampPoint(inverse.Transform(e.GetPosition(ImageScrollViewer)));
+        }
+        catch
+        {
+            // Fallback for transient layout states while the editor is opening.
+        }
+
+        return ClampPoint(e.GetPosition(EditorCanvas));
+    }
 
     private static Rect RectFrom(Point a, Point b)
         => new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
@@ -1229,6 +1703,7 @@ public partial class DetailWindow : Window
             };
             _annotations.Add(annotation);
             _selectedAnnotation = annotation;
+            SaveCurrentStyle();
         }
 
         RenderAnnotations();
@@ -1329,6 +1804,7 @@ public partial class DetailWindow : Window
 
     private void ImagePreview_MouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
         double delta = e.Delta > 0 ? 1.15 : (1.0 / 1.15);
         SetImageZoom(_imageZoom * delta);
         e.Handled = true;
@@ -1469,72 +1945,298 @@ public partial class DetailWindow : Window
 
         CodeHighlightOverlay.Inlines.Clear();
         var text = TextPreview.Text ?? "";
-        var keywordSet = KeywordsFor(_editorLanguage);
+        var syntax = SyntaxProfileFor(_editorLanguage);
         var lines = text.Replace("\r", "").Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
-            AppendHighlightedLine(CodeHighlightOverlay, lines[i], keywordSet);
+            AppendHighlightedLine(CodeHighlightOverlay, lines[i], syntax);
             if (i < lines.Length - 1)
                 CodeHighlightOverlay.Inlines.Add(new LineBreak());
         }
     }
 
-    private static void AppendHighlightedLine(TextBlock target, string line, HashSet<string> keywords)
+    private static void AppendHighlightedLine(TextBlock target, string line, SyntaxProfile syntax)
     {
-        foreach (Match match in Regex.Matches(line, @"//.*|#.*|""(?:\\.|[^""])*""|'(?:\\.|[^'])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|\s+|."))
+        var directiveStart = DirectiveStartIndex(line, syntax.Language);
+        if (directiveStart >= 0)
+        {
+            if (directiveStart > 0)
+                AddRun(target, line[..directiveStart]);
+            AddRun(target, line[directiveStart..], SyntaxDirectiveBrush);
+            return;
+        }
+
+        var commentStart = FindLineCommentStart(line, syntax.Language);
+        var code = commentStart >= 0 ? line[..commentStart] : line;
+        AppendCodeTokens(target, code, syntax);
+        if (commentStart >= 0)
+            AddRun(target, line[commentStart..], SyntaxCommentBrush);
+    }
+
+    private static void AppendCodeTokens(TextBlock target, string text, SyntaxProfile syntax)
+    {
+        foreach (Match match in Regex.Matches(text, SyntaxTokenPattern, RegexOptions.None, UiRegexTimeout))
         {
             var token = match.Value;
-            var run = new Run(token);
-            if (token.StartsWith("//", StringComparison.Ordinal) || token.StartsWith("#", StringComparison.Ordinal))
-                run.Foreground = new SolidColorBrush(Color.FromRgb(93, 181, 89));
-            else if (token.StartsWith("\"", StringComparison.Ordinal) || token.StartsWith("'", StringComparison.Ordinal))
-                run.Foreground = new SolidColorBrush(Color.FromRgb(241, 196, 83));
-            else if (Regex.IsMatch(token, @"^\d"))
-                run.Foreground = new SolidColorBrush(Color.FromRgb(181, 206, 168));
-            else if (keywords.Contains(token))
-                run.Foreground = new SolidColorBrush(Color.FromRgb(197, 134, 232));
-            else if (token is "true" or "false" or "null")
-                run.Foreground = new SolidColorBrush(Color.FromRgb(86, 156, 214));
-            target.Inlines.Add(run);
+            AddRun(target, token, SyntaxBrushFor(token, syntax));
         }
     }
 
-    private static HashSet<string> KeywordsFor(string? language)
+    private static Brush? SyntaxBrushFor(string token, SyntaxProfile syntax)
     {
-        var common = new HashSet<string>(["true", "false", "null"], StringComparer.OrdinalIgnoreCase);
-        var languageKeywords = language switch
-        {
-            "HTML" => new[]
-            {
-                "doctype", "html", "head", "body", "main", "section", "article", "header",
-                "footer", "div", "span", "button", "input", "script", "style", "link",
-                "meta", "title", "class", "id", "href", "src", "type", "role", "aria",
-            },
-            "XML" => ["xml", "version", "encoding", "xmlns", "schema", "configuration", "appSettings", "add", "key", "value"],
-            "JSON" => ["true", "false", "null"],
-            "CSS" => ["display", "grid", "flex", "block", "none", "color", "background", "margin", "padding", "border", "font", "width", "height", "media"],
-            "SQL" => ["SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "DELETE", "CREATE", "TABLE", "AND", "OR", "JOIN", "ORDER", "GROUP", "BY"],
-            "JavaScript" or "TypeScript" => ["function", "return", "const", "let", "var", "if", "else", "for", "while", "class", "new", "import", "export", "async", "await"],
-            "C#" => ["using", "namespace", "public", "private", "protected", "internal", "class", "record", "static", "void", "async", "await", "return", "new"],
-            "Python" => ["def", "class", "import", "from", "return", "if", "elif", "else", "for", "while", "with", "as", "None", "True", "False"],
-            "PowerShell" => ["param", "function", "foreach", "where", "if", "else", "try", "catch", "Get", "Set", "Invoke", "Write"],
-            _ => new[]
-            {
-                "function", "return", "const", "let", "var", "if", "else", "for", "while",
-                "class", "new", "public", "private", "static", "void", "using", "namespace",
-                "def", "import", "from", "SELECT", "FROM", "WHERE", "INSERT", "UPDATE",
-                "DELETE", "CREATE", "TABLE", "AND", "OR",
-            },
-        };
-        foreach (var keyword in languageKeywords)
-            common.Add(keyword);
-        return common;
+        if (token.Length == 0 || string.IsNullOrWhiteSpace(token))
+            return null;
+        if (IsStringToken(token))
+            return SyntaxStringBrush;
+        if (IsNumberToken(token))
+            return SyntaxNumberBrush;
+        if (IsHexColorToken(token))
+            return SyntaxLiteralBrush;
+        if (syntax.Literals.Contains(token))
+            return SyntaxLiteralBrush;
+        if (syntax.Keywords.Contains(token))
+            return SyntaxKeywordBrush;
+        if (syntax.Types.Contains(token))
+            return SyntaxTypeBrush;
+        if (syntax.Builtins.Contains(token))
+            return SyntaxBuiltinBrush;
+        if (syntax.Attributes.Contains(token) || IsVariableToken(token, syntax.Language))
+            return SyntaxAttributeBrush;
+        if (IsOperatorToken(token))
+            return SyntaxOperatorBrush;
+        return null;
     }
+
+    private static void AddRun(TextBlock target, string text, Brush? foreground = null)
+    {
+        var run = new Run(text);
+        if (foreground != null)
+            run.Foreground = foreground;
+        target.Inlines.Add(run);
+    }
+
+    private static int DirectiveStartIndex(string line, string? language)
+    {
+        var start = 0;
+        while (start < line.Length && char.IsWhiteSpace(line[start]))
+            start++;
+        if (start >= line.Length || line[start] != '#')
+            return -1;
+        return language is "C#" or "C++" ? start : -1;
+    }
+
+    private static int FindLineCommentStart(string line, string? language)
+    {
+        var slashComments = language is null or "Code" or "JavaScript" or "TypeScript" or "C#" or "C++" or "Go" or "Rust" or "PHP";
+        var hashComments = language is null or "Code" or "Python" or "Bash" or "PowerShell" or "Ruby" or "YAML";
+        var sqlComments = language == "SQL";
+        var blockComments = slashComments || language == "CSS";
+
+        var inSingle = false;
+        var inDouble = false;
+        var inBacktick = false;
+        var escaped = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if ((inSingle || inDouble || inBacktick) && c == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (!inDouble && !inBacktick && c == '\'')
+            {
+                inSingle = !inSingle;
+                continue;
+            }
+            if (!inSingle && !inBacktick && c == '"')
+            {
+                inDouble = !inDouble;
+                continue;
+            }
+            if (!inSingle && !inDouble && c == '`')
+            {
+                inBacktick = !inBacktick;
+                continue;
+            }
+            if (inSingle || inDouble || inBacktick)
+                continue;
+
+            if (slashComments && i + 1 < line.Length && line[i] == '/' && line[i + 1] == '/')
+                return i;
+            if (blockComments && i + 1 < line.Length && line[i] == '/' && line[i + 1] == '*')
+                return i;
+            if (sqlComments && i + 1 < line.Length && line[i] == '-' && line[i + 1] == '-')
+                return i;
+            if (hashComments && line[i] == '#')
+                return i;
+        }
+        return -1;
+    }
+
+    private static bool IsStringToken(string token)
+        => token.StartsWith("\"", StringComparison.Ordinal)
+           || token.StartsWith("'", StringComparison.Ordinal)
+           || token.StartsWith("`", StringComparison.Ordinal);
+
+    private static bool IsNumberToken(string token)
+        => char.IsDigit(token[0]);
+
+    private static bool IsHexColorToken(string token)
+        => token.Length is 4 or 5 or 7 or 9
+           && token[0] == '#'
+           && token.Skip(1).All(Uri.IsHexDigit);
+
+    private static bool IsVariableToken(string token, string? language)
+        => token.StartsWith("$", StringComparison.Ordinal)
+           && language is "PowerShell" or "Bash" or "PHP";
+
+    private static bool IsOperatorToken(string token)
+        => token.All(c => "{}[]().,;:+-*/%=!<>|&?~^#".IndexOf(c) >= 0);
+
+    private static SyntaxProfile SyntaxProfileFor(string? language)
+    {
+        var exact = StringComparer.Ordinal;
+        var ignore = StringComparer.OrdinalIgnoreCase;
+
+        return language switch
+        {
+            "HTML" => Profile(language, ignore,
+                keywords: ["doctype"],
+                types: ["html", "head", "body", "main", "section", "article", "header", "footer", "nav", "div", "span", "button", "input", "form", "label", "script", "style", "link", "meta", "title", "img", "a", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td"],
+                attributes: ["class", "id", "href", "src", "type", "role", "aria", "alt", "title", "name", "value", "data", "style", "rel", "target", "placeholder", "disabled", "checked"]),
+            "XML" => Profile(language, ignore,
+                keywords: ["xml", "version", "encoding", "xmlns", "schema"],
+                types: ["configuration", "appSettings", "connectionStrings", "package", "project", "itemGroup", "propertyGroup"],
+                attributes: ["name", "key", "value", "type", "include", "remove", "condition"]),
+            "JSON" => Profile(language, exact,
+                literals: ["true", "false", "null"]),
+            "CSS" => Profile(language, ignore,
+                keywords: ["display", "grid", "flex", "block", "inline", "none", "position", "absolute", "relative", "fixed", "color", "background", "margin", "padding", "border", "font", "width", "height", "media", "container", "supports", "import", "keyframes"],
+                builtins: ["rgb", "rgba", "hsl", "hsla", "var", "calc", "min", "max", "clamp", "url", "linear-gradient", "repeat", "minmax"]),
+            "SQL" => Profile(language, ignore,
+                keywords: ["SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "TABLE", "VIEW", "INDEX", "AND", "OR", "NOT", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "ORDER", "GROUP", "BY", "HAVING", "AS", "IN", "IS", "LIKE", "DISTINCT", "LIMIT", "OFFSET", "UNION", "VALUES", "SET", "INTO", "PRIMARY", "KEY", "FOREIGN"],
+                types: ["INTEGER", "INT", "TEXT", "VARCHAR", "CHAR", "DATETIME", "DATE", "BOOLEAN", "REAL", "BLOB", "NUMERIC"],
+                builtins: ["COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CAST", "CONVERT", "LOWER", "UPPER", "TRIM"],
+                literals: ["NULL", "TRUE", "FALSE"]),
+            "JavaScript" or "TypeScript" => Profile(language, exact,
+                keywords: ["function", "return", "const", "let", "var", "if", "else", "for", "while", "do", "switch", "case", "break", "continue", "class", "extends", "new", "import", "from", "export", "default", "async", "await", "try", "catch", "finally", "throw", "typeof", "instanceof", "in", "of", "yield", "delete", "void", "get", "set", "static", "super", "this"],
+                types: ["string", "number", "boolean", "unknown", "any", "never", "void", "object", "Promise", "Array", "Record", "Map", "Set", "Date", "Error"],
+                builtins: ["console", "log", "JSON", "Math", "Object", "String", "Number", "Boolean", "fetch", "window", "document", "setTimeout", "setInterval"],
+                literals: ["true", "false", "null", "undefined", "NaN", "Infinity"]),
+            "C#" => Profile(language, exact,
+                keywords: ["using", "namespace", "public", "private", "protected", "internal", "class", "record", "struct", "interface", "enum", "static", "void", "async", "await", "return", "new", "sealed", "virtual", "override", "abstract", "event", "delegate", "typeof", "nameof", "where", "readonly", "required", "partial", "if", "else", "for", "foreach", "while", "switch", "case", "break", "continue", "try", "catch", "finally", "throw", "get", "set", "init", "var", "this", "base", "is", "as"],
+                types: ["string", "int", "bool", "double", "decimal", "float", "long", "short", "byte", "object", "dynamic", "Task", "List", "Dictionary", "IEnumerable", "DateTime", "Guid"],
+                builtins: ["Console", "Math", "File", "Path", "Enumerable", "Regex", "JsonSerializer"],
+                literals: ["true", "false", "null", "default"]),
+            "C++" => Profile(language, exact,
+                keywords: ["include", "using", "namespace", "class", "struct", "public", "private", "protected", "virtual", "template", "typename", "auto", "const", "constexpr", "static", "return", "new", "delete", "if", "else", "for", "while", "switch", "case", "break", "continue", "try", "catch", "throw", "noexcept", "override", "final"],
+                types: ["int", "double", "float", "bool", "void", "char", "long", "short", "unsigned", "signed", "size_t", "std", "string", "vector", "map", "unordered_map"],
+                builtins: ["cout", "cin", "endl", "printf", "scanf", "make_unique", "make_shared"],
+                literals: ["true", "false", "nullptr", "NULL"]),
+            "Go" => Profile(language, exact,
+                keywords: ["package", "import", "func", "return", "var", "const", "type", "struct", "interface", "defer", "go", "chan", "select", "if", "else", "for", "range", "switch", "case", "break", "continue", "fallthrough", "map"],
+                types: ["string", "int", "int64", "float64", "bool", "error", "byte", "rune", "any"],
+                builtins: ["make", "new", "append", "copy", "len", "cap", "panic", "recover", "println", "fmt"],
+                literals: ["true", "false", "nil", "iota"]),
+            "Rust" => Profile(language, exact,
+                keywords: ["use", "mod", "pub", "fn", "let", "mut", "const", "static", "struct", "enum", "impl", "trait", "match", "if", "else", "loop", "while", "for", "in", "return", "async", "await", "move", "ref", "crate", "super", "self", "Self", "where", "unsafe"],
+                types: ["String", "Vec", "Option", "Result", "HashMap", "bool", "i32", "i64", "u32", "u64", "usize", "str"],
+                builtins: ["println", "format", "Some", "None", "Ok", "Err", "Default", "Clone"],
+                literals: ["true", "false"]),
+            "Bash" => Profile(language, exact,
+                keywords: ["if", "then", "else", "elif", "fi", "for", "while", "do", "done", "case", "esac", "function", "return", "in"],
+                builtins: ["echo", "export", "local", "readonly", "cd", "pwd", "test", "grep", "sed", "awk", "printf", "source"],
+                literals: ["true", "false"]),
+            "PHP" => Profile(language, exact,
+                keywords: ["function", "return", "class", "public", "private", "protected", "static", "new", "echo", "if", "else", "elseif", "foreach", "while", "try", "catch", "finally", "throw", "namespace", "use", "extends", "implements"],
+                builtins: ["array", "count", "isset", "empty", "json_encode", "json_decode", "strlen", "var_dump"],
+                literals: ["true", "false", "null"]),
+            "Ruby" => Profile(language, exact,
+                keywords: ["def", "end", "class", "module", "require", "include", "return", "if", "elsif", "else", "unless", "while", "do", "begin", "rescue", "ensure", "raise", "yield", "self"],
+                builtins: ["puts", "print", "attr_reader", "attr_writer", "attr_accessor", "Array", "Hash", "String"],
+                literals: ["nil", "true", "false"]),
+            "Python" => Profile(language, exact,
+                keywords: ["def", "class", "import", "from", "return", "if", "elif", "else", "for", "while", "with", "as", "pass", "lambda", "yield", "in", "not", "and", "or", "raise", "try", "except", "finally", "assert", "break", "continue", "global", "nonlocal", "async", "await", "del", "is"],
+                builtins: ["print", "len", "range", "enumerate", "zip", "open", "list", "dict", "set", "tuple", "str", "int", "float", "bool", "type", "super", "self", "cls"],
+                literals: ["None", "True", "False"]),
+            "PowerShell" => Profile(language, ignore,
+                keywords: ["param", "function", "foreach", "where", "if", "else", "elseif", "try", "catch", "finally", "switch", "return", "begin", "process", "end", "filter", "class", "using", "namespace"],
+                builtins: ["Get", "Set", "Invoke", "Write", "Read", "Start", "Stop", "New", "Remove", "Select", "Where", "ForEach", "Out", "Test", "Join", "Split"],
+                literals: ["$true", "$false", "$null"]),
+            "YAML" => Profile(language, ignore,
+                keywords: ["true", "false", "null", "yes", "no", "on", "off"],
+                attributes: ["apiVersion", "kind", "metadata", "spec", "services", "steps", "name", "version"]),
+            _ => Profile("Code", ignore,
+                keywords: ["if", "else", "for", "while", "return", "class", "new"],
+                literals: ["true", "false", "null"]),
+        };
+    }
+
+    private static SyntaxProfile Profile(
+        string? language,
+        StringComparer comparer,
+        string[]? keywords = null,
+        string[]? types = null,
+        string[]? builtins = null,
+        string[]? literals = null,
+        string[]? attributes = null)
+        => new(
+            language,
+            SyntaxSet(comparer, keywords),
+            SyntaxSet(comparer, types),
+            SyntaxSet(comparer, builtins),
+            SyntaxSet(comparer, literals),
+            SyntaxSet(comparer, attributes));
+
+    private static HashSet<string> SyntaxSet(StringComparer comparer, string[]? values)
+        => values is { Length: > 0 }
+            ? new HashSet<string>(values, comparer)
+            : new HashSet<string>(comparer);
+
+    private static SolidColorBrush SyntaxBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    private sealed record SyntaxProfile(
+        string? Language,
+        HashSet<string> Keywords,
+        HashSet<string> Types,
+        HashSet<string> Builtins,
+        HashSet<string> Literals,
+        HashSet<string> Attributes);
+
+    private const string SyntaxTokenPattern =
+        @"#[0-9A-Fa-f]{3,8}\b|`(?:\\.|[^`])*`|""(?:\\.|[^""])*""|'(?:\\.|[^'])*'|\b0x[0-9A-Fa-f]+\b|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\$[A-Za-z_][A-Za-z0-9_]*|@[A-Za-z_][A-Za-z0-9_]*|\b[A-Za-z_][A-Za-z0-9_]*\b|\s+|.";
+
+    private static readonly Brush SyntaxKeywordBrush = SyntaxBrush(197, 134, 232);
+    private static readonly Brush SyntaxTypeBrush = SyntaxBrush(78, 201, 176);
+    private static readonly Brush SyntaxBuiltinBrush = SyntaxBrush(220, 220, 170);
+    private static readonly Brush SyntaxLiteralBrush = SyntaxBrush(86, 156, 214);
+    private static readonly Brush SyntaxStringBrush = SyntaxBrush(241, 196, 83);
+    private static readonly Brush SyntaxNumberBrush = SyntaxBrush(181, 206, 168);
+    private static readonly Brush SyntaxCommentBrush = SyntaxBrush(93, 181, 89);
+    private static readonly Brush SyntaxAttributeBrush = SyntaxBrush(156, 220, 254);
+    private static readonly Brush SyntaxDirectiveBrush = SyntaxBrush(86, 156, 214);
+    private static readonly Brush SyntaxOperatorBrush = SyntaxBrush(128, 144, 160);
 
     private void TextPreview_TextChanged(object sender, TextChangedEventArgs e)
     {
         UpdateTextEditorStats();
         UpdateCodeHighlightOverlay();
+        if (_isMarkdownPreviewActive)
+            RefreshMarkdownPreview();
         QueueTextEditorSync();
         if (UndoTextBtn != null)
             UndoTextBtn.IsEnabled = !_loadingTextEditor && TextPreview.CanUndo;
@@ -1558,6 +2260,13 @@ public partial class DetailWindow : Window
     private void SaveText_Click(object sender, RoutedEventArgs e)
         => SaveText();
 
+    private bool HasUnsavedTextChanges()
+        => _textPreviewEditable
+           && TextPreview != null
+           && !TextPreview.IsReadOnly
+           && (!string.Equals(TextPreview.Text, _savedTextPreview, StringComparison.Ordinal)
+               || !string.Equals(_editorLanguage, _savedEditorLanguage, StringComparison.Ordinal));
+
     private void UndoText_Click(object sender, RoutedEventArgs e)
     {
         if (TextPreview.CanUndo)
@@ -1572,6 +2281,7 @@ public partial class DetailWindow : Window
         TextEditorTitleLabel.Text = "Skripteditor";
         TextModeLabel.Text = $"Sprache: {language}";
         UpdateCodeHighlightOverlay();
+        QueueTextEditorSync();
         if (SaveTextBtn != null && !TextPreview.IsReadOnly)
         {
             SaveTextBtn.IsEnabled = true;
@@ -1608,6 +2318,7 @@ public partial class DetailWindow : Window
 
         _vm.SetContent(text, kind, reason, language);
         _savedTextPreview = text;
+        _savedEditorLanguage = _editorLanguage;
         _loadingTextEditor = true;
         TextPreview.IsUndoEnabled = false;
         TextPreview.IsUndoEnabled = true;
@@ -1622,29 +2333,37 @@ public partial class DetailWindow : Window
     private void ShowOcr_Click(object sender, RoutedEventArgs e)
     {
         _showingOcr = !_showingOcr;
-        if (_showingOcr && !string.IsNullOrEmpty(_ocrText))
+        if (_showingOcr)
         {
-            ImageBorder.Visibility  = Visibility.Collapsed;
-            TextEditorPanel.Visibility = Visibility.Visible;
-            TextPreview.Text        = _ocrText;
-            TextPreview.Visibility  = Visibility.Visible;
-            TextPreview.IsReadOnly  = true;
-            TextEditorTitleLabel.Text = "OCR-Text aus Zwischenablage";
-            TextModeLabel.Text = "OCR";
-            EditorLanguageBox.Visibility = Visibility.Collapsed;
-            SaveTextBtn.Visibility = Visibility.Collapsed;
-            UndoTextBtn.Visibility = Visibility.Collapsed;
-            _textPreviewEditable = false;
-            UpdateTextEditorStats();
-            ShowOcrBtn.Content      = "Bild anzeigen";
+            ShowOcrTextView();
         }
         else
         {
             TextPreview.Visibility  = Visibility.Collapsed;
             TextEditorPanel.Visibility = Visibility.Collapsed;
             ImageBorder.Visibility  = Visibility.Visible;
-            ShowOcrBtn.Content      = "OCR-Text anzeigen";
+            UpdateOcrButtonState();
         }
+    }
+
+    private void ShowOcrTextView()
+    {
+        ImageBorder.Visibility  = Visibility.Collapsed;
+        TextEditorPanel.Visibility = Visibility.Visible;
+        TextPreview.Text = !string.IsNullOrWhiteSpace(_ocrText)
+            ? _ocrText
+            : _ocrRequested ? "OCR läuft..." : "Noch kein OCR-Text vorhanden.";
+        TextPreview.Visibility  = Visibility.Visible;
+        TextPreview.IsReadOnly  = true;
+        TextEditorTitleLabel.Text = "OCR-Text aus Zwischenablage";
+        TextModeLabel.Text = "OCR";
+        EditorLanguageBox.Visibility = Visibility.Collapsed;
+        SaveTextBtn.Visibility = Visibility.Collapsed;
+        UndoTextBtn.Visibility = Visibility.Collapsed;
+        _textPreviewEditable = false;
+        UpdateTextEditorStats();
+        UpdateOcrButtonState();
+        StartOcrIfNeeded();
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)
@@ -1669,6 +2388,22 @@ public partial class DetailWindow : Window
         catch { }
     }
 
+    private void OpenUrl_Click(object sender, RoutedEventArgs e)
+        => OpenUrl(_vm.Content);
+
+    private static void OpenUrl(string? url)
+    {
+        if (!UrlPreviewService.IsUrl(url)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url!)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch { }
+    }
+
     private void SaveAs_Click(object sender, RoutedEventArgs e)
     {
         if (ImageBorder.Visibility == Visibility.Visible && _baseImage != null)
@@ -1682,21 +2417,9 @@ public partial class DetailWindow : Window
 
     private void SaveImageAs()
     {
-        var dlg = new SaveFileDialog
-        {
-            Title = "Bild speichern unter",
-            Filter = "PNG-Bild|*.png",
-            DefaultExt = ".png",
-            FileName = DefaultExportName("png"),
-        };
-        if (dlg.ShowDialog(this) != true) return;
-
         var image = RenderEditedImage();
         if (image == null) return;
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(image));
-        using var stream = File.Create(dlg.FileName);
-        encoder.Save(stream);
+        SaveImageAsJpg(image);
     }
 
     private void SaveTextAs()
@@ -1706,22 +2429,89 @@ public partial class DetailWindow : Window
             : _vm.Content ?? _vm.Entry.OcrText ?? _vm.HexColor ?? "";
         if (string.IsNullOrEmpty(text)) return;
 
-        var extension = ExportExtension();
+        var language = _isCodeEditor ? _editorLanguage : _vm.Language;
+        var formats = BuildTextExportFormats(_vm.Type, language, _vm.ContentKind, text);
+        var extension = formats[0].Extension;
         var dlg = new SaveFileDialog
         {
             Title = "Text speichern unter",
-            Filter = ExportFilter(extension),
+            Filter = BuildExportFilter(formats),
             DefaultExt = "." + extension,
             FileName = DefaultExportName(extension),
         };
         if (dlg.ShowDialog(this) != true) return;
-        File.WriteAllText(dlg.FileName, text);
+
+        var format = ResolveSelectedExportFormat(formats, dlg.FilterIndex, dlg.FileName);
+        var output = FormatExportContent(text, format.Extension, _vm.Type, language, _vm.ContentKind, _vm.UrlTitle);
+        try
+        {
+            File.WriteAllText(dlg.FileName, output);
+        }
+        catch (Exception ex)
+        {
+            App.LogCrash(ex);
+            System.Windows.MessageBox.Show(
+                this,
+                $"Die Datei konnte nicht gespeichert werden:\n{ex.Message}",
+                "Speichern fehlgeschlagen",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
-    private string ExportExtension()
+    public static IReadOnlyList<ExportFormat> BuildTextExportFormats(
+        EntryType type,
+        string? language,
+        string? contentKind,
+        string text)
     {
-        if (_vm.Type == EntryType.Color) return "txt";
-        var language = _isCodeEditor ? _editorLanguage : _vm.Language;
+        var formats = new List<ExportFormat>();
+
+        void Add(string label, string extension)
+        {
+            if (formats.Any(f => string.Equals(f.Extension, extension, StringComparison.OrdinalIgnoreCase))) return;
+            formats.Add(new ExportFormat(label, extension));
+        }
+
+        if (type == EntryType.Url || UrlPreviewService.IsUrl(text))
+        {
+            Add("Windows-Internetverknuepfung", "url");
+            Add("Textdatei", "txt");
+            Add("Markdown-Link", "md");
+            Add("HTML-Link", "html");
+            Add("JSON-Datei", "json");
+            return formats;
+        }
+
+        var defaultExtension = ExportExtension(language, contentKind);
+        Add(ExportLabel(defaultExtension), defaultExtension);
+
+        Add("Textdatei", "txt");
+        if (type == EntryType.Color)
+            Add("CSS-Farbe", "css");
+        Add("Markdown-Datei", "md");
+        Add("HTML-Dokument", "html");
+        Add("JSON-Datei", "json");
+        Add("XML-Datei", "xml");
+        Add("CSV-Datei", "csv");
+        Add("JavaScript-Datei", "js");
+        Add("TypeScript-Datei", "ts");
+        Add("CSS-Datei", "css");
+        Add("SQL-Datei", "sql");
+        Add("PowerShell-Datei", "ps1");
+        Add("Shell-Skript", "sh");
+        Add("C#-Datei", "cs");
+        Add("Python-Datei", "py");
+        Add("YAML-Datei", "yaml");
+
+        return formats;
+    }
+
+    private static string ExportExtension(string? language, string? contentKind)
+    {
+        if (string.Equals(contentKind, "MARKDOWN", StringComparison.OrdinalIgnoreCase))
+            return "md";
+
         return language switch
         {
             "HTML" => "html",
@@ -1741,14 +2531,79 @@ public partial class DetailWindow : Window
             "PHP" => "php",
             "Ruby" => "rb",
             "YAML" => "yaml",
-            _ when string.Equals(_vm.ContentKind, "NOTE", StringComparison.OrdinalIgnoreCase) => "txt",
             _ => "txt",
         };
     }
 
-    private static string ExportFilter(string extension)
+    public static string BuildExportFilter(IReadOnlyList<ExportFormat> formats)
+        => string.Join("|", formats.Select(f => $"{f.Label}|*.{f.Extension}").Append("Alle Dateien|*.*"));
+
+    public static ExportFormat ResolveSelectedExportFormat(
+        IReadOnlyList<ExportFormat> formats,
+        int filterIndex,
+        string fileName)
     {
-        var label = extension switch
+        var extension = System.IO.Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
+        var byFileName = formats.FirstOrDefault(f =>
+            string.Equals(f.Extension, extension, StringComparison.OrdinalIgnoreCase));
+        var index = filterIndex - 1;
+        var byFilter = index >= 0 && index < formats.Count ? formats[index] : null;
+        if (byFileName != null
+            && (byFilter == null || !string.Equals(extension, formats[0].Extension, StringComparison.OrdinalIgnoreCase)))
+            return byFileName;
+
+        return byFilter ?? formats[0];
+    }
+
+    public static string FormatExportContent(
+        string text,
+        string extension,
+        EntryType type,
+        string? language,
+        string? contentKind,
+        string? title)
+    {
+        extension = extension.TrimStart('.').ToLowerInvariant();
+        if (extension == "url" && UrlPreviewService.IsUrl(text))
+            return $"[InternetShortcut]\r\nURL={text.Trim()}\r\n";
+
+        if (extension == "json")
+        {
+            var payload = new
+            {
+                Type = type.ToString(),
+                Title = title,
+                Language = language,
+                ContentKind = contentKind,
+                Content = text,
+                ExportedAt = DateTime.Now,
+            };
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        if (extension == "html")
+        {
+            if (string.Equals(language, "HTML", StringComparison.OrdinalIgnoreCase))
+                return text;
+            if (string.Equals(contentKind, "MARKDOWN", StringComparison.OrdinalIgnoreCase))
+                return WrapMarkdownHtml(MarkdownToHtml(text));
+            if (type == EntryType.Url && UrlPreviewService.IsUrl(text))
+                return BuildUrlHtml(text, title);
+            return BuildPlainTextHtml(text, title);
+        }
+
+        if (extension == "md" && type == EntryType.Url && UrlPreviewService.IsUrl(text))
+            return $"[{EscapeMarkdownLinkText(title ?? text.Trim())}]({text.Trim()}){Environment.NewLine}";
+
+        if (extension == "css" && type == EntryType.Color)
+            return $":root {{\r\n  --clipwell-color: {text.Trim()};\r\n}}\r\n";
+
+        return text;
+    }
+
+    private static string ExportLabel(string extension)
+    {
+        return extension switch
         {
             "png" => "PNG-Bild",
             "html" => "HTML-Datei",
@@ -1767,10 +2622,52 @@ public partial class DetailWindow : Window
             "rs" => "Rust-Datei",
             "php" => "PHP-Datei",
             "rb" => "Ruby-Datei",
+            "md" => "Markdown-Datei",
+            "csv" => "CSV-Datei",
             "yaml" => "YAML-Datei",
             _ => "Textdatei",
         };
-        return $"{label}|*.{extension}|Alle Dateien|*.*";
+    }
+
+    private static string BuildPlainTextHtml(string text, string? title)
+    {
+        var safeTitle = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(title) ? "Clipwell Export" : title);
+        var body = System.Net.WebUtility.HtmlEncode(text).Replace("\r\n", "\n").Replace("\n", "<br>\r\n");
+        return $$"""
+            <!DOCTYPE html>
+            <html lang="de">
+            <head>
+              <meta charset="utf-8">
+              <title>{{safeTitle}}</title>
+              <style>
+                body { font-family: 'Segoe UI', sans-serif; line-height: 1.55; margin: 2rem; }
+                main { white-space: normal; max-width: 80rem; }
+              </style>
+            </head>
+            <body><main>{{body}}</main></body>
+            </html>
+            """;
+    }
+
+    private static string BuildUrlHtml(string url, string? title)
+    {
+        var safeUrl = System.Net.WebUtility.HtmlEncode(url.Trim());
+        var safeTitle = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(title) ? url.Trim() : title);
+        return $$"""
+            <!DOCTYPE html>
+            <html lang="de">
+            <head><meta charset="utf-8"><title>{{safeTitle}}</title></head>
+            <body><p><a href="{{safeUrl}}">{{safeTitle}}</a></p></body>
+            </html>
+            """;
+    }
+
+    private static string EscapeMarkdownLinkText(string text)
+    {
+        return text
+            .Replace("\\", "\\\\")
+            .Replace("[", "\\[")
+            .Replace("]", "\\]");
     }
 
     private static string DefaultExportName(string extension)
@@ -1791,5 +2688,470 @@ public partial class DetailWindow : Window
             return img;
         }
         catch { return null; }
+    }
+
+    // ── Structured-content validation ───────────────────────────────────────
+
+    private void ValidateStructuredContent(string text, string? language, string? kind)
+    {
+        if (ValidationLabel == null) return;
+        ValidationLabel.Visibility = Visibility.Collapsed;
+
+        var lang = language ?? kind ?? "";
+        if (string.Equals(lang, "JSON", StringComparison.OrdinalIgnoreCase))
+            ShowValidationResult(ValidateJson(text));
+        else if (string.Equals(lang, "XML", StringComparison.OrdinalIgnoreCase)
+              || string.Equals(lang, "HTML", StringComparison.OrdinalIgnoreCase)
+              || string.Equals(kind, "CODE", StringComparison.OrdinalIgnoreCase) && text.TrimStart().StartsWith('<'))
+            ShowValidationResult(ValidateXml(text));
+        else if (string.Equals(lang, "YAML", StringComparison.OrdinalIgnoreCase)
+              || string.Equals(kind, "YAML", StringComparison.OrdinalIgnoreCase))
+            ShowValidationResult(ValidateYaml(text));
+    }
+
+    private static string? ValidateJson(string text)
+    {
+        try { JsonDocument.Parse(text); return null; }
+        catch (JsonException ex) { return $"JSON: {ex.Message}"; }
+    }
+
+    private static string? ValidateXml(string text)
+    {
+        try { XDocument.Parse(text); return null; }
+        catch (System.Xml.XmlException ex) { return $"XML: Zeile {ex.LineNumber}, Pos {ex.LinePosition}: {ex.Message}"; }
+    }
+
+    private static string? ValidateYaml(string text)
+    {
+        try
+        {
+            var parser = new Parser(new StringReader(text));
+            while (parser.MoveNext()) { }
+            return null;
+        }
+        catch (YamlException ex) { return $"YAML: Zeile {ex.Start.Line}, Pos {ex.Start.Column}: {ex.Message}"; }
+    }
+
+    private void ShowValidationResult(string? error)
+    {
+        if (ValidationLabel == null) return;
+        if (error == null)
+        {
+            ValidationLabel.Text = "Valide";
+            ValidationLabel.Foreground = new SolidColorBrush(Color.FromRgb(80, 200, 120));
+        }
+        else
+        {
+            ValidationLabel.Text = error;
+            ValidationLabel.Foreground = new SolidColorBrush(Color.FromRgb(229, 57, 53));
+        }
+        ValidationLabel.Visibility = Visibility.Visible;
+    }
+
+    // ── Shape / style memory ─────────────────────────────────────────────────
+
+    private void LoadStyleMemory()
+    {
+        try
+        {
+            if (!File.Exists(StyleMemoryPath)) return;
+            var list = JsonSerializer.Deserialize<List<JsonElement>>(File.ReadAllText(StyleMemoryPath));
+            if (list == null) return;
+            _recentStyles.Clear();
+            foreach (var el in list.Take(3))
+            {
+                var color = el.GetProperty("Color").GetString() ?? "#E53935";
+                var thickness = el.GetProperty("Thickness").GetDouble();
+                _recentStyles.Add(new StyleMemory(color, thickness));
+            }
+        }
+        catch { }
+        RefreshRecentStylesPanel();
+    }
+
+    private void SaveCurrentStyle()
+    {
+        var current = new StyleMemory(_currentColor, StrokeSlider.Value);
+        _recentStyles.RemoveAll(s => s.Color == current.Color && Math.Abs(s.Thickness - current.Thickness) < 0.5);
+        _recentStyles.Insert(0, current);
+        if (_recentStyles.Count > 3) _recentStyles.RemoveRange(3, _recentStyles.Count - 3);
+        try
+        {
+            Directory.CreateDirectory(AppPaths.DataDir);
+            var data = _recentStyles.Select(s => new { s.Color, s.Thickness }).ToList();
+            File.WriteAllText(StyleMemoryPath, JsonSerializer.Serialize(data));
+        }
+        catch { }
+        RefreshRecentStylesPanel();
+    }
+
+    private void RefreshRecentStylesPanel()
+    {
+        if (RecentStylesPanel == null) return;
+        RecentStylesPanel.Children.Clear();
+        var visible = _recentStyles.Count > 0;
+        RecentStylesLabel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        RecentStylesPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var style in _recentStyles)
+        {
+            var dotSize = Math.Clamp(style.Thickness * 1.5, 4, 18);
+            var dot = new Ellipse
+            {
+                Width = dotSize,
+                Height = dotSize,
+                Fill = new SolidColorBrush(ContrastColor(style.Color)),
+                IsHitTestVisible = false,
+            };
+            var btn = new WpfButton
+            {
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(0, 0, 4, 4),
+                Padding = new Thickness(0),
+                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(style.Color)),
+                BorderBrush = (Brush)FindResource("EditorBorderBrush"),
+                BorderThickness = new Thickness(1),
+                Content = dot,
+                ToolTip = $"{style.Color} / {(int)style.Thickness} px",
+                Tag = style,
+            };
+            btn.Click += RecentStyle_Click;
+            RecentStylesPanel.Children.Add(btn);
+        }
+    }
+
+    private void RecentStyle_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as WpfButton)?.Tag is not StyleMemory style) return;
+        _currentColor = style.Color;
+        _editorBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(style.Color));
+        StrokeSlider.Value = style.Thickness;
+        foreach (var rb in EditorColorSwatches.Children.OfType<System.Windows.Controls.RadioButton>())
+        {
+            if ((string?)rb.Tag == style.Color)
+            {
+                rb.IsChecked = true;
+                break;
+            }
+        }
+    }
+
+    private static Color ContrastColor(string hex)
+    {
+        try
+        {
+            var c = (Color)ColorConverter.ConvertFromString(hex);
+            var luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+            return luminance > 0.5 ? Color.FromRgb(0, 0, 0) : Color.FromRgb(255, 255, 255);
+        }
+        catch { return Color.FromRgb(255, 255, 255); }
+    }
+
+    // ── Markdown preview ─────────────────────────────────────────────────────
+
+    private void MarkdownPreviewToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _isMarkdownPreviewActive = !_isMarkdownPreviewActive;
+        if (_isMarkdownPreviewActive)
+            ShowMarkdownPreview();
+        else
+            HideMarkdownPreview();
+    }
+
+    private void ShowMarkdownPreview()
+    {
+        if (MarkdownBrowser == null) return;
+        RefreshMarkdownPreview();
+        MarkdownBrowser.Visibility = Visibility.Visible;
+        TextPreview.Visibility = Visibility.Collapsed;
+        CodeHighlightScrollViewer.Visibility = Visibility.Collapsed;
+        if (MarkdownPreviewToggle != null) MarkdownPreviewToggle.Content = "Quelltext";
+    }
+
+    private void RefreshMarkdownPreview()
+    {
+        if (MarkdownBrowser == null) return;
+        var html = MarkdownToHtml(TextPreview.Text ?? "");
+        MarkdownBrowser.NavigateToString(WrapMarkdownHtml(html));
+    }
+
+    private void HideMarkdownPreview()
+    {
+        if (MarkdownBrowser != null) MarkdownBrowser.Visibility = Visibility.Collapsed;
+        TextPreview.Visibility = Visibility.Visible;
+        CodeHighlightScrollViewer.Visibility = Visibility.Visible;
+        if (MarkdownPreviewToggle != null) MarkdownPreviewToggle.Content = "Vorschau";
+    }
+
+    private static string WrapMarkdownHtml(string body)
+    {
+        var isDark = System.Windows.Application.Current is App app && app.IsEffectiveDarkTheme;
+        var bg     = isDark ? "#0D1117" : "#F7F9FC";
+        var fg     = isDark ? "#E6EDF3" : "#1A1D21";
+        var code   = isDark ? "#161B22" : "#EEF2F7";
+        var border = isDark ? "#30363D" : "#D0DAE6";
+        var link   = isDark ? "#79B8FF" : "#1A6BB5";
+        var muted  = isDark ? "#8B949E" : "#6B7A8A";
+        return $$"""
+            <!DOCTYPE html>
+            <html><head>
+            <meta charset="utf-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <style>
+              html, body { background: {{bg}}; color: {{fg}}; margin: 0; padding: 0; }
+              body { font-family: 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.65;
+                      padding: 24px 28px; }
+              h1,h2,h3,h4,h5,h6 { margin: 1em 0 .4em; font-weight: 600; }
+              h1 { font-size: 1.7em; border-bottom: 1px solid {{border}}; padding-bottom: .3em; }
+              h2 { font-size: 1.4em; border-bottom: 1px solid {{border}}; padding-bottom: .2em; }
+              h3 { font-size: 1.2em; }
+              p { margin: .6em 0; }
+              code { background: {{code}}; padding: 2px 5px; border-radius: 4px;
+                      font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.88em; }
+              pre { background: {{code}}; padding: 12px 16px; border-radius: 6px; overflow-x: auto;
+                     border: 1px solid {{border}}; }
+              pre code { background: transparent; padding: 0; }
+              blockquote { border-left: 3px solid {{border}}; margin: 0; padding: 4px 16px;
+                            color: {{muted}}; }
+              ul,ol { padding-left: 1.5em; }
+              li { margin: .2em 0; }
+              a { color: {{link}}; }
+              hr { border: none; border-top: 1px solid {{border}}; margin: 1.2em 0; }
+              table { border-collapse: collapse; width: 100%; }
+              th,td { border: 1px solid {{border}}; padding: 6px 12px; text-align: left; }
+              th { background: {{code}}; font-weight: 600; }
+              img { max-width: 100%; }
+            </style></head><body>
+            {{body}}
+            </body></html>
+            """;
+    }
+
+    private static string MarkdownToHtml(string md)
+    {
+        md = System.Net.WebUtility.HtmlEncode(md);
+
+        // fenced code blocks first (multi-line)
+        md = Regex.Replace(md, @"```(\w*)\r?\n([\s\S]*?)```",
+            m => $"<pre><code>{m.Groups[2].Value}</code></pre>",
+            RegexOptions.Multiline);
+
+        // inline code
+        md = Regex.Replace(md, @"`([^`]+)`",
+            m => $"<code>{m.Groups[1].Value}</code>");
+
+        // headings
+        md = Regex.Replace(md, @"^######\s+(.+)$", "<h6>$1</h6>", RegexOptions.Multiline);
+        md = Regex.Replace(md, @"^#####\s+(.+)$",  "<h5>$1</h5>", RegexOptions.Multiline);
+        md = Regex.Replace(md, @"^####\s+(.+)$",   "<h4>$1</h4>", RegexOptions.Multiline);
+        md = Regex.Replace(md, @"^###\s+(.+)$",    "<h3>$1</h3>", RegexOptions.Multiline);
+        md = Regex.Replace(md, @"^##\s+(.+)$",     "<h2>$2</h2>".Replace("$2", "$1"), RegexOptions.Multiline);
+        md = Regex.Replace(md, @"^#\s+(.+)$",      "<h1>$1</h1>", RegexOptions.Multiline);
+
+        // horizontal rules
+        md = Regex.Replace(md, @"^(\*{3,}|-{3,}|_{3,})\s*$", "<hr>", RegexOptions.Multiline);
+
+        // bold + italic
+        md = Regex.Replace(md, @"\*\*\*(.+?)\*\*\*", "<strong><em>$1</em></strong>");
+        md = Regex.Replace(md, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+        md = Regex.Replace(md, @"__(.+?)__", "<strong>$1</strong>");
+        md = Regex.Replace(md, @"\*(.+?)\*", "<em>$1</em>");
+        md = Regex.Replace(md, @"_(.+?)_", "<em>$1</em>");
+
+        // images
+        md = Regex.Replace(md, @"!\[(.+?)\]\((.+?)\)",
+            m => $"<img alt=\"{m.Groups[1].Value}\" src=\"{SafeMarkdownUrl(m.Groups[2].Value)}\">");
+
+        // links
+        md = Regex.Replace(md, @"\[(.+?)\]\((.+?)\)",
+            m => $"<a href=\"{SafeMarkdownUrl(m.Groups[2].Value)}\">{m.Groups[1].Value}</a>");
+
+        // blockquotes
+        md = Regex.Replace(md, @"^>\s*(.+)$", "<blockquote>$1</blockquote>", RegexOptions.Multiline);
+
+        // unordered lists (simple, non-nested)
+        md = Regex.Replace(md, @"((?:^[ \t]*[-*+][ \t]+.+\n?)+)", m =>
+        {
+            var items = Regex.Matches(m.Value, @"^[ \t]*[-*+][ \t]+(.+)$", RegexOptions.Multiline);
+            var sb = new System.Text.StringBuilder("<ul>");
+            foreach (Match item in items) sb.Append($"<li>{item.Groups[1].Value}</li>");
+            sb.Append("</ul>");
+            return sb.ToString();
+        }, RegexOptions.Multiline);
+
+        // ordered lists (simple)
+        md = Regex.Replace(md, @"((?:^[ \t]*\d+\.[ \t]+.+\n?)+)", m =>
+        {
+            var items = Regex.Matches(m.Value, @"^[ \t]*\d+\.[ \t]+(.+)$", RegexOptions.Multiline);
+            var sb = new System.Text.StringBuilder("<ol>");
+            foreach (Match item in items) sb.Append($"<li>{item.Groups[1].Value}</li>");
+            sb.Append("</ol>");
+            return sb.ToString();
+        }, RegexOptions.Multiline);
+
+        // paragraphs: wrap sequences of plain lines
+        var lines = md.Split('\n');
+        var result = new System.Text.StringBuilder();
+        var para = new System.Text.StringBuilder();
+
+        foreach (var raw in lines)
+        {
+            var line = raw.TrimEnd('\r');
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                FlushPara(result, para);
+                continue;
+            }
+            if (line.StartsWith('<'))
+            {
+                FlushPara(result, para);
+                result.AppendLine(line);
+                continue;
+            }
+            if (para.Length > 0) para.Append(' ');
+            para.Append(line);
+        }
+        FlushPara(result, para);
+        return result.ToString();
+    }
+
+    private static void FlushPara(System.Text.StringBuilder result, System.Text.StringBuilder para)
+    {
+        if (para.Length == 0) return;
+        result.AppendLine($"<p>{para}</p>");
+        para.Clear();
+    }
+
+    private static string SafeMarkdownUrl(string encodedUrl)
+    {
+        var url = System.Net.WebUtility.HtmlDecode(encodedUrl).Trim();
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https" or "mailto")
+            return System.Net.WebUtility.HtmlEncode(uri.AbsoluteUri);
+        return "#";
+    }
+
+    // ── Image rotate / flip ──────────────────────────────────────────────────
+
+    private void RotateImage(double angle)
+    {
+        if (_baseImage == null) return;
+        PushUndo();
+        var rotated = new TransformedBitmap(_baseImage, new RotateTransform(angle));
+        rotated.Freeze();
+        ApplyNewBaseImage(rotated);
+    }
+
+    private void FlipImageHorizontal()
+    {
+        if (_baseImage == null) return;
+        PushUndo();
+        var flipped = new TransformedBitmap(_baseImage, new ScaleTransform(-1, 1));
+        flipped.Freeze();
+        ApplyNewBaseImage(flipped);
+    }
+
+    private void FlipImageVertical()
+    {
+        if (_baseImage == null) return;
+        PushUndo();
+        var flipped = new TransformedBitmap(_baseImage, new ScaleTransform(1, -1));
+        flipped.Freeze();
+        ApplyNewBaseImage(flipped);
+    }
+
+    private void ApplyNewBaseImage(BitmapSource newImage)
+    {
+        _baseImage = newImage;
+        _annotations.Clear();
+        _nextMarkerNumber = 1;
+        EditorCanvas.Width = newImage.PixelWidth;
+        EditorCanvas.Height = newImage.PixelHeight;
+        UpdateCanvasClip();
+        ImagePreview.Source = newImage;
+        ImagePreview.Width = newImage.PixelWidth;
+        ImagePreview.Height = newImage.PixelHeight;
+        Canvas.SetLeft(ImagePreview, 0);
+        Canvas.SetTop(ImagePreview, 0);
+        RenderAnnotations();
+    }
+
+    private void EditorRotateCW_Click(object sender, RoutedEventArgs e)    => RotateImage(90);
+    private void EditorRotateCCW_Click(object sender, RoutedEventArgs e)   => RotateImage(270);
+    private void EditorFlipH_Click(object sender, RoutedEventArgs e)       => FlipImageHorizontal();
+    private void EditorFlipV_Click(object sender, RoutedEventArgs e)       => FlipImageVertical();
+
+    // ── Resize with presets ──────────────────────────────────────────────────
+
+    private void EditorResizePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not string tag) return;
+        var parts = tag.Split('x');
+        if (parts.Length != 2
+            || !double.TryParse(parts[0], out var pw)
+            || !double.TryParse(parts[1], out var ph)) return;
+
+        double newWidth, newHeight;
+        if (pw == 0 || ph == 0)
+        {
+            // half / double shorthand: Tag = "0.5x" or "2x"
+            if (!double.TryParse(parts[0], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var factor)) return;
+            newWidth  = Math.Round(EditorCanvas.Width  * factor);
+            newHeight = Math.Round(EditorCanvas.Height * factor);
+        }
+        else
+        {
+            newWidth  = pw;
+            newHeight = ph;
+        }
+        ApplyResize(newWidth, newHeight);
+    }
+
+    private void ApplyResize(double newWidth, double newHeight)
+    {
+        if (newWidth < 64 || newHeight < 64) return;
+        var factorX = newWidth / EditorCanvas.Width;
+        var factorY = newHeight / EditorCanvas.Height;
+        var thicknessFactor = (factorX + factorY) / 2;
+        PushUndo();
+        EditorCanvas.Width = newWidth;
+        EditorCanvas.Height = newHeight;
+        UpdateCanvasClip();
+        ImagePreview.Width  *= factorX;
+        ImagePreview.Height *= factorY;
+        Canvas.SetLeft(ImagePreview, Canvas.GetLeft(ImagePreview) * factorX);
+        Canvas.SetTop(ImagePreview,  Canvas.GetTop(ImagePreview)  * factorY);
+        foreach (var a in _annotations)
+        {
+            a.X *= factorX; a.Y *= factorY; a.W *= factorX; a.H *= factorY;
+            if (a.Tool is not EditorTool.Text and not EditorTool.Pixelate)
+                a.Thickness *= thicknessFactor;
+            for (var i = 0; i < a.Points.Count; i++)
+                a.Points[i] = new Point(a.Points[i].X * factorX, a.Points[i].Y * factorY);
+        }
+        RenderAnnotations();
+    }
+
+    // ── JPG export ───────────────────────────────────────────────────────────
+
+    private void SaveImageAsJpg(RenderTargetBitmap image)
+    {
+        var dlg = new SaveFileDialog
+        {
+            Title = "Bild speichern unter",
+            Filter = "JPEG-Bild|*.jpg;*.jpeg|PNG-Bild|*.png|Alle Dateien|*.*",
+            DefaultExt = ".jpg",
+            FileName = DefaultExportName("jpg"),
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        var ext = System.IO.Path.GetExtension(dlg.FileName).ToLowerInvariant();
+        BitmapEncoder encoder = (ext == ".jpg" || ext == ".jpeg")
+            ? new JpegBitmapEncoder { QualityLevel = 92 }
+            : new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+        using var stream = File.Create(dlg.FileName);
+        encoder.Save(stream);
     }
 }

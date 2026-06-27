@@ -102,6 +102,48 @@ public class PopupViewModelTests
     }
 
     [Fact]
+    public void TogglePin_MovesEntryToTopOfFilteredView()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var vm = new PopupViewModel(db);
+
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "older",
+                Timestamp = new DateTime(2026, 6, 6, 10, 0, 0),
+            });
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Text,
+                Content = "newer",
+                Timestamp = new DateTime(2026, 6, 6, 10, 1, 0),
+            });
+
+            var older = vm.Entries.Single(e => e.Content == "older");
+            Assert.Equal("newer", vm.FilteredEntries.Cast<EntryViewModel>().First().Content);
+
+            vm.TogglePin(older);
+
+            Assert.Equal("older", vm.FilteredEntries.Cast<EntryViewModel>().First().Content);
+            Assert.Equal("older", vm.Entries[0].Content);
+            var firstGroup = Assert.IsAssignableFrom<System.Windows.Data.CollectionViewGroup>(
+                vm.FilteredEntries.Groups!.Cast<object>().First());
+            Assert.Equal("Gepinnt", firstGroup.Name);
+            Assert.Contains(firstGroup.Items.Cast<EntryViewModel>(), e => e.Content == "older");
+        }
+        finally
+        {
+            DeleteIfExists(dbPath);
+            DeleteIfExists($"{dbPath}-wal");
+            DeleteIfExists($"{dbPath}-shm");
+        }
+    }
+
+    [Fact]
     public void AddEntry_SkipsDuplicateLatestImage()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
@@ -123,6 +165,39 @@ public class PopupViewModelTests
                 Type = EntryType.Image,
                 ImageData = image.ToArray(),
                 ContentKind = "PNG",
+                Timestamp = DateTime.Now.AddMilliseconds(10),
+            });
+
+            Assert.Single(vm.Entries);
+            Assert.Single(db.LoadAll());
+        }
+        finally
+        {
+            DeleteIfExists(dbPath);
+            DeleteIfExists($"{dbPath}-wal");
+            DeleteIfExists($"{dbPath}-shm");
+        }
+    }
+
+    [Fact]
+    public void AddEntry_DeduplicatesEmptyImageDataWithoutThrowing()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var vm = new PopupViewModel(db);
+
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Image,
+                ImageData = [],
+                Timestamp = DateTime.Now,
+            });
+            vm.AddEntry(new ClipboardEntry
+            {
+                Type = EntryType.Image,
+                ImageData = [],
                 Timestamp = DateTime.Now.AddMilliseconds(10),
             });
 

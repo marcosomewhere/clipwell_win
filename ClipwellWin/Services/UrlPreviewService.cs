@@ -1,17 +1,16 @@
+using System.IO;
 using System.Net.Http;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace ClipwellWin.Services;
 
 public class UrlPreviewService : IDisposable
 {
-    private readonly HttpClient _http = new()
-    {
-        Timeout = TimeSpan.FromSeconds(3),
-        DefaultRequestHeaders = { { "User-Agent", "Clipwell/1.0" } },
-    };
+    private readonly HttpClient _http;
 
     private static readonly Regex TitleRx = new(@"<title[^>]*>([^<]{1,300})</title>",
         RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -19,6 +18,27 @@ public class UrlPreviewService : IDisposable
         RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex AttrRx = new(@"(?<name>[\w:-]+)\s*=\s*([""'])(?<value>.*?)\2",
         RegexOptions.IgnoreCase);
+    private static readonly Regex MetaCharsetRx = new(
+        @"<meta\b[^>]*(?:charset\s*=\s*[""']?(?<charset>[-\w.]+)|content\s*=\s*[""'][^""']*charset\s*=\s*(?<charset>[-\w.]+))",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+    private const int MaxHtmlBytes = 512 * 1024;
+    private const int MaxFaviconBytes = 256 * 1024;
+
+    public UrlPreviewService()
+    {
+        var handler = new SocketsHttpHandler
+        {
+            ConnectCallback = ConnectGuardedAsync,
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 3,
+        };
+        _http = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(3),
+            DefaultRequestHeaders = { { "User-Agent", "Clipwell/1.0" } },
+        };
+    }
 
     public static bool IsUrl(string? text)
     {
@@ -62,28 +82,30 @@ public class UrlPreviewService : IDisposable
         return false;
     }
 
-    private const int MaxHtmlBytes = 512 * 1024;
-
     public async Task<(string? title, byte[]? favicon)> FetchAsync(string url)
     {
+        if (!ShouldFetch(url)) return (null, null);
+
         try
         {
             using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync();
             var buf = new byte[MaxHtmlBytes];
             int total = 0, read;
             while (total < buf.Length && (read = await stream.ReadAsync(buf.AsMemory(total))) > 0)
                 total += read;
-            var html = Encoding.UTF8.GetString(buf, 0, total);
+            var html = DecodeHtml(buf, total, response.Content.Headers.ContentType?.CharSet);
             var title = WebUtility.HtmlDecode(TitleRx.Match(html).Groups[1].Value.Trim());
             if (title.Length == 0) title = null;
 
             byte[]? favicon = null;
             foreach (var candidate in GetFaviconCandidates(url, html))
             {
+                if (!ShouldFetch(candidate)) continue;
                 try
                 {
-                    var bytes = await _http.GetByteArrayAsync(candidate);
+                    var bytes = await FetchLimitedBytesAsync(candidate, MaxFaviconBytes);
                     if (IsSupportedFavicon(bytes))
                     {
                         favicon = bytes;
@@ -96,6 +118,98 @@ public class UrlPreviewService : IDisposable
             return (title, favicon?.Length > 0 ? favicon : null);
         }
         catch { return (null, null); }
+    }
+
+    private async Task<byte[]> FetchLimitedBytesAsync(string url, int maxBytes)
+    {
+        using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength.HasValue
+            && response.Content.Headers.ContentLength.Value > maxBytes)
+            throw new InvalidDataException("Favicon too large.");
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        using var output = new MemoryStream();
+        var buf = new byte[8192];
+        int read;
+        while ((read = await stream.ReadAsync(buf)) > 0)
+        {
+            if (output.Length + read > maxBytes)
+                throw new InvalidDataException("Favicon too large.");
+            output.Write(buf, 0, read);
+        }
+        return output.ToArray();
+    }
+
+    private static string DecodeHtml(byte[] bytes, int length, string? headerCharset)
+    {
+        var encoding = TryGetEncoding(headerCharset);
+        if (encoding != null)
+            return encoding.GetString(bytes, 0, length);
+
+        var utf8Probe = Encoding.UTF8.GetString(bytes, 0, length);
+        var metaCharset = MetaCharsetRx.Match(utf8Probe).Groups["charset"].Value;
+        encoding = TryGetEncoding(metaCharset) ?? Encoding.UTF8;
+        return encoding.GetString(bytes, 0, length);
+    }
+
+    private static Encoding? TryGetEncoding(string? charset)
+    {
+        if (string.IsNullOrWhiteSpace(charset)) return null;
+        charset = charset.Trim().Trim('"', '\'');
+        if (charset.Equals("utf-8", StringComparison.OrdinalIgnoreCase)
+            || charset.Equals("utf8", StringComparison.OrdinalIgnoreCase))
+            return Encoding.UTF8;
+        if (charset.Equals("iso-8859-1", StringComparison.OrdinalIgnoreCase)
+            || charset.Equals("latin1", StringComparison.OrdinalIgnoreCase)
+            || charset.Equals("latin-1", StringComparison.OrdinalIgnoreCase))
+            return Encoding.Latin1;
+        try { return Encoding.GetEncoding(charset); }
+        catch { return null; }
+    }
+
+    private static async ValueTask<Stream> ConnectGuardedAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
+    {
+        var host = context.DnsEndPoint.Host;
+        var port = context.DnsEndPoint.Port;
+        IPAddress[] addresses;
+
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            throw new HttpRequestException("Localhost URL preview is blocked.");
+
+        if (IPAddress.TryParse(host, out var literal))
+        {
+            if (IPAddress.IsLoopback(literal) || IsPrivate(literal))
+                throw new HttpRequestException("Private address URL preview is blocked.");
+            addresses = [literal];
+        }
+        else
+        {
+            addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
+            addresses = addresses
+                .Where(ip => !IPAddress.IsLoopback(ip) && !IsPrivate(ip))
+                .ToArray();
+            if (addresses.Length == 0)
+                throw new HttpRequestException("Resolved URL preview address is private.");
+        }
+
+        Exception? lastError = null;
+        foreach (var ip in addresses)
+        {
+            var socket = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            try
+            {
+                await socket.ConnectAsync(new IPEndPoint(ip, port), cancellationToken);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                socket.Dispose();
+            }
+        }
+
+        throw new HttpRequestException("Could not connect to URL preview host.", lastError);
     }
 
     private static IEnumerable<string> GetFaviconCandidates(string pageUrl, string html)
