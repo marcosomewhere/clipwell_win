@@ -22,8 +22,12 @@ public class ClipboardEntry
     public string? HexColor { get; set; }
     public string? ContentKind { get; set; }
     public string? DetectionReason { get; set; }
+    public byte[]? ThumbnailData { get; set; }
+    public int UseCount { get; set; }
+    public DateTime? LastUsedAt { get; set; }
     public DateTime Timestamp { get; set; }
     public bool IsPinned { get; set; }
+    public long PinOrder { get; set; }
 
     public string PreviewText => Type switch
     {

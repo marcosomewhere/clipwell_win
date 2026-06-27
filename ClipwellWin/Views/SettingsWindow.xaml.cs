@@ -77,6 +77,7 @@ public partial class SettingsWindow : FluentWindow
         }
 
         UrlPreviewSwitch.IsChecked      = s.UrlPreviewEnabled;
+        UrlCacheTtlBox.Text = ClampInt(s.UrlCacheTtlDays, 1, 365, 7).ToString();
 
         MaxAgeBox.Text  = ClampInt(s.MaxAgeInDays, 0, 3650, 0).ToString();
         MaxSizeBox.Text = ClampInt(s.MaxSizeInMb, 0, 10240, 0).ToString();
@@ -155,7 +156,9 @@ public partial class SettingsWindow : FluentWindow
         var registered = _app.ReRegisterHotkey();
         UpdateHotkeyStatus();
 
-        if (registered) ShowInfo("Hotkey wurde gespeichert.");
+        if (registered && _app.IsHotkeyFallbackActive)
+            ShowError($"Hotkey gespeichert, aber aktuell belegt. Fuer diese Sitzung aktiv: {_app.RegisteredHotkeyText}");
+        else if (registered) ShowInfo("Hotkey wurde gespeichert.");
         else ShowError($"Hotkey gespeichert, konnte aber nicht registriert werden. Fehlercode: {_app.LastHotkeyError}");
     }
 
@@ -204,7 +207,9 @@ public partial class SettingsWindow : FluentWindow
     private void UpdateHotkeyStatus()
     {
         var s = _app.CurrentSettings;
-        HotkeyStatusLabel.Text = _app.IsHotkeyRegistered
+        HotkeyStatusLabel.Text = _app.IsHotkeyFallbackActive
+            ? $"Fallback aktiv: {_app.RegisteredHotkeyText}"
+            : _app.IsHotkeyRegistered
             ? $"Aktiv: {App.FormatHotkey(s.HotkeyModifiers, s.HotkeyVk)}"
             : $"Blockiert: {App.FormatHotkey(s.HotkeyModifiers, s.HotkeyVk)}";
     }
@@ -262,6 +267,7 @@ public partial class SettingsWindow : FluentWindow
     private void UrlPreview_Click(object sender, RoutedEventArgs e)
     {
         _app.CurrentSettings.UrlPreviewEnabled = UrlPreviewSwitch.IsChecked == true;
+        _app.CurrentSettings.UrlCacheTtlDays = ReadInt(UrlCacheTtlBox.Text, 1, 365, 7);
         _app.SaveSettings();
     }
 
@@ -269,6 +275,7 @@ public partial class SettingsWindow : FluentWindow
     {
         _app.CurrentSettings.MaxAgeInDays = ReadInt(MaxAgeBox.Text, 0, 3650, 0);
         _app.CurrentSettings.MaxSizeInMb  = ReadInt(MaxSizeBox.Text, 0, 10240, 0);
+        _app.CurrentSettings.UrlCacheTtlDays = ReadInt(UrlCacheTtlBox.Text, 1, 365, 7);
         _app.SaveSettings();
     }
 
@@ -318,6 +325,40 @@ public partial class SettingsWindow : FluentWindow
         catch (Exception ex) { ShowError($"Backup fehlgeschlagen: {ex.Message}"); }
     }
 
+    private void ExportCsv_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new SaveFileDialog
+        {
+            Title    = "History als CSV exportieren",
+            Filter   = "CSV-Datei|*.csv",
+            FileName = $"clipwell-history-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+        };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            _app.Database.ExportAsCsv(dlg.FileName);
+            ShowInfo($"Export erfolgreich:\n{dlg.FileName}");
+        }
+        catch (Exception ex) { ShowError($"Export fehlgeschlagen: {ex.Message}"); }
+    }
+
+    private void ExportMarkdown_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new SaveFileDialog
+        {
+            Title    = "History als Markdown exportieren",
+            Filter   = "Markdown-Datei|*.md",
+            FileName = $"clipwell-history-{DateTime.Now:yyyyMMdd-HHmmss}.md",
+        };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            _app.Database.ExportAsMarkdown(dlg.FileName);
+            ShowInfo($"Export erfolgreich:\n{dlg.FileName}");
+        }
+        catch (Exception ex) { ShowError($"Export fehlgeschlagen: {ex.Message}"); }
+    }
+
     private void ImportJson_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new OpenFileDialog
@@ -328,8 +369,13 @@ public partial class SettingsWindow : FluentWindow
         if (dlg.ShowDialog() != true) return;
         try
         {
-            int count = _app.Database.ImportFromJson(dlg.FileName);
-            ShowInfo($"{count} Einträge importiert. Bitte Clipwell neu starten.");
+            var (count, skipped, errors) = _app.Database.ImportFromJsonDetailed(dlg.FileName);
+            var msg = $"{count} Einträge importiert";
+            if (skipped > 0) msg += $", {skipped} Duplikate übersprungen";
+            msg += ". Bitte Clipwell neu starten.";
+            if (errors.Count > 0)
+                msg += $"\n\nWarnungen ({errors.Count}):\n" + string.Join("\n", errors.Take(5));
+            ShowInfo(msg);
         }
         catch (Exception ex) { ShowError($"Import fehlgeschlagen: {ex.Message}"); }
     }
@@ -337,18 +383,29 @@ public partial class SettingsWindow : FluentWindow
     private void ResetHistory_Click(object sender, RoutedEventArgs e)
     {
         var r = MessageBox.Show(
-            "Gesamte History löschen? Gepinnte Einträge bleiben erhalten.",
-            "History löschen",
-            MessageBoxButton.YesNoCancel,
+            "Alle ungepinnten Eintraege loeschen? Gepinnte Eintraege bleiben erhalten.",
+            "Ungepinnte History loeschen",
+            MessageBoxButton.OKCancel,
             MessageBoxImage.Warning);
 
-        if (r == MessageBoxResult.Cancel) return;
+        if (r != MessageBoxResult.OK) return;
 
-        bool keepPinned = r == MessageBoxResult.Yes;
-        _app.Database.ClearHistory(keepPinned);
-        ShowInfo(keepPinned
-            ? "History gelöscht (gepinnte Einträge behalten)."
-            : "Gesamte History gelöscht.");
+        _app.Database.ClearHistory(keepPinned: true);
+        ShowInfo("Ungepinnte History geloescht. Gepinnte Eintraege wurden behalten.");
+    }
+
+    private void ResetAllHistory_Click(object sender, RoutedEventArgs e)
+    {
+        var r = MessageBox.Show(
+            "Gesamte History inklusive gepinnter Eintraege endgueltig loeschen?",
+            "Gesamte History loeschen",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+
+        if (r != MessageBoxResult.OK) return;
+
+        _app.Database.ClearHistory(keepPinned: false);
+        ShowInfo("Gesamte History geloescht.");
     }
 
     private void ResetUrlCache_Click(object sender, RoutedEventArgs e)

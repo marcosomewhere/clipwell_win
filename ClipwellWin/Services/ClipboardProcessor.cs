@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Media.Imaging;
 using ClipwellWin.Models;
@@ -47,7 +48,7 @@ public static class ClipboardProcessor
             else if (data.GetDataPresent(System.Windows.DataFormats.Html))
                 text = StripHtml(data.GetData(System.Windows.DataFormats.Html) as string);
             else if (data.GetDataPresent(System.Windows.DataFormats.Rtf))
-                text = data.GetData(System.Windows.DataFormats.Rtf) as string;
+                text = StripRtf(data.GetData(System.Windows.DataFormats.Rtf) as string);
 
             if (string.IsNullOrWhiteSpace(text)) return null;
             text = text.Trim();
@@ -72,7 +73,7 @@ public static class ClipboardProcessor
                 codeReason = analysis.reason;
                 if (language != null) type = EntryType.Code;
                 contentKind = ContentKindService.DetectTextKind(text, language);
-                if (language == null && contentKind is "TOML" or "INI" or "PROPS" or "ENV" or "DOCKER" or "CONFIG")
+                if (language != null || contentKind is "CODE" or "YAML")
                     type = EntryType.Code;
 
                 var hexMatch = HexColorRx.Match(text);
@@ -86,7 +87,7 @@ public static class ClipboardProcessor
             var reason = type switch
             {
                 EntryType.Url => "URL erkannt: beginnt mit http:// oder https:// und ist einzeilig.",
-                EntryType.Code when language == null && contentKind != null => $"Als {contentKind} erkannt: typische Konfigurations- oder Dateistruktur.",
+                EntryType.Code when language == null && contentKind != null => "Als Code erkannt: typische Konfigurations- oder Dateistruktur.",
                 EntryType.Code => codeReason ?? "",
                 EntryType.Color => $"Farbwert erkannt: {hexColor}.",
                 _ => "Als Text behandelt: keine URL-, Farb- oder Code-Regel passte.",
@@ -232,10 +233,189 @@ public static class ClipboardProcessor
     private static string? StripHtml(string? html)
     {
         if (html == null) return null;
+        html = ExtractWindowsHtmlFragment(html);
         var bodyIdx = html.IndexOf("<body", StringComparison.OrdinalIgnoreCase);
         if (bodyIdx >= 0) html = html[bodyIdx..];
         html = ScriptStyleRx.Replace(html, " ");
         html = HtmlTagRx.Replace(html, " ");
         return MultiSpaceRx.Replace(html, " ").Trim();
     }
+
+    private static string ExtractWindowsHtmlFragment(string html)
+    {
+        if (!html.StartsWith("Version:", StringComparison.OrdinalIgnoreCase))
+            return html;
+
+        var start = ReadHtmlOffset(html, "StartFragment");
+        var end = ReadHtmlOffset(html, "EndFragment");
+        if (start < 0 || end <= start)
+        {
+            start = ReadHtmlOffset(html, "StartHTML");
+            end = ReadHtmlOffset(html, "EndHTML");
+        }
+
+        if (start < 0 || end <= start)
+            return html;
+
+        var bytes = Encoding.UTF8.GetBytes(html);
+        if (start >= bytes.Length)
+            return html;
+
+        end = Math.Min(end, bytes.Length);
+        return Encoding.UTF8.GetString(bytes, start, end - start);
+    }
+
+    private static int ReadHtmlOffset(string html, string name)
+    {
+        var match = Regex.Match(html, $@"^{Regex.Escape(name)}:(\d+)\s*$", RegexOptions.Multiline);
+        return match.Success && int.TryParse(match.Groups[1].Value, out var value) ? value : -1;
+    }
+
+    private static string? StripRtf(string? rtf)
+    {
+        if (string.IsNullOrWhiteSpace(rtf)) return null;
+        try
+        {
+            var text = StripRtfPlainText(rtf);
+            return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string StripRtfPlainText(string rtf)
+    {
+        var output = new StringBuilder(rtf.Length);
+        var skipStack = new Stack<bool>();
+        var skipGroup = false;
+        var unicodeFallbackSkip = 1;
+        var skipChars = 0;
+
+        for (var i = 0; i < rtf.Length; i++)
+        {
+            var ch = rtf[i];
+
+            if (skipChars > 0)
+            {
+                skipChars--;
+                continue;
+            }
+
+            if (ch == '{')
+            {
+                skipStack.Push(skipGroup);
+                continue;
+            }
+
+            if (ch == '}')
+            {
+                skipGroup = skipStack.Count > 0 && skipStack.Pop();
+                continue;
+            }
+
+            if (ch == '\r' || ch == '\n')
+                continue;
+
+            if (ch != '\\')
+            {
+                if (!skipGroup) output.Append(ch);
+                continue;
+            }
+
+            if (++i >= rtf.Length) break;
+            ch = rtf[i];
+
+            if (ch is '\\' or '{' or '}')
+            {
+                if (!skipGroup) output.Append(ch);
+                continue;
+            }
+
+            if (ch == '~')
+            {
+                if (!skipGroup) output.Append(' ');
+                continue;
+            }
+
+            if (ch == '*')
+            {
+                skipGroup = true;
+                continue;
+            }
+
+            if (ch == '\'')
+            {
+                if (i + 2 < rtf.Length
+                    && byte.TryParse(rtf.AsSpan(i + 1, 2), System.Globalization.NumberStyles.HexNumber, null, out var value))
+                {
+                    if (!skipGroup) output.Append((char)value);
+                    i += 2;
+                }
+                continue;
+            }
+
+            if (!char.IsLetter(ch))
+            {
+                if (!skipGroup) output.Append(ch);
+                continue;
+            }
+
+            var wordStart = i;
+            while (i < rtf.Length && char.IsLetter(rtf[i]))
+                i++;
+            var word = rtf[wordStart..i];
+
+            var sign = 1;
+            if (i < rtf.Length && rtf[i] == '-')
+            {
+                sign = -1;
+                i++;
+            }
+
+            var numberStart = i;
+            while (i < rtf.Length && char.IsDigit(rtf[i]))
+                i++;
+            var hasNumber = i > numberStart;
+            var number = hasNumber && int.TryParse(rtf[numberStart..i], out var parsed)
+                ? sign * parsed
+                : 0;
+
+            if (i < rtf.Length && rtf[i] != ' ')
+                i--;
+
+            if (IsRtfDestination(word))
+            {
+                skipGroup = true;
+                continue;
+            }
+
+            if (skipGroup) continue;
+
+            switch (word)
+            {
+                case "par":
+                case "line":
+                    output.AppendLine();
+                    break;
+                case "tab":
+                    output.Append('\t');
+                    break;
+                case "uc" when hasNumber:
+                    unicodeFallbackSkip = Math.Max(0, number);
+                    break;
+                case "u" when hasNumber:
+                    output.Append(char.ConvertFromUtf32(number < 0 ? number + 65536 : number));
+                    skipChars = unicodeFallbackSkip;
+                    break;
+            }
+        }
+
+        return output.ToString();
+    }
+
+    private static bool IsRtfDestination(string word)
+        => word is "fonttbl" or "colortbl" or "datastore" or "stylesheet" or "info"
+            or "pict" or "object" or "header" or "footer" or "footnote" or "annotation";
 }
