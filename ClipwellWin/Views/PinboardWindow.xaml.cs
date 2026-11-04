@@ -36,20 +36,39 @@ public partial class PinboardWindow : Window
             WatchEntry(entry);
         Refresh();
         _vm.Entries.CollectionChanged += Entries_CollectionChanged;
+        Closed += (_, _) =>
+        {
+            _vm.Entries.CollectionChanged -= Entries_CollectionChanged;
+            foreach (var entry in _observedEntries.ToList())
+                UnwatchEntry(entry);
+        };
     }
 
     internal void Refresh()
     {
-        var pinned = _vm.Entries
+        var search = PinSearchBox?.Text?.Trim() ?? "";
+        var allPinned = _vm.Entries
             .Where(e => e.IsPinned)
-            .OrderByDescending(e => e.Timestamp)
+            .OrderByDescending(e => e.PinOrder > 0 ? e.PinOrder : e.Timestamp.Ticks)
             .ToList();
 
-        PinList.ItemsSource = pinned;
-        CountLabel.Text = pinned.Count == 0
+        var shown = string.IsNullOrEmpty(search)
+            ? allPinned
+            : allPinned.Where(e =>
+                (e.Entry.PreviewText?.Contains(search, StringComparison.OrdinalIgnoreCase) == true) ||
+                (e.Entry.OcrText?.Contains(search, StringComparison.OrdinalIgnoreCase) == true) ||
+                (e.Entry.UrlTitle?.Contains(search, StringComparison.OrdinalIgnoreCase) == true)).ToList();
+
+        PinList.ItemsSource = shown;
+        CountLabel.Text = allPinned.Count == 0
             ? "Keine gepinnten Einträge"
-            : $"{pinned.Count} gepinnte{(pinned.Count == 1 ? "r Eintrag" : " Einträge")}";
+            : string.IsNullOrEmpty(search)
+                ? $"{allPinned.Count} gepinnte{(allPinned.Count == 1 ? "r Eintrag" : " Einträge")}"
+                : $"{shown.Count} von {allPinned.Count} angezeigt";
     }
+
+    private void PinSearch_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        => Refresh();
 
     private void PinList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
@@ -79,12 +98,72 @@ public partial class PinboardWindow : Window
         if (Math.Abs(pos.X - _dragStart.Value.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(pos.Y - _dragStart.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
 
-        var data = BuildDragDataObject(_dragEntry);
+        var entry = _dragEntry;
         _dragStart = null;
         _dragEntry = null;
-        if (data == null) return;
 
-        DragDrop.DoDragDrop(PinList, data, DragDropEffects.Copy);
+        var dragData = new System.Windows.DataObject();
+        dragData.SetData("ClipwellPinboardEntry", entry.Id.ToString());
+        var text = entry.Content ?? entry.Entry.OcrText ?? "";
+        if (!string.IsNullOrEmpty(text))
+            dragData.SetText(text, TextDataFormat.UnicodeText);
+
+        DragDrop.DoDragDrop(PinList, dragData, DragDropEffects.Move | DragDropEffects.Copy);
+    }
+
+    private void PinList_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent("ClipwellPinboardEntry"))
+            e.Effects = DragDropEffects.Move;
+        else
+            UpdateDropEffects(e);
+        e.Handled = true;
+    }
+
+    private void PinList_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent("ClipwellPinboardEntry"))
+        {
+            var idStr = e.Data.GetData("ClipwellPinboardEntry") as string;
+            if (long.TryParse(idStr, out var draggedId))
+            {
+                var dropTarget = FindDataContext<EntryViewModel>(e.OriginalSource as DependencyObject);
+                ReorderPinnedEntry(draggedId, dropTarget?.Id);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        Pinboard_Drop(sender, e);
+    }
+
+    private void ReorderPinnedEntry(long draggedId, long? targetId)
+    {
+        if (!targetId.HasValue || draggedId == targetId.Value) return;
+
+        var items = (PinList.ItemsSource as System.Collections.Generic.List<EntryViewModel>)?.ToList();
+        if (items == null) return;
+
+        var dragged = items.FirstOrDefault(e => e.Id == draggedId);
+        var target  = items.FirstOrDefault(e => e.Id == targetId.Value);
+        if (dragged == null || target == null) return;
+
+        items.Remove(dragged);
+        var insertIdx = items.IndexOf(target);
+        items.Insert(insertIdx, dragged);
+
+        // Reassign PinOrder with gaps
+        for (int i = 0; i < items.Count; i++)
+        {
+            var newOrder = (long)(items.Count - i) * 1000;
+            if (items[i].PinOrder != newOrder)
+            {
+                items[i].PinOrder = newOrder;
+                _app.Database.UpdatePinOrder(items[i].Id, newOrder);
+            }
+        }
+
+        Refresh();
     }
 
     private void CopyBtn_Click(object sender, RoutedEventArgs e)
@@ -165,23 +244,6 @@ public partial class PinboardWindow : Window
     {
         e.Effects = HasSupportedDropData(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
-    }
-
-    private static System.Windows.DataObject? BuildDragDataObject(EntryViewModel vm)
-    {
-        var data = new System.Windows.DataObject();
-        if (vm.Type == EntryType.Image && vm.Entry.ImageData != null)
-        {
-            var image = LoadBitmapSource(vm.Entry.ImageData);
-            if (image == null) return null;
-            data.SetData(System.Windows.DataFormats.Bitmap, image);
-            return data;
-        }
-
-        var text = vm.Content ?? vm.Entry.OcrText ?? "";
-        if (string.IsNullOrEmpty(text)) return null;
-        data.SetText(text, TextDataFormat.UnicodeText);
-        return data;
     }
 
     private bool TryBuildPinnedEntry(System.Windows.IDataObject data, out ClipboardEntry entry)

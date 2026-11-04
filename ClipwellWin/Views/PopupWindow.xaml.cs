@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ClipwellWin.Models;
+using ClipwellWin.Services;
 using ClipwellWin.ViewModels;
 using Microsoft.Win32;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -53,6 +55,7 @@ public partial class PopupWindow : Window
             {
                 RefreshVisibleTimestamps();
                 _timestampTimer.Start();
+                RestoreQuickNoteDraft();
             }
             else
             {
@@ -87,7 +90,8 @@ public partial class PopupWindow : Window
         var tint = _app?.IsEffectiveDarkTheme == false
             ? Color.FromArgb(240, 250, 250, 248)
             : Color.FromArgb(238, 23, 26, 30);
-        NativeMethods.EnableAcrylic(hwnd, tint);
+        if (!NativeMethods.EnableAcrylic(hwnd, tint))
+            Background = new SolidColorBrush(tint);
         NativeMethods.SetImmersiveDarkMode(hwnd, _app?.IsEffectiveDarkTheme == true);
     }
 
@@ -276,12 +280,31 @@ public partial class PopupWindow : Window
     private void Window_Deactivated(object sender, EventArgs e)
     {
         SaveSizeAndPosition();
+        SaveQuickNoteDraft();
         Hide();
         _vm.SearchText  = "";
-        _vm.IsBulkMode  = false;
         ChipAll.IsChecked = true;
         _vm.TypeFilter    = null;
         _vm.ShowPinnedOnly = false;
+    }
+
+    private void SaveQuickNoteDraft()
+    {
+        if (_app == null) return;
+        var draft = QuickNotePanel.Visibility == Visibility.Visible ? QuickNoteBox.Text : "";
+        _app.CurrentSettings.QuickNoteDraft = draft;
+        _app.SaveSettings();
+    }
+
+    private void RestoreQuickNoteDraft()
+    {
+        var draft = _app?.CurrentSettings.QuickNoteDraft ?? "";
+        if (!string.IsNullOrEmpty(draft))
+        {
+            QuickNotePanel.Visibility = Visibility.Visible;
+            QuickNoteBox.Text = draft;
+            QuickNoteBox.CaretIndex = draft.Length;
+        }
     }
 
     private void SaveSizeAndPosition()
@@ -313,6 +336,9 @@ public partial class PopupWindow : Window
     private void ToggleBulkMode_Click(object sender, RoutedEventArgs e)
         => _vm.IsBulkMode = !_vm.IsBulkMode;
 
+    private void EntrySelectionCheckBox_Click(object sender, RoutedEventArgs e)
+        => _vm.NotifySelectionChanged();
+
     private void BulkSelectAll_Click(object sender, RoutedEventArgs e)
         => _vm.ToggleSelectAll();
 
@@ -324,62 +350,25 @@ public partial class PopupWindow : Window
 
     private void BulkDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedCount == 0) return;
+        var selected = _vm.GetSelectedViewModels();
+        if (selected.Count == 0) return;
         var r = System.Windows.MessageBox.Show(
-            $"{_vm.SelectedCount} Einträge löschen?", "Clipwell",
+            $"{selected.Count} Einträge löschen?", "Clipwell",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question);
         if (r == System.Windows.MessageBoxResult.Yes)
-            _vm.DeleteSelected();
+            _vm.DeleteEntries(selected);
     }
 
-    private void BulkExport_Click(object sender, RoutedEventArgs e)
+
+
+    private void BulkCopy_Click(object sender, RoutedEventArgs e)
     {
-        bool exportAll = _vm.SelectedCount == 0;
-        if (exportAll)
-        {
-            var ask = System.Windows.MessageBox.Show(
-                "Keine Einträge ausgewählt. Gesamte History exportieren?", "Clipwell",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Question);
-            if (ask != System.Windows.MessageBoxResult.Yes) return;
-        }
-
-        var dlg = new SaveFileDialog
-        {
-            Title  = exportAll ? "Gesamte History exportieren" : "Auswahl exportieren",
-            Filter = "JSON-Datei|*.json",
-            FileName = $"clipwell-export-{DateTime.Now:yyyyMMdd-HHmmss}.json",
-        };
-        if (dlg.ShowDialog() != true) return;
-
-        try
-        {
-            if (exportAll)
-            {
-                _app.Database.ExportAsJson(dlg.FileName);
-                System.Windows.MessageBox.Show(
-                    "Gesamte History exportiert.", "Clipwell",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Information);
-            }
-            else
-            {
-                var entries = _vm.GetSelectedEntries();
-                _app.Database.ExportAsJson(entries, dlg.FileName);
-                System.Windows.MessageBox.Show(
-                    $"{entries.Count} Einträge exportiert.", "Clipwell",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Information);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(
-                $"Export fehlgeschlagen: {ex.Message}", "Clipwell",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
-        }
+        if (_vm.SelectedCount == 0) return;
+        var text = _vm.CopySelectedTexts();
+        if (string.IsNullOrEmpty(text)) return;
+        try { System.Windows.Clipboard.SetText(text); }
+        catch { }
     }
 
     private void BulkCancel_Click(object sender, RoutedEventArgs e)
@@ -413,7 +402,9 @@ public partial class PopupWindow : Window
         QuickNotePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show)
         {
-            QuickNoteBox.Text = "";
+            var draft = _app?.CurrentSettings.QuickNoteDraft ?? "";
+            QuickNoteBox.Text = draft;
+            QuickNoteBox.CaretIndex = draft.Length;
             QuickNoteBox.Focus();
         }
     }
@@ -425,11 +416,12 @@ public partial class PopupWindow : Window
     {
         QuickNotePanel.Visibility = Visibility.Collapsed;
         QuickNoteBox.Text = "";
+        if (_app != null) { _app.CurrentSettings.QuickNoteDraft = ""; _app.SaveSettings(); }
     }
 
     private void QuickNoteBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        if (e.Key == Key.Enter && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
             SaveQuickNote();
             e.Handled = true;
@@ -449,6 +441,7 @@ public partial class PopupWindow : Window
         _vm.AddQuickNote(text);
         QuickNotePanel.Visibility = Visibility.Collapsed;
         QuickNoteBox.Text = "";
+        if (_app != null) { _app.CurrentSettings.QuickNoteDraft = ""; _app.SaveSettings(); }
     }
 
     private Point? _dragStart;
@@ -522,6 +515,7 @@ public partial class PopupWindow : Window
         }
     }
 
+
     private void Item_MouseEnter(object sender, MouseEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is EntryViewModel vm)
@@ -540,10 +534,46 @@ public partial class PopupWindow : Window
             _app.CopyEntryToClipboard(vm, plainText: false);
     }
 
+    private void HoverOpenUrl_Click(object sender, RoutedEventArgs e)
+    {
+        if (HoverEntry(sender) is { } vm)
+            OpenUrl(vm);
+    }
+
     private void HoverPin_Click(object sender, RoutedEventArgs e)
     {
         if (HoverEntry(sender) is { } vm)
-            _vm.TogglePin(vm);
+        {
+            TogglePinAndRefreshList(vm);
+        }
+        e.Handled = true;
+    }
+
+    private void TogglePinAndRefreshList(EntryViewModel vm)
+    {
+        _vm.TogglePin(vm);
+        var pinned = vm.IsPinned;
+
+        if (pinned)
+        {
+            EntryList.SelectedItem = null;
+            _vm.SelectedEntry = null;
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            _entryScrollViewer = FindVisualChild<ScrollViewer>(EntryList);
+            if (pinned && _entryScrollViewer != null)
+            {
+                _entryScrollViewer.ScrollToTop();
+                EntryList.SelectedItem = null;
+                _vm.SelectedEntry = null;
+            }
+            else
+            {
+                EntryList.ScrollIntoView(vm);
+            }
+        }));
     }
 
     private void HoverDelete_Click(object sender, RoutedEventArgs e)
@@ -564,7 +594,8 @@ public partial class PopupWindow : Window
     {
         // DataContext wird über das Grid gesetzt; Button findet den VM über VisualTree
         var el = sender as FrameworkElement;
-        return el?.DataContext as EntryViewModel
+        return el?.Tag as EntryViewModel
+            ?? el?.DataContext as EntryViewModel
             ?? FindParentDataContext<EntryViewModel>(el);
     }
 
@@ -597,15 +628,70 @@ public partial class PopupWindow : Window
         "pinned:true", "pinned:false",
     ];
 
+    private void RegexToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _vm.IsRegexSearch = RegexToggle.IsChecked == true;
+    }
+
+    private void SortMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        var ctx = SortMenuButton.ContextMenu;
+        ctx.PlacementTarget = SortMenuButton;
+        ctx.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        ctx.IsOpen = true;
+    }
+
+    private void SortContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ContextMenu menu) return;
+        foreach (var item in menu.Items.OfType<System.Windows.Controls.MenuItem>())
+            item.IsChecked = item.Tag is string tag && tag == _vm.SortMode;
+    }
+
+    private void SortMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as System.Windows.Controls.MenuItem)?.Tag is string mode)
+            _vm.SortMode = mode;
+    }
+
+    private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(SearchBox.Text) && _vm.SearchHistory.Count > 0)
+            ShowSearchHistory();
+    }
+
+    private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        // Delay so clicks on suggestions register first
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!SuggestionsList.IsKeyboardFocusWithin)
+                SuggestionsPopup.IsOpen = false;
+        }, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void ShowSearchHistory()
+    {
+        if (_vm.SearchHistory.Count == 0) return;
+        SuggestionsList.ItemsSource = _vm.SearchHistory;
+        SearchHistoryHeader.Visibility = Visibility.Visible;
+        SuggestionsPopup.IsOpen = true;
+    }
+
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         var text = SearchBox.Text;
         if (string.IsNullOrEmpty(text))
         {
-            SuggestionsPopup.IsOpen = false;
+            SearchHistoryHeader.Visibility = Visibility.Collapsed;
+            if (_vm.SearchHistory.Count > 0)
+                ShowSearchHistory();
+            else
+                SuggestionsPopup.IsOpen = false;
             return;
         }
 
+        SearchHistoryHeader.Visibility = Visibility.Collapsed;
         var suggestions = GetSuggestions(text);
         if (suggestions.Count == 0)
         {
@@ -752,7 +838,7 @@ public partial class PopupWindow : Window
 
         if (s != null && MatchShortcut(e, s.KeyPin, s.KeyPinCtrl, s.KeyPinAlt, s.KeyPinShift, s.KeyPinWin))
         {
-            if (_vm.SelectedEntry != null) _vm.TogglePin(_vm.SelectedEntry);
+            if (_vm.SelectedEntry != null) TogglePinAndRefreshList(_vm.SelectedEntry);
             e.Handled = true;
             return;
         }
@@ -834,7 +920,7 @@ public partial class PopupWindow : Window
 
     private void PinMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (MenuEntry(sender) is { } vm) _vm.TogglePin(vm);
+        if (MenuEntry(sender) is { } vm) TogglePinAndRefreshList(vm);
     }
 
     private void DeleteMenuItem_Click(object sender, RoutedEventArgs e)
@@ -863,6 +949,12 @@ public partial class PopupWindow : Window
         if (MenuEntry(sender) is { } vm) _app.ReloadUrlPreview(vm);
     }
 
+    private void OpenUrlMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuEntry(sender) is { } vm)
+            OpenUrl(vm);
+    }
+
     private void TreatAsTextMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (MenuEntry(sender) is { } vm) _vm.SetType(vm, EntryType.Text);
@@ -876,8 +968,23 @@ public partial class PopupWindow : Window
     private static EntryViewModel? MenuEntry(object sender)
         => (sender as FrameworkElement)?.DataContext as EntryViewModel;
 
+    private static void OpenUrl(EntryViewModel vm)
+    {
+        if (vm.Type != EntryType.Url || !UrlPreviewService.IsUrl(vm.Content)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(vm.Content!)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch { }
+    }
+
     private void OpenDetails(EntryViewModel vm)
     {
+        if (vm.Type == EntryType.Image && vm.Entry.ImageData == null)
+            vm.Entry.ImageData = _app.Database.LoadImageData(vm.Id);
         var details = new DetailWindow(vm)
         {
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
@@ -897,6 +1004,8 @@ public partial class PopupWindow : Window
     private void PasteSelected(bool plainText)
     {
         if (_vm.SelectedEntry == null) return;
+        if (!string.IsNullOrWhiteSpace(_vm.SearchText))
+            _vm.AddToSearchHistory(_vm.SearchText);
         _app.PasteEntry(_vm.SelectedEntry, plainText);
     }
 }

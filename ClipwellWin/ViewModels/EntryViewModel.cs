@@ -30,6 +30,15 @@ public class EntryViewModel : ViewModelBase
         set { Entry.IsPinned = value; OnPropertyChanged(); OnPropertyChanged(nameof(GroupLabel)); }
     }
 
+    public long PinOrder
+    {
+        get => Entry.PinOrder;
+        set { Entry.PinOrder = value; OnPropertyChanged(); }
+    }
+
+    public int UseCount => Entry.UseCount;
+    public DateTime? LastUsedAt => Entry.LastUsedAt;
+
     public string GroupLabel
     {
         get
@@ -85,6 +94,20 @@ public class EntryViewModel : ViewModelBase
         }
     }
 
+    // Zweite Zeile im Popup: für URLs die echte URL statt nochmals den Titel
+    public string SublineText
+    {
+        get
+        {
+            if (Entry.Type == EntryType.Url)
+            {
+                var url = Entry.Content ?? "";
+                return url.Length > 200 ? url[..200] : url;
+            }
+            return PreviewText;
+        }
+    }
+
     public string RelativeTime
     {
         get
@@ -93,7 +116,11 @@ public class EntryViewModel : ViewModelBase
             if (diff.TotalSeconds < 60) return "gerade eben";
             if (diff.TotalMinutes < 60) return $"vor {(int)diff.TotalMinutes} Min.";
             if (diff.TotalHours < 24) return $"vor {(int)diff.TotalHours} Std.";
-            if (diff.TotalDays < 7) return $"vor {(int)diff.TotalDays} Tagen";
+            if (diff.TotalDays < 7)
+            {
+                var days = (int)diff.TotalDays;
+                return days == 1 ? "vor 1 Tag" : $"vor {days} Tagen";
+            }
             return Entry.Timestamp.ToString("dd.MM.yyyy");
         }
     }
@@ -103,8 +130,10 @@ public class EntryViewModel : ViewModelBase
     {
         get
         {
-            if (_thumbnail != null || Entry.ImageData == null) return _thumbnail;
-            _thumbnail = LoadBitmapImage(Entry.ImageData, 80);
+            if (_thumbnail != null) return _thumbnail;
+            var data = Entry.ThumbnailData ?? Entry.ImageData;
+            if (data == null) return null;
+            _thumbnail = LoadBitmapImage(data, 80);
             return _thumbnail;
         }
     }
@@ -149,8 +178,12 @@ public class EntryViewModel : ViewModelBase
             if (Entry.Type == EntryType.Url)
                 return Entry.ContentKind;
             if (Entry.Type == EntryType.Image)
-                return Entry.ContentKind ?? "IMG";
-            return Entry.ContentKind ?? Entry.Language;
+                return Entry.ContentKind; // BadgeText ist immer "IMG"; nur zeigen wenn ContentKind gesetzt
+            if (Entry.Type == EntryType.Code)
+                return null;
+            // Nur anzeigen wenn es sich von BadgeText unterscheidet (z.B. "TEXT" + "Python", nicht "MARKDOWN" + "MARKDOWN")
+            var detail = Entry.ContentKind ?? Entry.Language;
+            return detail == BadgeText ? null : detail;
         }
     }
 
@@ -210,7 +243,13 @@ public class EntryViewModel : ViewModelBase
         }
     }
 
-    public void RefreshPreview() => OnPropertyChanged(nameof(PreviewText));
+    public void RefreshPreview()
+    {
+        OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(SublineText));
+        OnPropertyChanged(nameof(BadgeText));
+        OnPropertyChanged(nameof(DetailBadgeText));
+    }
     public void RefreshTimestamp()
     {
         OnPropertyChanged(nameof(Timestamp));
@@ -222,6 +261,14 @@ public class EntryViewModel : ViewModelBase
     {
         Entry.Timestamp = timestamp;
         RefreshTimestamp();
+    }
+
+    public void MarkUsed(DateTime usedAt)
+    {
+        Entry.UseCount++;
+        Entry.LastUsedAt = usedAt;
+        OnPropertyChanged(nameof(UseCount));
+        OnPropertyChanged(nameof(LastUsedAt));
     }
 
     public void SetType(EntryType type, string? language, string? kind, string reason)

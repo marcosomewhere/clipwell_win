@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
@@ -28,6 +29,7 @@ public partial class App : System.Windows.Application
     private const string StartupRunValueName = "Clipwell";
     private const string OnboardingSeenFileName = "onboarding.seen";
     private static readonly object LogLock = new();
+    private readonly object _settingsMutationLock = new();
     private const int PasteDelayMs = 140;
     private const string ClipboardBusyMessage = "Clipboard konnte gerade nicht geschrieben werden.";
     private enum PopupPlacement { Cursor, Taskbar }
@@ -47,6 +49,11 @@ public partial class App : System.Windows.Application
     private CancellationTokenSource? _showEventCts;
     private bool _ownsSingleInstance;
     private bool _isEffectiveDarkTheme = true;
+    private uint _registeredHotkeyModifiers;
+    private uint _registeredHotkeyVk;
+    private bool _usingHotkeyFallback;
+
+    private readonly System.Threading.SemaphoreSlim _urlFetchSemaphore = new(3, 3);
 
     private IntPtr _previousForeground;
     private bool _ignoreNextClipboard;
@@ -157,11 +164,14 @@ public partial class App : System.Windows.Application
         Current.DispatcherUnhandledException += (_, e) =>
         {
             LogCrash(e.Exception);
-            e.Handled = true;
+            e.Handled = IsRecoverableUiException(e.Exception);
         };
     }
 
-    private static void LogCrash(Exception ex)
+    private static bool IsRecoverableUiException(Exception ex)
+        => ex is COMException { HResult: unchecked((int)0x800401D0) or unchecked((int)0x800401D3) };
+
+    internal static void LogCrash(Exception ex)
     {
         try
         {
@@ -262,7 +272,7 @@ public partial class App : System.Windows.Application
         ApplicationThemeManager.Apply(dark ? ApplicationTheme.Dark : ApplicationTheme.Light);
         ApplyPopupResources(dark);
         ApplyOnboardingResources(dark);
-        ApplyCompactResources(mode == AppThemeMode.Compact);
+        ApplyDefaultSizeResources();
         _popup?.ApplyWindowTheme();
         _onboarding?.ApplyWindowTheme();
         _pinboard?.Refresh();
@@ -363,37 +373,20 @@ public partial class App : System.Windows.Application
     private static SolidColorBrush Brush(string color)
         => new((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
 
-    private static void ApplyCompactResources(bool compact)
+    private static void ApplyDefaultSizeResources()
     {
         var res = Current.Resources;
-        if (compact)
-        {
-            res["EntryItemMargin"]       = new System.Windows.Thickness(6, 1, 6, 1);
-            res["EntryContentMargin"]    = new System.Windows.Thickness(8, 5, 8, 5);
-            res["EntryMinHeight"]        = 38.0;
-            res["EntryFontSizeMain"]     = 11.5;
-            res["EntryFontSizeMeta"]     = 10.0;
-            res["EntryFontWeightMain"]   = System.Windows.FontWeights.Normal;
-            res["EntryFontWeightMeta"]   = System.Windows.FontWeights.Light;
-            res["FilterChipPadding"]     = new System.Windows.Thickness(8, 2, 8, 2);
-            res["FilterChipFontSize"]    = 10.0;
-            res["BadgeFontSize"]         = 9.0;
-            res["BadgePadding"]          = new System.Windows.Thickness(4, 1, 4, 1);
-        }
-        else
-        {
-            res["EntryItemMargin"]       = new System.Windows.Thickness(8, 2, 8, 2);
-            res["EntryContentMargin"]    = new System.Windows.Thickness(12, 8, 12, 8);
-            res["EntryMinHeight"]        = 52.0;
-            res["EntryFontSizeMain"]     = 12.5;
-            res["EntryFontSizeMeta"]     = 11.0;
-            res["EntryFontWeightMain"]   = System.Windows.FontWeights.Normal;
-            res["EntryFontWeightMeta"]   = System.Windows.FontWeights.Normal;
-            res["FilterChipPadding"]     = new System.Windows.Thickness(10, 4, 10, 4);
-            res["FilterChipFontSize"]    = 11.0;
-            res["BadgeFontSize"]         = 10.0;
-            res["BadgePadding"]          = new System.Windows.Thickness(6, 2, 6, 2);
-        }
+        res["EntryItemMargin"]       = new System.Windows.Thickness(8, 2, 8, 2);
+        res["EntryContentMargin"]    = new System.Windows.Thickness(12, 8, 12, 8);
+        res["EntryMinHeight"]        = 52.0;
+        res["EntryFontSizeMain"]     = 12.5;
+        res["EntryFontSizeMeta"]     = 11.0;
+        res["EntryFontWeightMain"]   = System.Windows.FontWeights.Normal;
+        res["EntryFontWeightMeta"]   = System.Windows.FontWeights.Normal;
+        res["FilterChipPadding"]     = new System.Windows.Thickness(10, 4, 10, 4);
+        res["FilterChipFontSize"]    = 11.0;
+        res["BadgeFontSize"]         = 10.0;
+        res["BadgePadding"]          = new System.Windows.Thickness(6, 2, 6, 2);
     }
 
     private void SetupTray()
@@ -426,6 +419,15 @@ public partial class App : System.Windows.Application
             5000,
             "Clipwell Hotkey nicht aktiv",
             $"Die Tastenkombination ist schon belegt oder wurde von Windows blockiert. Fehlercode: {error}",
+            ToolTipIcon.Warning);
+    }
+
+    private void ShowHotkeyFallbackWarning(uint requestedModifiers, uint requestedVk)
+    {
+        _trayIcon?.ShowBalloonTip(
+            7000,
+            "Clipwell Hotkey-Fallback aktiv",
+            $"{FormatHotkey(requestedModifiers, requestedVk)} ist belegt. Fuer diese Sitzung wurde {FormatHotkey(_registeredHotkeyModifiers, _registeredHotkeyVk)} registriert; die Einstellung wurde nicht ueberschrieben.",
             ToolTipIcon.Warning);
     }
 
@@ -720,6 +722,10 @@ public partial class App : System.Windows.Application
 
     internal bool IsHotkeyRegistered => _msgWin?.IsHotkeyRegistered == true;
     internal int LastHotkeyError => _msgWin?.LastHotkeyError ?? 0;
+    internal bool IsHotkeyFallbackActive => IsHotkeyRegistered && _usingHotkeyFallback;
+    internal string RegisteredHotkeyText => IsHotkeyRegistered
+        ? FormatHotkey(_registeredHotkeyModifiers, _registeredHotkeyVk)
+        : "";
 
     private bool RegisterConfiguredHotkey()
     {
@@ -729,6 +735,9 @@ public partial class App : System.Windows.Application
         s.HotkeyModifiers = NormalizeHotkeyModifiers(s.HotkeyModifiers);
         if (_msgWin.RegisterHotkey(s.HotkeyModifiers, s.HotkeyVk))
         {
+            _registeredHotkeyModifiers = s.HotkeyModifiers;
+            _registeredHotkeyVk = s.HotkeyVk;
+            _usingHotkeyFallback = false;
             _settings.Save();
             return true;
         }
@@ -739,14 +748,18 @@ public partial class App : System.Windows.Application
             if (fallback == requested) continue;
             if (!_msgWin.RegisterHotkey(fallback.modifiers, fallback.vk)) continue;
 
-            s.HotkeyModifiers = fallback.modifiers;
-            s.HotkeyVk = fallback.vk;
-            _settings.Save();
+            _registeredHotkeyModifiers = fallback.modifiers;
+            _registeredHotkeyVk = fallback.vk;
+            _usingHotkeyFallback = true;
+            ShowHotkeyFallbackWarning(requested.HotkeyModifiers, requested.HotkeyVk);
             return true;
         }
 
         s.HotkeyModifiers = requested.HotkeyModifiers;
         s.HotkeyVk = requested.HotkeyVk;
+        _registeredHotkeyModifiers = 0;
+        _registeredHotkeyVk = 0;
+        _usingHotkeyFallback = false;
         return false;
     }
 
@@ -775,6 +788,9 @@ public partial class App : System.Windows.Application
 
         var entry = ClipboardProcessor.BuildEntry(_settings.Settings.CodeDetectionMode);
         if (entry == null) return;
+
+        if (entry.Type == EntryType.Image)
+            entry.ThumbnailData = GenerateThumbnail120(entry.ImageData);
 
         _popupVm!.AddEntry(entry);
 
@@ -805,9 +821,11 @@ public partial class App : System.Windows.Application
 
             _ = Task.Run(async () =>
             {
+                await _urlFetchSemaphore.WaitAsync();
                 try
                 {
-                    var (cachedTitle, cachedFavicon) = _db!.GetUrlCache(url);
+                    var ttl = _settings?.Settings.UrlCacheTtlDays ?? 7;
+                    var (cachedTitle, cachedFavicon) = _db!.GetUrlCache(url, ttl);
                     if (cachedTitle != null || cachedFavicon != null)
                     {
                         Dispatcher.Invoke(() =>
@@ -836,6 +854,10 @@ public partial class App : System.Windows.Application
                         var v = _popupVm?.Entries.FirstOrDefault(x => x.Id == id);
                         if (v != null) v.UrlState = UrlPreviewState.Failed;
                     });
+                }
+                finally
+                {
+                    _urlFetchSemaphore.Release();
                 }
             });
         }
@@ -867,6 +889,7 @@ public partial class App : System.Windows.Application
         var url = vm.Content;
         _ = Task.Run(async () =>
         {
+            await _urlFetchSemaphore.WaitAsync();
             try
             {
                 var (title, favicon) = await _urlService!.FetchAsync(url);
@@ -883,15 +906,27 @@ public partial class App : System.Windows.Application
             {
                 Dispatcher.Invoke(() => vm.UrlState = UrlPreviewState.Failed);
             }
+            finally
+            {
+                _urlFetchSemaphore.Release();
+            }
         });
     }
 
     private bool TryWriteEntryToClipboard(EntryViewModel vm, bool plainText)
     {
-        if (vm.Type == EntryType.Image && vm.Entry.ImageData != null)
+        if (vm.Type == EntryType.Image)
         {
-            var src = LoadBitmapSource(vm.Entry.ImageData);
-            return src != null && TrySetClipboardImage(src);
+            // LoadAllLite skips the ImageData BLOB for performance — fetch on demand.
+            if (vm.Entry.ImageData == null)
+                vm.Entry.ImageData = _db?.LoadImageData(vm.Id);
+
+            if (vm.Entry.ImageData != null)
+            {
+                var src = LoadBitmapSource(vm.Entry.ImageData);
+                if (src == null) return false;
+                return TrySetClipboardImage(src);
+            }
         }
         var text = plainText
             ? ClipboardProcessor.GetPlainText(vm.Entry)
@@ -909,6 +944,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        RecordEntryUsed(vm);
         HidePopup();
 
         var target = _previousForeground;
@@ -933,14 +969,54 @@ public partial class App : System.Windows.Application
         {
             _ignoreNextClipboard = false;
             _trayIcon?.ShowBalloonTip(3000, "Clipwell", ClipboardBusyMessage, ToolTipIcon.Warning);
+            return;
         }
+        RecordEntryUsed(vm);
+    }
+
+    private void RecordEntryUsed(EntryViewModel vm)
+    {
+        try
+        {
+            var usedAt = _db?.IncrementUseCount(vm.Id) ?? DateTime.Now;
+            vm.MarkUsed(usedAt);
+        }
+        catch (Exception ex)
+        {
+            LogCrash(ex);
+        }
+    }
+
+    private static byte[]? GenerateThumbnail120(byte[]? imageData)
+    {
+        if (imageData == null) return null;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.StreamSource = new System.IO.MemoryStream(imageData);
+            bmp.DecodePixelWidth = 120;
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.EndInit();
+            bmp.Freeze();
+            var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+            using var ms = new System.IO.MemoryStream();
+            enc.Save(ms);
+            return ms.ToArray();
+        }
+        catch { return null; }
     }
 
     internal static bool TrySetClipboardText(string text)
         => TryClipboardWrite(() => System.Windows.Clipboard.SetText(text));
 
     internal static bool TrySetClipboardImage(System.Windows.Media.Imaging.BitmapSource image)
-        => TryClipboardWrite(() => System.Windows.Clipboard.SetImage(image));
+        => TryClipboardWrite(() =>
+        {
+            using var bitmap = ImageUtils.CreateOpaqueDrawingBitmap(image);
+            System.Windows.Forms.Clipboard.SetImage(bitmap);
+        });
 
     private static bool TryClipboardWrite(Action write)
     {
@@ -1013,11 +1089,7 @@ public partial class App : System.Windows.Application
 
     private void ExitApp()
     {
-        _trayIcon!.Visible = false;
-        _trayIcon.Dispose();
-        _msgWin?.Dispose();
-        _db?.Dispose();
-        _urlService?.Dispose();
+        if (_trayIcon != null) _trayIcon.Visible = false;
         _pinboard?.Close();
         Shutdown();
     }
@@ -1034,6 +1106,7 @@ public partial class App : System.Windows.Application
         _msgWin?.Dispose();
         _db?.Dispose();
         _urlService?.Dispose();
+        _urlFetchSemaphore.Dispose();
         base.OnExit(e);
     }
 
@@ -1041,17 +1114,35 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            var s = _settings?.Settings;
-            if (s == null || !s.AutoBackupEnabled || string.IsNullOrWhiteSpace(s.AutoBackupDirectory))
+            (bool Enabled, string Directory, DateTime? LastRun) snapshot = Dispatcher.Invoke(() =>
+            {
+                lock (_settingsMutationLock)
+                {
+                    var s = _settings?.Settings;
+                    return s == null
+                        ? (Enabled: false, Directory: "", LastRun: (DateTime?)null)
+                        : (Enabled: s.AutoBackupEnabled, Directory: s.AutoBackupDirectory, LastRun: s.LastAutoBackupDate);
+                }
+            });
+
+            if (!snapshot.Enabled || string.IsNullOrWhiteSpace(snapshot.Directory))
                 return;
 
-            var lastRun = s.LastAutoBackupDate;
+            var lastRun = snapshot.LastRun;
             if (lastRun.HasValue && (DateTime.Today - lastRun.Value.Date).TotalDays < 1)
                 return;
 
-            _db!.AutoBackupIfNeeded(s.AutoBackupDirectory);
-            s.LastAutoBackupDate = DateTime.Now;
-            _settings!.Save();
+            _db!.AutoBackupIfNeeded(snapshot.Directory);
+            Dispatcher.Invoke(() =>
+            {
+                lock (_settingsMutationLock)
+                {
+                    var s = _settings?.Settings;
+                    if (s == null) return;
+                    s.LastAutoBackupDate = DateTime.Now;
+                    _settings?.Save();
+                }
+            });
         }
         catch (Exception ex)
         {

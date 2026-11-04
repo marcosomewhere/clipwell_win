@@ -18,18 +18,41 @@ public class ContentKindServiceTests
     }
 
     [Fact]
-    public void DetectTextKind_StillDetectsProperties()
+    public void DetectTextKind_LabelsPropertiesAsCode()
     {
         var text = """
             server.port=8080
             app.name=Clipwell
             """;
 
-        Assert.Equal("PROPS", ContentKindService.DetectTextKind(text, language: null));
+        Assert.Equal("CODE", ContentKindService.DetectTextKind(text, language: null));
     }
 
     [Fact]
-    public void DetectTextKind_KeepsHtmlLanguageAsHtml()
+    public void DetectTextKind_DoesNotLabelTwoEnvLinesAsCode()
+    {
+        var text = """
+            API_KEY=test
+            FEATURE_FLAG=true
+            """;
+
+        Assert.Null(ContentKindService.DetectTextKind(text, language: null));
+    }
+
+    [Fact]
+    public void DetectTextKind_LabelsThreeEnvLinesAsCode()
+    {
+        var text = """
+            API_KEY=test
+            FEATURE_FLAG=true
+            CLIPWELL_MODE=dev
+            """;
+
+        Assert.Equal("CODE", ContentKindService.DetectTextKind(text, language: null));
+    }
+
+    [Fact]
+    public void DetectTextKind_LabelsLanguagesAsCode()
     {
         var text = """
             <!doctype html>
@@ -39,6 +62,6 @@ public class ContentKindServiceTests
             </html>
             """;
 
-        Assert.Equal("HTML", ContentKindService.DetectTextKind(text, language: "HTML"));
+        Assert.Equal("CODE", ContentKindService.DetectTextKind(text, language: "HTML"));
     }
 }

@@ -41,16 +41,47 @@ public static class OcrService
             using var writer = new DataWriter(ras.GetOutputStreamAt(0));
             writer.WriteBytes(pngBytes);
             await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
             ras.Seek(0);
 
             var decoder = await WinBitmapDecoder.CreateAsync(ras);
-            var softBitmap = await decoder.GetSoftwareBitmapAsync(
-                BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            var (scaledWidth, scaledHeight) = CalculateOcrScaledSize(
+                decoder.PixelWidth,
+                decoder.PixelHeight,
+                (uint)OcrEngine.MaxImageDimension);
+            var transform = new BitmapTransform
+            {
+                ScaledWidth = scaledWidth,
+                ScaledHeight = scaledHeight
+            };
+            using var softBitmap = await decoder.GetSoftwareBitmapAsync(
+                BitmapPixelFormat.Bgra8,
+                BitmapAlphaMode.Premultiplied,
+                transform,
+                ExifOrientationMode.IgnoreExifOrientation,
+                ColorManagementMode.DoNotColorManage);
 
             var result = await engine.RecognizeAsync(softBitmap);
             return result.Text;
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            App.LogCrash(ex);
+            return null;
+        }
+    }
+
+    public static (uint Width, uint Height) CalculateOcrScaledSize(uint width, uint height, uint maxDimension)
+    {
+        if (width == 0 || height == 0 || maxDimension == 0) return (width, height);
+        var longestSide = Math.Max(width, height);
+        if (longestSide <= maxDimension) return (width, height);
+
+        var scale = maxDimension / (double)longestSide;
+        return (
+            Math.Max(1, (uint)Math.Round(width * scale)),
+            Math.Max(1, (uint)Math.Round(height * scale)));
     }
 
     private const int MaxImageSizeBytes = 2 * 1024 * 1024;
@@ -59,7 +90,7 @@ public static class OcrService
     {
         try
         {
-            src = RepairFullyTransparentColorBitmap(src);
+            src = ImageUtils.RepairFullyTransparentColorBitmap(src);
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(WpfBitmapFrame.Create(src));
             using var ms = new MemoryStream();
@@ -70,45 +101,4 @@ public static class OcrService
         catch { return null; }
     }
 
-    private static BitmapSource RepairFullyTransparentColorBitmap(BitmapSource src)
-    {
-        if (src.PixelWidth <= 0 || src.PixelHeight <= 0) return src;
-
-        var converted = src.Format == PixelFormats.Bgra32 || src.Format == PixelFormats.Pbgra32
-            ? src
-            : new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
-        var stride = converted.PixelWidth * 4;
-        var pixels = new byte[stride * converted.PixelHeight];
-        converted.CopyPixels(pixels, stride, 0);
-
-        var hasColor = false;
-        var hasVisibleAlpha = false;
-        for (var i = 0; i < pixels.Length; i += 4)
-        {
-            if (pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0)
-                hasColor = true;
-            if (pixels[i + 3] != 0)
-            {
-                hasVisibleAlpha = true;
-                break;
-            }
-        }
-
-        if (!hasColor || hasVisibleAlpha) return src;
-
-        for (var i = 3; i < pixels.Length; i += 4)
-            pixels[i] = 255;
-
-        var repaired = BitmapSource.Create(
-            converted.PixelWidth,
-            converted.PixelHeight,
-            converted.DpiX,
-            converted.DpiY,
-            PixelFormats.Bgra32,
-            null,
-            pixels,
-            stride);
-        repaired.Freeze();
-        return repaired;
-    }
 }

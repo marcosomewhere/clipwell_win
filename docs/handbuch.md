@@ -148,7 +148,7 @@ Für präzisere Suchen stehen folgende Präfixe zur Verfügung:
 | Präfix | Beispiel | Funktion |
 |--------|----------|----------|
 | `type:` | `type:code` | Suche nach Eintragstyp |
-| `kind:` | `kind:json` | Suche nach Content-Kind (Badge) |
+| `kind:` | `kind:code` | Suche nach Content-Kind (Badge) |
 | `domain:` | `domain:github.com` | URL-Einträge nach Domain filtern |
 | `pinned:` | `pinned:true` | Nur angepinnte / nicht angepinnte |
 
@@ -188,6 +188,10 @@ Beim Eingeben erscheinen Vorschläge für Präfixe und vorhandene Werte.
 ### URL-Vorschau nachladen
 
 Im Kontextmenü (Rechtsklick) steht bei URL-Einträgen "URL-Vorschau neu laden". Dies ruft Titel und Favicon erneut ab.
+
+### URL im Browser öffnen
+
+Bei URL-Einträgen kann der Link über Hover-Aktion, Kontextmenü oder Detailfenster direkt im Standardbrowser geöffnet werden.
 
 ---
 
@@ -315,11 +319,11 @@ Für Bildeinträge bietet das Detailfenster einen vollständigen Bild-Editor:
 | Zuschneiden | Bild auf markierten Bereich zuschneiden |
 
 **Bild-Operationen:**
-- Drehen (90°, 180°, 270°)
+- Drehen um 90° nach links oder rechts
 - Spiegeln (horizontal, vertikal)
 - Größe ändern (Pixelgenaue Eingabe)
 - Canvas erweitern (Rand hinzufügen)
-- Als PNG speichern (exportieren)
+- Als JPEG oder PNG speichern (exportieren)
 - Undo/Redo für alle Änderungen
 
 ### Farb-Details
@@ -402,7 +406,7 @@ Zeigt Version, Build-Datum und Lizenzen der verwendeten Bibliotheken.
 
 Popup → Bulk-Modus → Exportieren, oder Einstellungen → Daten.
 
-Exportiert die History als lesbares JSON-Format, das alle Felder enthält (inkl. Bilder als Base64).
+Exportiert die History als lesbares JSON-Format inklusive Bilder, Thumbnails, Pin-Reihenfolge und Nutzungsmetadaten.
 
 ### JSON-Import
 

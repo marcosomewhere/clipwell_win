@@ -30,61 +30,80 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Header (Drag-Handle) -->
+            <!-- Header -->
             <Border Grid.Row="0" CornerRadius="10,10,0,0"
-                    Background="{DynamicResource PopupPanelBrush}" Cursor="SizeAll"
-                    MouseLeftButtonDown="Header_MouseDown"
+                    Background="{DynamicResource PopupPanelBrush}"
                     Padding="10,6">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE840;" FontFamily="Segoe Fluent Icons"
-                                   FontSize="13" Margin="0,0,7,0"
-                                   Foreground="{DynamicResource PopupTextPrimaryBrush}"
-                                   VerticalAlignment="Center" />
-                        <TextBlock Text="Gepinnte Einträge"
-                                   FontWeight="SemiBold" FontSize="13"
-                                   Foreground="{DynamicResource PopupTextPrimaryBrush}"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                    <Button Grid.Column="1" ToolTip="Schließen"
-                            Background="Transparent" BorderThickness="0"
-                            Foreground="{DynamicResource PopupTextMutedBrush}" FontSize="13" Padding="6,2"
-                            Click="Close_Click" Cursor="Hand">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" />
-                    </Button>
-                </Grid>
+                <StackPanel>
+                    <Grid MouseLeftButtonDown="Header_MouseDown" Cursor="SizeAll">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE840;" FontFamily="Segoe Fluent Icons"
+                                       FontSize="13" Margin="0,0,7,0"
+                                       Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="Gepinnte Einträge"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button Grid.Column="1" ToolTip="Schließen"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{DynamicResource PopupTextMutedBrush}" FontSize="13" Padding="6,2"
+                                Click="Close_Click" Cursor="Hand">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" />
+                        </Button>
+                    </Grid>
+                    <TextBox x:Name="PinSearchBox"
+                             Margin="0,5,0,0"
+                             Padding="6,3"
+                             FontSize="12"
+                             Background="{DynamicResource PopupBackgroundBrush}"
+                             Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                             BorderBrush="{DynamicResource PopupPanelBorderBrush}"
+                             BorderThickness="1"
+                             TextChanged="PinSearch_TextChanged" />
+                </StackPanel>
             </Border>
 
             <!-- Eintragsliste -->
             <ListBox x:Name="PinList" Grid.Row="1"
                      Background="Transparent" BorderThickness="0"
+                     AllowDrop="True"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      SelectionChanged="PinList_SelectionChanged"
                      PreviewMouseLeftButtonDown="PinList_PreviewMouseLeftButtonDown"
-                     PreviewMouseMove="PinList_PreviewMouseMove">
+                     PreviewMouseMove="PinList_PreviewMouseMove"
+                     DragOver="PinList_DragOver"
+                     Drop="PinList_Drop">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Padding" Value="0" />
                         <Setter Property="Margin" Value="6,2,6,2" />
                         <Setter Property="Background" Value="Transparent" />
                         <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="AllowDrop" Value="True" />
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
-                                    <Border Background="{TemplateBinding Background}"
-                                            CornerRadius="6" Padding="8,6">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="6" Padding="8,6"
+                                            BorderThickness="0,2,0,0"
+                                            BorderBrush="Transparent">
                                         <ContentPresenter />
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

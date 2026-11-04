@@ -5,33 +5,37 @@ namespace ClipwellWin.Services;
 
 public static class SyntaxService
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
+
     private static readonly Regex CodeAnchorRx = new(
         @"^\s*(#!|using\s+[\w.]+;|namespace\s+\w|#include\s+[<""]|package\s+\w+|import\s+[\w.{*]|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+|func\s+\w+\(|fn\s+\w+|\$env:|Get-\w+|Set-\w+)",
-        RegexOptions.Multiline | RegexOptions.Compiled);
+        RegexOptions.Multiline | RegexOptions.Compiled,
+        RegexTimeout);
 
     private static readonly Regex StrongCodeSignalRx = new(
         @"(=>|==|!=|<=|>=|::|;\s*$|^\s*(SELECT|INSERT|UPDATE|DELETE)\b)",
-        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled,
+        RegexTimeout);
 
     private static readonly (Regex pattern, string label)[] LangPatterns =
     [
-        (new(@"^#!/usr/bin/env python|^import \w|^from \w+ import|^\s*def \w+\(|^\s*class \w+:", RegexOptions.Multiline), "Python"),
-        (new(@"SELECT\s+.+FROM\s+|INSERT\s+INTO\s+|UPDATE\s+\w+\s+SET\s+|DELETE\s+FROM\s+", RegexOptions.IgnoreCase), "SQL"),
-        (new(@"^\s*(const|let|var)\s+\w+|=>\s*\{|console\.log\(|require\(|import\s+\{", RegexOptions.Multiline), "JavaScript"),
-        (new(@"^\s*(interface|type)\s+\w+|:\s*(string|number|boolean|void)\b", RegexOptions.Multiline), "TypeScript"),
-        (new(@"using\s+\w[\w.]+;|namespace\s+\w|public\s+(class|void|static|async)|\.NET", RegexOptions.Multiline), "C#"),
-        (new(@"^#include\s+[<""]|int\s+main\s*\(|std::|cout\s*<<|cin\s*>>", RegexOptions.Multiline), "C++"),
-        (new(@"^\s*func\s+\w+\(|:=\s*|fmt\.Println|package\s+\w+", RegexOptions.Multiline), "Go"),
-        (new(@"^\s*fn\s+\w+|let\s+mut\s+|println!\(|use\s+std::", RegexOptions.Multiline), "Rust"),
-        (new(@"<\?php|\$\w+\s*=|echo\s+|->|array\(", RegexOptions.Multiline), "PHP"),
-        (new(@"def\s+\w+|puts\s+|\.each\s*\{|require\s+'", RegexOptions.Multiline), "Ruby"),
-        (new(@"^\s*<[a-zA-Z][^>]*>|<!DOCTYPE|</\w+>", RegexOptions.Multiline), "HTML"),
-        (new(@"^\s*[.#][\w-]+\s*\{|:\s*(px|em|rem|vh|vw|%)|@media\s+", RegexOptions.Multiline), "CSS"),
-        (new(@"^\s*\{[\s\S]*""[\w]+"":\s*[""{\[\d]", RegexOptions.Multiline), "JSON"),
-        (new(@"^#!/bin/(bash|sh)|^\s*\w+=[""]|echo\s+|grep\s+|awk\s+|sed\s+", RegexOptions.Multiline), "Bash"),
-        (new(@"\$\w+\s*=|\$env:|Get-\w+|Set-\w+|Invoke-\w+|Write-Host", RegexOptions.Multiline), "PowerShell"),
-        (new(@"^\s*<\?xml|xmlns[:=]|<[\w:]+\s+[\w:]+=""", RegexOptions.Multiline), "XML"),
-        (new(@"^\s*\w+\s*:\s*\n\s+\w+:", RegexOptions.Multiline), "YAML"),
+        (Rx(@"^#!/usr/bin/env python|^import \w|^from \w+ import|^\s*def \w+\(|^\s*class \w+:", RegexOptions.Multiline), "Python"),
+        (Rx(@"SELECT\s+.+FROM\s+|INSERT\s+INTO\s+|UPDATE\s+\w+\s+SET\s+|DELETE\s+FROM\s+", RegexOptions.IgnoreCase), "SQL"),
+        (Rx(@"^\s*(const|let|var)\s+\w+|=>\s*\{|console\.log\(|require\(|import\s+\{", RegexOptions.Multiline), "JavaScript"),
+        (Rx(@"^\s*(interface|type)\s+\w+|:\s*(string|number|boolean|void)\b", RegexOptions.Multiline), "TypeScript"),
+        (Rx(@"using\s+\w[\w.]+;|namespace\s+\w|public\s+(class|void|static|async)|\.NET", RegexOptions.Multiline), "C#"),
+        (Rx(@"^#include\s+[<""]|int\s+main\s*\(|std::|cout\s*<<|cin\s*>>", RegexOptions.Multiline), "C++"),
+        (Rx(@"^\s*func\s+\w+\(|:=\s*|fmt\.Println|package\s+\w+", RegexOptions.Multiline), "Go"),
+        (Rx(@"^\s*fn\s+\w+|let\s+mut\s+|println!\(|use\s+std::", RegexOptions.Multiline), "Rust"),
+        (Rx(@"<\?php|\$\w+\s*=|echo\s+|->|array\(", RegexOptions.Multiline), "PHP"),
+        (Rx(@"def\s+\w+|puts\s+|\.each\s*\{|require\s+'", RegexOptions.Multiline), "Ruby"),
+        (Rx(@"^\s*<[a-zA-Z][^>]*>|<!DOCTYPE|</\w+>", RegexOptions.Multiline), "HTML"),
+        (Rx(@"^\s*[.#][\w-]+\s*\{|:\s*(px|em|rem|vh|vw|%)|@media\s+", RegexOptions.Multiline), "CSS"),
+        (Rx(@"^\s*\{[\s\S]*""[\w]+"":\s*[""{\[\d]", RegexOptions.Multiline), "JSON"),
+        (Rx(@"^#!/bin/(bash|sh)|^\s*\w+=[""]|echo\s+|grep\s+|awk\s+|sed\s+", RegexOptions.Multiline), "Bash"),
+        (Rx(@"\$\w+\s*=|\$env:|Get-\w+|Set-\w+|Invoke-\w+|Write-Host", RegexOptions.Multiline), "PowerShell"),
+        (Rx(@"^\s*<\?xml|xmlns[:=]|<[\w:]+\s+[\w:]+=""", RegexOptions.Multiline), "XML"),
+        (Rx(@"^\s*\w+\s*:\s*\n\s+\w+:", RegexOptions.Multiline), "YAML"),
     ];
 
     public static string? DetectLanguage(string text, CodeDetectionMode mode = CodeDetectionMode.Normal)
@@ -66,12 +70,6 @@ public static class SyntaxService
             : (null, "Code-aehnliche Struktur, aber keine passende Sprache erkannt.");
     }
 
-    public static bool IsCode(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        return DetectLanguage(text) != null;
-    }
-
     private static bool LooksLikeCode(string text)
     {
         if (LooksLikePlainSentence(text) && !HasStrongCodeSignal(text))
@@ -80,28 +78,28 @@ public static class SyntaxService
         if (LooksLikePlainTextBlock(text))
             return false;
 
-        if (Regex.IsMatch(text, @"^\s*[\{\[][\s\S]*[\}\]]\s*$") && text.Contains(':'))
+        if (IsMatch(text, @"^\s*[\{\[][\s\S]*[\}\]]\s*$") && text.Contains(':'))
             return true;
 
-        if (Regex.IsMatch(text, @"^\s*<(!DOCTYPE|/?[a-zA-Z][\w:-]*)(\s|>|/>)", RegexOptions.Multiline))
+        if (IsMatch(text, @"^\s*<(!DOCTYPE|/?[a-zA-Z][\w:-]*)(\s|>|/>)", RegexOptions.Multiline))
             return true;
 
         if (CodeAnchorRx.IsMatch(text))
             return true;
 
-        if (Regex.IsMatch(text, @"\b(SELECT\s+.+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b", RegexOptions.IgnoreCase))
+        if (IsMatch(text, @"\b(SELECT\s+.+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b", RegexOptions.IgnoreCase))
             return true;
 
-        var codeChars = Regex.Matches(text, @"[{}();=\[\]<>$]").Count;
+        var codeChars = CountMatches(text, @"[{}();=\[\]<>$]");
         if (codeChars >= 2) return true;
 
         var lines = text.Split('\n');
         if (lines.Length >= 2)
         {
             var codeLikeLines = lines.Count(l =>
-                Regex.IsMatch(l, @"^\s{2,}\S") ||
-                Regex.IsMatch(l, @"^\s*(//|#|/\*|\*|</?\w|[}\]])") ||
-                Regex.IsMatch(l, @"[{}();=]"));
+                IsMatch(l, @"^\s{2,}\S") ||
+                IsMatch(l, @"^\s*(//|#|/\*|\*|</?\w|[}\]])") ||
+                IsMatch(l, @"[{}();=]"));
 
             return codeLikeLines >= 2;
         }
@@ -112,12 +110,12 @@ public static class SyntaxService
     private static bool LooksLikePlainSentence(string text)
     {
         if (text.Contains('\n')) return false;
-        if (Regex.IsMatch(text, @"[{}();=\[\]<>$]")) return false;
+        if (IsMatch(text, @"[{}();=\[\]<>$]")) return false;
 
-        var words = Regex.Matches(text, @"\p{L}+").Count;
+        var words = CountMatches(text, @"\p{L}+");
         if (words < 5) return false;
 
-        var lowerWords = Regex.Matches(text, @"\b\p{Ll}{2,}\b").Count;
+        var lowerWords = CountMatches(text, @"\b\p{Ll}{2,}\b");
         return lowerWords >= Math.Max(3, words / 2);
     }
 
@@ -136,7 +134,7 @@ public static class SyntaxService
         if (lines.Count < 2) return false;
 
         var codePunctuationLines = lines.Count(l =>
-            Regex.IsMatch(l, @"[{}=\[\]<>$]|;\s*$|^\s*(//|#|/\*)"));
+            IsMatch(l, @"[{}=\[\]<>$]|;\s*$|^\s*(//|#|/\*)"));
         if (codePunctuationLines > 0) return false;
 
         var proseLines = lines.Count(IsProseLine);
@@ -145,13 +143,13 @@ public static class SyntaxService
 
     private static bool IsProseLine(string line)
     {
-        var words = Regex.Matches(line, @"\p{L}+").Count;
+        var words = CountMatches(line, @"\p{L}+");
         if (words < 3) return false;
 
-        var lowerWords = Regex.Matches(line, @"\b\p{Ll}{2,}\b").Count;
+        var lowerWords = CountMatches(line, @"\b\p{Ll}{2,}\b");
         if (lowerWords >= Math.Max(2, words / 3)) return true;
 
-        return Regex.IsMatch(line, @"^\p{Lu}[\p{L}\s-]{2,30}:\s+\p{L}");
+        return IsMatch(line, @"^\p{Lu}[\p{L}\s-]{2,30}:\s+\p{L}");
     }
 
     private static bool HasStrongCodeSignal(string text)
@@ -159,12 +157,26 @@ public static class SyntaxService
 
     private static bool HasLanguageAnchor(string text, string label) => label switch
     {
-        "Python" => Regex.IsMatch(text, @"^\s*(def|class|import|from)\s+", RegexOptions.Multiline),
-        "SQL" => Regex.IsMatch(text, @"\b(SELECT|INSERT|UPDATE|DELETE)\b", RegexOptions.IgnoreCase),
-        "JavaScript" or "TypeScript" => Regex.IsMatch(text, @"(=>|function\s+\w+|const\s+\w+|let\s+\w+|import\s+)"),
-        "C#" => Regex.IsMatch(text, @"(namespace\s+\w|public\s+(class|static|void)|using\s+[\w.]+;)"),
-        "JSON" => Regex.IsMatch(text, @"^\s*[\{\[][\s\S]*[\}\]]\s*$"),
+        "Python" => IsMatch(text, @"^\s*(def|class|import|from)\s+", RegexOptions.Multiline),
+        "SQL" => IsMatch(text, @"\b(SELECT|INSERT|UPDATE|DELETE)\b", RegexOptions.IgnoreCase),
+        "JavaScript" or "TypeScript" => IsMatch(text, @"(=>|function\s+\w+|const\s+\w+|let\s+\w+|import\s+)"),
+        "C#" => IsMatch(text, @"(namespace\s+\w|public\s+(class|static|void)|using\s+[\w.]+;)"),
+        "JSON" => IsMatch(text, @"^\s*[\{\[][\s\S]*[\}\]]\s*$"),
         _ => HasStrongCodeSignal(text),
     };
 
+    private static Regex Rx(string pattern, RegexOptions options)
+        => new(pattern, options | RegexOptions.Compiled, RegexTimeout);
+
+    private static bool IsMatch(string text, string pattern, RegexOptions options = RegexOptions.None)
+    {
+        try { return Regex.IsMatch(text, pattern, options, RegexTimeout); }
+        catch (RegexMatchTimeoutException) { return false; }
+    }
+
+    private static int CountMatches(string text, string pattern, RegexOptions options = RegexOptions.None)
+    {
+        try { return Regex.Matches(text, pattern, options, RegexTimeout).Count; }
+        catch (RegexMatchTimeoutException) { return 0; }
+    }
 }

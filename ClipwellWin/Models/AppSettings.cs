@@ -69,4 +69,12 @@ public class AppSettings
     public bool   KeyPinboardAlt { get; set; } = false;
     public bool   KeyPinboardShift { get; set; } = false;
     public bool   KeyPinboardWin { get; set; } = false;
+
+    public string QuickNoteDraft { get; set; } = "";
+
+    public int UrlCacheTtlDays { get; set; } = 7;
+
+    public double DetailWindowWidth { get; set; } = 0;
+    public double DetailWindowHeight { get; set; } = 0;
+    public bool DetailWindowMaximized { get; set; } = false;
 }

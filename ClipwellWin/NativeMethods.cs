@@ -20,8 +20,6 @@ internal static class NativeMethods
     public const uint INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const ushort VK_CONTROL = 0x11;
-    public const ushort VK_LWIN = 0x5B;
-
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool AddClipboardFormatListener(IntPtr hwnd);
 
@@ -45,9 +43,6 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -89,7 +84,28 @@ internal static class NativeMethods
     [StructLayout(LayoutKind.Explicit)]
     public struct MOUSEKEYBDHARDWAREINPUT
     {
+        [FieldOffset(0)] public MOUSEINPUT Mouse;
         [FieldOffset(0)] public KEYBDINPUT Keyboard;
+        [FieldOffset(0)] public HARDWAREINPUT Hardware;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT
+    {
+        public int Dx;
+        public int Dy;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HARDWAREINPUT
+    {
+        public uint Msg;
+        public ushort ParamL;
+        public ushort ParamH;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -137,8 +153,6 @@ internal static class NativeMethods
     public const int DWMWA_BORDER_COLOR = 34;
     public const int DWMWA_CAPTION_COLOR = 35;
     public const int DWMWA_TEXT_COLOR = 36;
-    public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
-
     public static void SendCtrlV()
     {
         var inputs = new INPUT[]
@@ -155,7 +169,7 @@ internal static class NativeMethods
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
 
-    public static void EnableAcrylic(IntPtr hwnd, System.Windows.Media.Color tint)
+    public static bool EnableAcrylic(IntPtr hwnd, System.Windows.Media.Color tint)
     {
         // ABGR format
         uint gradientColor = ((uint)tint.A << 24)
@@ -178,7 +192,7 @@ internal static class NativeMethods
                 Data = pAccent,
                 SizeOfData = accentSize
             };
-            SetWindowCompositionAttribute(hwnd, ref data);
+            return SetWindowCompositionAttribute(hwnd, ref data);
         }
         finally
         {
