@@ -138,7 +138,7 @@ public partial class KnowledgeBaseWindow : Window
         var recording = _app.Recorder.IsRecording;
         RecordIcon.Text = recording ? "" : "";
         RecordIcon.Foreground = recording ? RecordingRed : (Brush)FindResource("OnboardingTextPrimaryBrush");
-        RecordLabel.Text = recording ? "Aufnahme beenden" : "Aufnahme starten";
+        RecordButton.ToolTip = recording ? "Aufnahme beenden" : "Aufnahme starten";
         HeaderStateDot.Fill = recording ? RecordingRed : IdleGray;
         HeaderStateLabel.Text = recording ? "Bildschirmaufnahme läuft" : "Keine Aufnahme";
         if (recording) _recordTimer.Start(); else _recordTimer.Stop();

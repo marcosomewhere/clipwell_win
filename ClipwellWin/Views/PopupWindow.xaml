@@ -614,7 +614,7 @@
                         <!-- Header toolbar: capture (record, quick note, eyedropper) | view (KB, multi-select) -->
                         <Border Grid.Column="2" Margin="6,0,0,0" Padding="2" CornerRadius="8" VerticalAlignment="Center"
                                 Background="{DynamicResource PopupChipBrush}"
-                                BorderBrush="{DynamicResource PopupBorderBrush}" BorderThickness="1">
+                                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="RecordButton" Style="{StaticResource HeaderToolButton}"
                                         Content="&#xE7C8;"

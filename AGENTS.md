@@ -76,7 +76,7 @@ Dependency-Sicherheitsstatus: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wurde
 ## Aktuelle Funktionen
 
 - Tray-App mit Single-Instance-Mutex und Hotkey-Fallbacks.
-- Popup mit Filter-Chips, Sortier-Chip, Suche, Gruppen, Bulk-Aktionen, Schnellnotiz mit direktem Diktat (speichert in die Notizen und sofort in die KB, nicht in die History), Pinboard und Eyedropper. Kopf-Aktionen als gerahmte Leiste (Stil `HeaderToolButton`, Zustand ueber `Tag` "recording"/"active"); Bilder mit Titel "Bild BxH" (Groesse aus dem Bildkopf, `ImageUtils.TryReadImageSize`) und OCR als Unterzeile; Zeitangaben je Gruppe (`EntryViewModel.FormatTime`).
+- Popup mit Filter-Chips, Sortier-Chip, Suche, Gruppen, Bulk-Aktionen, Schnellnotiz mit direktem Diktat (speichert in die Notizen und sofort in die KB, nicht in die History), Pinboard und Eyedropper. Kopf-Aktionen als orange gerahmte Leiste (Stil `HeaderToolButton`, Zustand ueber `Tag` "recording"/"active"); Bilder mit Titel "Bild BxH" (Groesse aus dem Bildkopf, `ImageUtils.TryReadImageSize`) und OCR als Unterzeile; Zeitangaben je Gruppe (`EntryViewModel.FormatTime`).
 - Eigene Grafiken in `ClipwellWin\Assets` als WPF-Resource: `kb-icon-16.png` (KB-Symbol in Popup, KB-Fenster, Tray) und `kb-rec-logo.png` ("KB REC" auf dem Aufnahme-Button der KB), Quelle `D:\dev\Browser-Addons\KnowledgeAssistant\KnowledgebaseRecorder\assets`.
 - Detailfenster mit editierbarem Text-/Code-Minieditor, Bildeditor, OCR-Ansicht und Farbdetails.
 - URL-Eintraege mit Browser-Sprung im Popup, Kontextmenue und Detailfenster.

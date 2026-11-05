@@ -522,13 +522,12 @@
                                    Foreground="{DynamicResource EditorMutedBrush}" />
                         <Button x:Name="RecordButton" Click="Record_Click" Style="{StaticResource EditorButtonStyle}"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                ToolTip="Bildschirmaufnahme starten oder beenden">
+                                ToolTip="Aufnahme starten">
                             <StackPanel Orientation="Horizontal">
                                 <Image Source="/Clipwell;component/Assets/kb-rec-logo.png" Height="24" Margin="0,0,12,0"
                                        RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center" />
                                 <TextBlock x:Name="RecordIcon" Text="&#xE7C8;" FontFamily="Segoe Fluent Icons" FontSize="13"
-                                           Margin="0,0,8,0" VerticalAlignment="Center" />
-                                <TextBlock x:Name="RecordLabel" Text="Aufnahme starten" VerticalAlignment="Center" />
+                                           VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <TextBlock x:Name="RecordStatus" FontSize="11" Margin="2,8,0,0" TextWrapping="Wrap"
