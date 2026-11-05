@@ -2,12 +2,13 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using ClipwellWin.Models;
 
 namespace ClipwellWin.Services;
 
-public enum KbArticleKind { Note, Recording }
+public enum KbArticleKind { Note, Recording, Clipboard }
 
-/// <summary>A KB article (exported note or recording) prepared for export.</summary>
+/// <summary>A KB article (exported note, recording or clipboard entry) prepared for export.</summary>
 public sealed record KbArticle(KbArticleKind Kind, string Title, DateTime Date, string FileName, string Content);
 
 public static class KnowledgeExport
@@ -29,9 +30,84 @@ public static class KnowledgeExport
         return "Früher";
     }
 
-    public static string KindLabel(KbArticleKind kind) => kind == KbArticleKind.Note ? "Sprachnotizen" : "Bildschirmaufnahmen";
+    public static string KindLabel(KbArticleKind kind) => kind switch
+    {
+        KbArticleKind.Note => "Sprachnotizen",
+        KbArticleKind.Recording => "Bildschirmaufnahmen",
+        _ => "Zwischenablage",
+    };
 
-    public static string KindName(KbArticleKind kind) => kind == KbArticleKind.Note ? "Sprachnotiz" : "Bildschirmaufnahme";
+    public static string KindName(KbArticleKind kind) => kind switch
+    {
+        KbArticleKind.Note => "Sprachnotiz",
+        KbArticleKind.Recording => "Bildschirmaufnahme",
+        _ => "Zwischenablage",
+    };
+
+    public static string ClipboardTypeName(ClipboardEntry e) => e.Type switch
+    {
+        EntryType.Code => string.IsNullOrWhiteSpace(e.Language) ? "Code" : $"Code ({e.Language})",
+        EntryType.Url => "URL",
+        EntryType.Image => "Bild",
+        EntryType.Color => "Farbe",
+        _ => "Text",
+    };
+
+    /// <summary>List title of a clipboard entry: URL title, first text line, OCR line or color value.</summary>
+    public static string ClipboardTitle(ClipboardEntry e)
+    {
+        var text = e.Type switch
+        {
+            EntryType.Url when !string.IsNullOrWhiteSpace(e.UrlTitle) => e.UrlTitle,
+            EntryType.Image => string.IsNullOrWhiteSpace(e.OcrText) ? "Bild" : "Bild: " + e.OcrText,
+            EntryType.Color => e.HexColor ?? e.Content,
+            _ => e.Content,
+        };
+        var line = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? "";
+        if (line.Length == 0) return "(leer)";
+        return line.Length > 90 ? line[..90] + "…" : line;
+    }
+
+    public static string ClipboardFileName(ClipboardEntry e)
+        => $"{e.Timestamp.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture)}_{e.Id}.md";
+
+    /// <summary>Markdown view of a clipboard entry for the KB: short header, then the content.</summary>
+    public static string ClipboardMarkdown(ClipboardEntry e)
+    {
+        var sb = new StringBuilder();
+        sb.Append("# Zwischenablage: ").Append(ClipboardTitle(e)).Append("\n\n");
+        sb.Append("- Kopiert: ").Append(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).Append('\n');
+        sb.Append("- Typ: ").Append(ClipboardTypeName(e)).Append('\n');
+        if (!string.IsNullOrWhiteSpace(e.SourceUrl)) sb.Append("- Quelle: ").Append(e.SourceUrl).Append('\n');
+        if (e.UseCount > 0) sb.Append("- Verwendet: ").Append(e.UseCount.ToString(De)).Append("x\n");
+        if (e.IsPinned) sb.Append("- Gepinnt\n");
+        sb.Append('\n');
+
+        switch (e.Type)
+        {
+            case EntryType.Code:
+                var fence = (e.Content ?? "").Contains("```", StringComparison.Ordinal) ? "````" : "```";
+                sb.Append(fence).Append(e.Language?.ToLowerInvariant() ?? "").Append('\n')
+                  .Append((e.Content ?? "").TrimEnd()).Append('\n').Append(fence).Append('\n');
+                break;
+            case EntryType.Url:
+                if (!string.IsNullOrWhiteSpace(e.UrlTitle)) sb.Append(e.UrlTitle!.Trim()).Append("\n\n");
+                sb.Append('<').Append((e.Content ?? "").Trim()).Append(">\n");
+                break;
+            case EntryType.Image:
+                sb.Append(string.IsNullOrWhiteSpace(e.OcrText)
+                    ? "(Bild ohne erkannten Text)\n"
+                    : "Erkannter Text (OCR):\n\n" + e.OcrText!.Trim() + "\n");
+                break;
+            case EntryType.Color:
+                sb.Append(e.HexColor ?? e.Content).Append('\n');
+                break;
+            default:
+                sb.Append((e.Content ?? "").TrimEnd()).Append('\n');
+                break;
+        }
+        return sb.ToString();
+    }
 
     /// <summary>One Markdown document with a table of contents; article headings are shifted one level down.</summary>
     public static string BuildCombined(IReadOnlyList<KbArticle> articles, DateTime now, string? overview = null)
@@ -62,7 +138,10 @@ public static class KnowledgeExport
         return sb.ToString().TrimEnd() + "\n";
     }
 
-    /// <summary>Writes each article as its own file into sprachnotizen/ and bildschirmaufnahmen/, plus an optional overview.</summary>
+    /// <summary>
+    /// Writes each article as its own file into sprachnotizen/, bildschirmaufnahmen/ and zwischenablage/, plus an
+    /// optional overview.
+    /// </summary>
     public static void WriteZip(string zipPath, IReadOnlyList<KbArticle> articles, string? overview = null)
     {
         var tmp = zipPath + ".tmp";

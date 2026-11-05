@@ -1,6 +1,6 @@
 # Clipwell Windows - Roadmap und offene Punkte
 
-Stand: 2026-11-05
+Stand: 2026-11-06
 
 Diese Datei ist die zentrale Ablage fuer offene Produkt-, Technik- und Release-Punkte. Kurzlebige Review-, Bug- und Feature-MDs werden hier konsolidiert und nicht separat weitergefuehrt.
 
@@ -14,6 +14,12 @@ Diese Datei ist die zentrale Ablage fuer offene Produkt-, Technik- und Release-P
 | Mittel | Bildeditor manuell auf DPI-, Zoom- und Multi-Monitor-Setups pruefen | Offen |
 | Mittel | UI-Interaktionstests fuer Maus/Tastaturpfade ergaenzen | Offen |
 | Niedrig | URL-Preview-Koordination in `App.OnClipboardChanged` und `App.ReloadUrlPreview` ggf. extrahieren | Beobachten |
+| Mittel | Semantische Suche: Schwellen (0,80/0,83/0,97) mit echten Daten pruefen und ggf. nachjustieren | Offen; Stufe 1 (Embeddings, hybride Suche, Aehnliche, Dubletten) umgesetzt |
+| Mittel | Brain: Schwelle (0,86), Themenbildung und Stichworte mit echten Daten pruefen | Offen; Stufe 2 (Wissensnetz aus Inhalt, Zeit, Aufnahme und Webseite, Themen, Darstellung) umgesetzt, Kanten werden live aus dem Index berechnet statt in SQLite gespeichert |
+| Niedrig | Brain: manuelle Verknuepfungen und Notizen zu Bezuegen, Zeitachse als zweite Ansicht, Export des Netzes (z. B. Obsidian-Links) | Offen |
+| Niedrig | Brain: mehr als 1000 Knoten (Barnes-Hut statt O(n^2)-Abstossung, Kanten-Bucketing bleibt) | Offen; 1000 Knoten: Aufbau 0,1 s, Layout 0,4 s |
+| Niedrig | KB Stufe 3: Entitaeten per lokalem LLM | Zurueckgestellt; erst wenn Stufe 1 und 2 nicht reichen (LLM-Groesse, Qualitaet bei kurzen Clips) |
+| Niedrig | Themen aus dem Brain im Dashboard | Offen |
 
 ## Feature-Luecken
 

@@ -31,3 +31,21 @@ models\ggml-base.bin
 Whisper.net (runtime and bindings)
   https://github.com/sandrohanea/whisper.net
   MIT License, Copyright (c) Sandro Hanea
+
+ONNX Runtime (onnxruntime.dll, Microsoft.ML.OnnxRuntime)
+  https://github.com/microsoft/onnxruntime
+  MIT License, Copyright (c) Microsoft Corporation
+
+Microsoft.ML.Tokenizers
+  https://github.com/dotnet/machinelearning
+  MIT License, Copyright (c) .NET Foundation and Contributors
+
+Google.Protobuf (dependency of Microsoft.ML.Tokenizers)
+  https://github.com/protocolbuffers/protobuf
+  BSD 3-Clause License, Copyright 2008 Google Inc.
+
+models\e5-small (multilingual-e5-small, int8 ONNX model and sentencepiece.bpe.model)
+  Embedding model by Liang Wang et al. (intfloat), ONNX conversion by Xenova
+  https://huggingface.co/intfloat/multilingual-e5-small
+  https://huggingface.co/Xenova/multilingual-e5-small
+  MIT License

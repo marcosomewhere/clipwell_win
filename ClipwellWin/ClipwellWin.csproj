@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Clipwell</AssemblyName>
     <RootNamespace>ClipwellWin</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Copyright>(c) 2026 Marco Seefeldt</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.1" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.1" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
@@ -50,6 +52,56 @@
     <Error Condition="'$(_WhisperModelHash.ToLowerInvariant())' != '$(WhisperBaseModelSha256)'"
            Text="Whisper-Modell: SHA256 $(_WhisperModelHash) passt nicht zu $(WhisperBaseModelSha256)." />
     <Move SourceFiles="$(WhisperModelDir)ggml-base.bin.part" DestinationFiles="$(WhisperBaseModel)" />
+  </Target>
+
+  <!-- The embedding model for the KB semantic search (multilingual-e5-small, MIT) ships next to the EXE under
+       models\e5-small. Like the Whisper model it is fetched once into Tools\e5-small (gitignored) from pinned
+       revisions and verified by SHA256; the values match EmbeddingModel.Files. -->
+  <PropertyGroup>
+    <E5ModelDir>$(MSBuildThisFileDirectory)..\Tools\e5-small\</E5ModelDir>
+    <E5Onnx>$(E5ModelDir)model_quantized.onnx</E5Onnx>
+    <E5OnnxUrl>https://huggingface.co/Xenova/multilingual-e5-small/resolve/761b726dd34fb83930e26aab4e9ac3899aa1fa78/onnx/model_quantized.onnx</E5OnnxUrl>
+    <E5OnnxSha256>f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193</E5OnnxSha256>
+    <E5Spm>$(E5ModelDir)sentencepiece.bpe.model</E5Spm>
+    <E5SpmUrl>https://huggingface.co/intfloat/multilingual-e5-small/resolve/614241f622f53c4eeff9890bdc4f31cfecc418b3/sentencepiece.bpe.model</E5SpmUrl>
+    <E5SpmSha256>cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865</E5SpmSha256>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(E5Onnx)" Link="models\e5-small\model_quantized.onnx" Visible="false"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="$(E5Spm)" Link="models\e5-small\sentencepiece.bpe.model" Visible="false"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <Target Name="FetchE5Onnx" BeforeTargets="AssignTargetPaths" Condition="!Exists('$(E5Onnx)')">
+    <DownloadFile SourceUrl="$(E5OnnxUrl)" DestinationFolder="$(E5ModelDir)" DestinationFileName="model_quantized.onnx.part" />
+    <GetFileHash Files="$(E5Onnx).part" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_E5OnnxHash" />
+    </GetFileHash>
+    <Delete Files="$(E5Onnx).part" Condition="'$(_E5OnnxHash.ToLowerInvariant())' != '$(E5OnnxSha256)'" />
+    <Error Condition="'$(_E5OnnxHash.ToLowerInvariant())' != '$(E5OnnxSha256)'"
+           Text="Embedding-Modell: SHA256 $(_E5OnnxHash) passt nicht zu $(E5OnnxSha256)." />
+    <Move SourceFiles="$(E5Onnx).part" DestinationFiles="$(E5Onnx)" />
+  </Target>
+
+  <Target Name="FetchE5Tokenizer" BeforeTargets="AssignTargetPaths" Condition="!Exists('$(E5Spm)')">
+    <DownloadFile SourceUrl="$(E5SpmUrl)" DestinationFolder="$(E5ModelDir)" DestinationFileName="sentencepiece.bpe.model.part" />
+    <GetFileHash Files="$(E5Spm).part" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_E5SpmHash" />
+    </GetFileHash>
+    <Delete Files="$(E5Spm).part" Condition="'$(_E5SpmHash.ToLowerInvariant())' != '$(E5SpmSha256)'" />
+    <Error Condition="'$(_E5SpmHash.ToLowerInvariant())' != '$(E5SpmSha256)'"
+           Text="Embedding-Tokenizer: SHA256 $(_E5SpmHash) passt nicht zu $(E5SpmSha256)." />
+    <Move SourceFiles="$(E5Spm).part" DestinationFiles="$(E5Spm)" />
+  </Target>
+
+  <!-- ONNX Runtime ships its import libraries as native assets; only the DLLs are needed at runtime. -->
+  <Target Name="RemoveOnnxImportLibraries" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(Extension)' == '.lib'" />
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(Extension)' == '.lib'" />
+    </ItemGroup>
   </Target>
 
   <!-- Whisper.net.Runtime copies every Windows architecture as content; RID-specific publishes keep only their own. -->

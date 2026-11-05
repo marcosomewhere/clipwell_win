@@ -38,6 +38,7 @@ public partial class App : System.Windows.Application
     private KnowledgeBaseWindow? _knowledgeBase;
     private NotesWindow? _notes;
     private DictationService? _dictation;
+    private SemanticIndex? _semantic;
     private MessageWindowService? _msgWin;
     private DatabaseService? _db;
     private SettingsService? _settings;
@@ -89,6 +90,8 @@ public partial class App : System.Windows.Application
         _recorder.StateChanged += (_, _) => Dispatcher.BeginInvoke(OnRecordingStateChanged);
         _dictation = new DictationService(AppPaths.ModelsDir,
             () => (_settings?.Settings.DictationModel ?? "base", _settings?.Settings.DictationLanguage ?? "de"));
+        _semantic = new SemanticIndex(Path.Combine(AppPaths.DataDir, SemanticIndex.FileName), EmbeddingModel.Id,
+            () => new EmbeddingModel(EmbeddingModel.ResolveModelsDir(AppContext.BaseDirectory, AppPaths.ModelsDir)));
 
         ApplyTheme(_settings.Settings.Theme);
         SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
@@ -110,6 +113,12 @@ public partial class App : System.Windows.Application
             ShowHotkeyRegistrationWarning();
 
         _ = Task.Run(() => RunAutoBackupIfNeeded());
+        var liveIds = _popupVm.Entries.Select(e => e.Id).ToHashSet();
+        _ = Task.Run(() =>
+        {
+            try { Semantic.PruneClipboard(liveIds); }
+            catch (Exception ex) when (ex is SqliteException or IOException) { LogCrash(ex); }
+        });
 
         // Pre-build the popup while idle so the first hotkey press does not pay for XAML parsing and HWND creation.
         Dispatcher.InvokeAsync(EnsurePopupCreated, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
@@ -1203,6 +1212,32 @@ public partial class App : System.Windows.Application
 
     internal DictationService Dictation => _dictation!;
 
+    internal SemanticIndex Semantic => _semantic!;
+
+    /// <summary>Raised on the UI thread whenever the clipboard history gains, loses or reorders entries.</summary>
+    internal event System.Collections.Specialized.NotifyCollectionChangedEventHandler? HistoryChanged
+    {
+        add => _popupVm!.Entries.CollectionChanged += value;
+        remove => _popupVm!.Entries.CollectionChanged -= value;
+    }
+
+    /// <summary>Deletes history entries as the popup does (database row plus list entry).</summary>
+    internal void DeleteHistoryEntries(IEnumerable<long> ids)
+    {
+        var targets = new HashSet<long>(ids);
+        foreach (var vm in _popupVm!.Entries.Where(e => targets.Contains(e.Id)).ToList()) _popupVm.Delete(vm);
+    }
+
+    /// <summary>Opens the detail window for a history entry; false when it is no longer in the history.</summary>
+    internal bool OpenEntryDetails(long id)
+    {
+        var vm = _popupVm?.Entries.FirstOrDefault(e => e.Id == id);
+        if (vm == null) return false;
+        if (vm.Type == EntryType.Image && vm.Entry.ImageData == null) vm.Entry.ImageData = _db?.LoadImageData(vm.Id);
+        new DetailWindow(vm) { WindowStartupLocation = WindowStartupLocation.CenterScreen }.Show();
+        return true;
+    }
+
     /// <summary>Raised after a note was exported into the KB, so an open KB window can reload.</summary>
     internal event EventHandler? KnowledgeBaseChanged;
 
@@ -1304,6 +1339,7 @@ public partial class App : System.Windows.Application
         _msgWin?.Dispose();
         _recorder?.Dispose();
         _dictation?.Dispose();
+        _semantic?.Dispose();
         _db?.Dispose();
         _urlService?.Dispose();
         _urlFetchSemaphore.Dispose();

@@ -17,6 +17,8 @@ Clipwell is a local-first Windows clipboard manager built with WPF, .NET 10 and 
 - Desktop recording: after pressing Record, the visible text of the foreground window is read through UI Automation (no screenshots) and every stable change is appended as Markdown.
 - Notes as a separate feature: notes window with search and autosave, local Whisper dictation into the note, export to the internal KB; tray submenu "Notizen".
 - KB window: overall Markdown summary of clipboard history, exported notes and all recordings, per-item view, copy and export.
+- KB semantic search: local embedding model (multilingual-e5-small, bundled) finds clipboard entries, voice notes and recordings by meaning; hybrid ranking with word matches, similar entries and near-duplicate detection.
+- KB "Brain": knowledge network of all indexed items with links by meaning, time, recording and website, automatic topics with keyword names, interactive force layout, focus and search.
 - Export/import as JSON, SQLite backup export, auto-backup rotation and secure delete via VACUUM.
 - Privacy controls: monitoring pause via tray menu.
 - SQLite recovery prompt when `quick_check` fails.
@@ -54,6 +56,7 @@ Supported prefixes:
 - Desktop recordings: `%APPDATA%\Clipwell\recordings\*.md`
 - Notes: `%APPDATA%\Clipwell\notes\*.md`; notes exported to the KB: `%APPDATA%\Clipwell\kb\notes\*.md`
 - Whisper base model: bundled as `models\ggml-base.bin` next to `Clipwell.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`); the build fetches it into `Tools\whisper` if missing. Larger models (small/medium) download on demand to `%APPDATA%\Clipwell\models`.
+- Semantic search: model bundled as `models\e5-small\` next to `Clipwell.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`; the build fetches it into `Tools\e5-small` if missing), vector index (no text) in `%APPDATA%\Clipwell\semantic.db`
 - Recovery backups: next to `history.db` with `.broken-YYYYMMDD-HHMMSS` suffix
 
 ## Build
@@ -82,7 +85,7 @@ Test:
 dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Current suite: 182 xUnit v3 tests.
+Current suite: 221 xUnit v3 tests (one network test for the fallback model download runs only with `CLIPWELL_E5_DOWNLOAD=1`).
 
 Portable single-file build:
 
@@ -95,7 +98,7 @@ Dependency status: the previous `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 `NU1903` war
 ## Project Structure
 
 - `ClipwellWin\Models`: persisted settings and clipboard entries
-- `ClipwellWin\Services`: clipboard processing, database, settings, content detection, OCR, URL preview, HTML-to-Markdown, desktop recording, notes, dictation and KB summary
+- `ClipwellWin\Services`: clipboard processing, database, settings, content detection, OCR, URL preview, HTML-to-Markdown, desktop recording, notes, dictation, KB summary and semantic search
 - `ClipwellWin\ViewModels`: popup and entry presentation state
 - `ClipwellWin\Views`: popup, details, settings, onboarding, pinboard, eyedropper, KB and notes windows
 - `ClipwellWin.Tests`: service, view-model and smoke tests

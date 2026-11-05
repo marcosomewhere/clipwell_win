@@ -83,4 +83,32 @@ public class AppSettings
     public double DetailWindowWidth { get; set; } = 0;
     public double DetailWindowHeight { get; set; } = 0;
     public bool DetailWindowMaximized { get; set; } = false;
+
+    // KB "Brain": view settings, remembered between sessions.
+    public const double BrainThresholdMin = 0.80;
+    public const double BrainThresholdMax = 0.95;
+    public const double BrainThresholdDefault = 0.86;
+
+    public double BrainThreshold { get; set; } = BrainThresholdDefault;
+    public bool BrainShowClipboard { get; set; } = true;
+    public bool BrainShowNotes { get; set; } = true;
+    public bool BrainShowRecordings { get; set; } = true;
+    public bool BrainEdgeSemantic { get; set; } = true;
+    public bool BrainEdgeTime { get; set; } = true;
+    public bool BrainEdgeSession { get; set; } = true;
+    public bool BrainEdgeDomain { get; set; } = true;
+    public bool BrainFocus { get; set; } = false;
+
+    /// <summary>Stored threshold within the slider range, rounded to whole percent; invalid values fall back to the default.</summary>
+    public double EffectiveBrainThreshold()
+        => double.IsFinite(BrainThreshold)
+            ? Math.Round(Math.Clamp(BrainThreshold, BrainThresholdMin, BrainThresholdMax), 2)
+            : BrainThresholdDefault;
+
+    /// <summary>At least one source stays visible; with all of them switched off, all are shown again.</summary>
+    public void NormalizeBrainSources()
+    {
+        if (BrainShowClipboard || BrainShowNotes || BrainShowRecordings) return;
+        BrainShowClipboard = BrainShowNotes = BrainShowRecordings = true;
+    }
 }

@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using ClipwellWin.Models;
 using ClipwellWin.Services;
 using Xunit;
 
@@ -67,11 +68,13 @@ public class KnowledgeExportTests
                 new(KbArticleKind.Recording, "R", Today, "rec.md", "Aufnahme\r\nZeile"),
             };
 
+            articles.Add(new(KbArticleKind.Clipboard, "C", Today, "2026-11-05_00-00-00_7.md", "Clip"));
             KnowledgeExport.WriteZip(zipPath, articles, "Übersicht");
 
             using var zip = ZipFile.OpenRead(zipPath);
             var names = zip.Entries.Select(e => e.FullName).OrderBy(n => n, StringComparer.Ordinal).ToList();
-            Assert.Equal(["bildschirmaufnahmen/rec.md", "sprachnotizen/same-2.md", "sprachnotizen/same.md", "uebersicht.md"], names);
+            Assert.Equal(["bildschirmaufnahmen/rec.md", "sprachnotizen/same-2.md", "sprachnotizen/same.md", "uebersicht.md",
+                "zwischenablage/2026-11-05_00-00-00_7.md"], names);
             using var reader = new StreamReader(zip.GetEntry("bildschirmaufnahmen/rec.md")!.Open());
             Assert.Equal("Aufnahme\nZeile", reader.ReadToEnd());
             Assert.False(File.Exists(zipPath + ".tmp"));
@@ -80,5 +83,25 @@ public class KnowledgeExportTests
         {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [Fact]
+    public void ClipboardMarkdown_RendersHeaderAndContentPerType()
+    {
+        var at = new DateTime(2026, 11, 5, 9, 30, 15);
+        var code = new ClipboardEntry { Id = 3, Type = EntryType.Code, Language = "CSharp", Content = "var x = 1;", Timestamp = at, UseCount = 2 };
+        var image = new ClipboardEntry { Id = 4, Type = EntryType.Image, OcrText = "Rechnung 4711\nZeile 2", Timestamp = at };
+        var url = new ClipboardEntry { Id = 5, Type = EntryType.Url, Content = "https://example.org", UrlTitle = "Beispiel", Timestamp = at };
+
+        var md = KnowledgeExport.ClipboardMarkdown(code);
+        Assert.StartsWith("# Zwischenablage: var x = 1;\n\n- Kopiert: 2026-11-05 09:30:15\n- Typ: Code (CSharp)\n- Verwendet: 2x\n", md);
+        Assert.Contains("```csharp\nvar x = 1;\n```", md);
+
+        Assert.Equal("Bild: Rechnung 4711", KnowledgeExport.ClipboardTitle(image));
+        Assert.Contains("Erkannter Text (OCR):\n\nRechnung 4711\nZeile 2", KnowledgeExport.ClipboardMarkdown(image));
+        Assert.Equal("Beispiel", KnowledgeExport.ClipboardTitle(url));
+        Assert.Contains("<https://example.org>", KnowledgeExport.ClipboardMarkdown(url));
+        Assert.Equal("2026-11-05_09-30-15_3.md", KnowledgeExport.ClipboardFileName(code));
+        Assert.Equal("Zwischenablage", KnowledgeExport.KindLabel(KbArticleKind.Clipboard));
     }
 }

@@ -144,6 +144,19 @@ public static class NoteStore
         return (note, ExportToKb(note, kbNotesDir, exported));
     }
 
+    /// <summary>Text of a KB note without the header written by <see cref="BuildKbMarkdown"/>.</summary>
+    public static string KbBody(string markdown)
+    {
+        var lines = NormalizeNewlines(markdown).Split('\n');
+        var i = 0;
+        while (i < lines.Length && (lines[i].Trim().Length == 0
+               || lines[i].StartsWith(KbHeaderPrefix, StringComparison.Ordinal)
+               || lines[i].StartsWith(KbCreatedPrefix, StringComparison.Ordinal)
+               || lines[i].StartsWith(KbExportedPrefix, StringComparison.Ordinal)))
+            i++;
+        return string.Join("\n", lines.Skip(i)).Trim();
+    }
+
     public static List<KbNote> LoadKbNotes(string kbNotesDir)
     {
         var result = new List<KbNote>();

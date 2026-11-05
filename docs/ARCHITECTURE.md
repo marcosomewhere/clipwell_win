@@ -11,7 +11,8 @@
 | OCR | `Windows.Media.Ocr.OcrEngine` |
 | YAML | `YamlDotNet 18.1.0` (detection and validation) |
 | Dictation | `Whisper.net 1.9.1` with bundled `ggml-base.bin` |
-| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 182 tests |
+| Embeddings | `Microsoft.ML.OnnxRuntime 1.31.1`, `Microsoft.ML.Tokenizers 2.0.1`, multilingual-e5-small bundled as `models\e5-small` |
+| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 221 tests |
 
 ## Project Layout
 
@@ -21,7 +22,7 @@ ClipwellWin/
   NativeMethods.cs            Win32 interop
   Models/                     persisted settings and entries
   Services/                   storage, processing, detection, image helpers, OCR, URL preview,
-                              recording, notes, dictation, KB summary
+                              recording, notes, dictation, KB summary, semantic search
   ViewModels/                 popup and entry state
   Views/                      WPF windows plus DragGhost (drag preview) and KbInstruments (KB gauges)
 ClipwellWin.Tests/            unit, integration and smoke tests
@@ -37,7 +38,8 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `OnboardingWindow` | First-run flow with hotkey test |
 | `PinboardWindow` | Always-on-top list of pinned entries |
 | `EyedropperWindow` | Transparent full-screen color picker |
-| `KnowledgeBaseWindow` | KB page in the detail-window chrome: dashboard with counters and gauges, overall Markdown summary, article list (exported notes and recordings) with search, type filter, grouping by date/type and multi-selection; combined preview, record/stop, copy, export, bulk delete |
+| `KnowledgeBaseWindow` | KB page in the detail-window chrome: dashboard with counters and gauges, overall Markdown summary, semantic search section (partial class `KnowledgeBaseWindow.Semantic.cs`: query, source chips, results, preview, similar, duplicates, model download), Brain section (partial class `KnowledgeBaseWindow.Brain.cs`), three article lists (voice notes, recordings, clipboard history) with search and multi-selection across lists; combined preview, record/stop, copy, export, bulk delete |
+| `BrainCanvas` | Self-drawn knowledge network for the KB "Brain" section (partial `KnowledgeBaseWindow.Brain.cs`): bucketed edge geometry, shapes per source, topic labels, zoom at cursor, pan, node drag, highlight and focus |
 | `KbExportDialog` | Export choice for the KB: combined Markdown or ZIP, optional overview |
 | `InlineDictation` | Dictation straight into a text box (popup quick note, KB "Neue Notiz"); owns the dictation while active, inserts at the caret |
 | `EditorChrome` | Shared header/button styles (`EditorChrome.xaml`) and light/dark brushes plus frame colors for KB window and export dialog |
@@ -63,10 +65,14 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `RecordingMarkdown` | Recording file format: header, snapshot sections with full content or newly visible lines, footer; parser and directory loader |
 | `KnowledgeSummaryBuilder` | Builds the KB overview Markdown from clipboard entries, exported notes and parsed recordings |
 | `KnowledgeDashboard` | Counters and per-application/per-site statistics for the KB dashboard |
-| `KnowledgeExport` | KB date groups, combined Markdown (TOC, demoted headings) and ZIP export (notizen/, aufnahmen/, uebersicht.md) |
+| `KnowledgeExport` | KB date groups, clipboard entries as Markdown articles, combined Markdown (TOC, demoted headings) and ZIP export (sprachnotizen/, bildschirmaufnahmen/, zwischenablage/, uebersicht.md) |
 | `NoteStore` | Notes as Markdown files (`notes\yyyy-MM-dd_HH-mm-ss.md`), load/create/save/delete, KB export as snapshot copy (`kb\notes`) |
 | `MicrophoneRecorder` | waveIn capture of the default microphone as 16 kHz mono floats (event notification plus capture thread) |
 | `DictationService` | Whisper.net speech-to-text: on-demand ggml model download to `models`, single active dictation with owner, cached `WhisperFactory` |
+| `EmbeddingModel` | multilingual-e5-small (int8 ONNX) via ONNX Runtime plus SentencePiece tokenizer (XLM-R id offset), mean pooling and L2 normalization, e5 query/passage prefixes; download of pinned files to `models\e5-small` with SHA256 check |
+| `SemanticSearch` | `SemanticChunker` (clipboard, KB notes and recording snapshots into chunks of up to 1000 chars, skips short single tokens) and `SemanticRanking` (cosine plus word matches fused by reciprocal rank, grouping per item, near-duplicate folding, similar items, duplicate groups) |
+| `SemanticIndex` | Vector store in `semantic.db` (key, content hash, vector; no text), incremental background sync with file cache, query embedding, prune of deleted clipboard entries, model release |
+| `KnowledgeGraph` | Knowledge network for the KB "Brain": item nodes (mean vector), semantic/time/session/domain edges, topics by label propagation with TF-IDF keyword labels (`BrainGraph`, `GraphNode`, `GraphEdge`, `GraphCluster`), deterministic Fruchterman-Reingold `ForceLayout` with warm start |
 
 ## Recording Flow
 
@@ -95,6 +101,33 @@ Diktieren -> App.ToggleDictationAsync
   -> second click: MicrophoneRecorder.Stop -> Whisper ProcessAsync (language from settings) -> drop [..]/(..) segments
   -> text inserted at the editor caret -> autosave
 In KB exportieren -> NoteStore.ExportToKb (kb\notes\<id>.md snapshot) -> App.KnowledgeBaseChanged -> KnowledgeBaseWindow reload
+```
+
+## Brain Flow
+
+```text
+KB "Brain" (Strg+B) -> semantic sync as for the search
+  -> index signature changed: KnowledgeGraph.Build (worker; newest 1000 items, edges, topics)
+  -> ForceLayout on a worker, positions published every ~45 ms -> BrainCanvas.UpdatePositions
+     (warm start keeps known nodes; threshold or source changes rebuild with warm start)
+  -> click: side panel with links and reasons | double click / Oeffnen: OpenChunkInKb
+  -> search: words highlight locally, Enter -> SemanticIndex.Search -> highlight and zoom
+```
+
+## Semantic Search Flow
+
+```text
+KB "Semantische Suche" (Strg+K)
+  -> model: bundled models\e5-small next to the EXE (EmbeddingModel.ResolveModelsDir); only if it is missing:
+     "Modell laden" -> EmbeddingModel.DownloadAsync (%APPDATA%\Clipwell\models\e5-small, SHA256)
+  -> SemanticIndex.Collect (clipboard snapshot, kb\notes, recordings; files cached by write time)
+  -> SemanticIndex.SyncAsync: reuse vectors with matching hash, embed new chunks newest first in batches of 16,
+     publish after each batch, delete vectors of vanished keys
+  -> query (debounce 350 ms, Enter also re-syncs): EmbedQuery -> SemanticRanking.Search (cosine >= 0.80 and/or word match, RRF)
+  -> "Aehnliche": SemanticRanking.Similar (>= 0.83) | "Dubletten": SemanticRanking.DuplicateGroups (>= 0.97)
+  -> "Oeffnen": clipboard -> App.OpenEntryDetails; note/recording -> KB article (recording scrolled to the snapshot)
+KB window closed -> sync cancelled -> SemanticIndex.ReleaseModel
+App start -> SemanticIndex.PruneClipboard (vectors of deleted history entries)
 ```
 
 ## Clipboard Flow

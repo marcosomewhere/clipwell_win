@@ -7,6 +7,8 @@ namespace ClipwellWin.Services;
 
 public sealed record RecordingSnapshot(DateTime Time, string App, string Title);
 
+public sealed record RecordingSnapshotText(DateTime Time, string App, string Title, string Body);
+
 public sealed class RecordingSession
 {
     public string Path { get; init; } = "";
@@ -237,6 +239,65 @@ public static partial class RecordingMarkdown
         var session = new RecordingSession { Path = path, Start = start.Value, End = end };
         session.Snapshots.AddRange(snapshots);
         return session;
+    }
+
+    /// <summary>
+    /// Splits a recording into its snapshots. The body keeps only the captured text: no headings, no change notes,
+    /// no bullet markers.
+    /// </summary>
+    public static List<RecordingSnapshotText> SplitSnapshots(string text)
+    {
+        var result = new List<RecordingSnapshotText>();
+        DateTime? start = null;
+        var lastTime = DateTime.MinValue;
+        (DateTime Time, string App, string Title)? current = null;
+        var body = new List<string>();
+        var skipSection = false;
+
+        void Flush()
+        {
+            if (current is { } c) result.Add(new RecordingSnapshotText(c.Time, c.App, c.Title, string.Join("\n", body)));
+            body.Clear();
+            current = null;
+        }
+
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (start == null)
+            {
+                var h = SessionHeaderRegex().Match(line);
+                if (h.Success && TryParseDateTime(h.Groups[1].Value, out var s)) { start = s; lastTime = s; }
+                continue;
+            }
+
+            var m = SnapshotHeaderRegex().Match(line);
+            if (m.Success && TimeSpan.TryParseExact(m.Groups[1].Value, @"hh\:mm\:ss", CultureInfo.InvariantCulture, out var tod))
+            {
+                Flush();
+                var time = lastTime.Date + tod;
+                if (time < lastTime) time = time.AddDays(1);
+                lastTime = time;
+                current = (time, m.Groups[2].Value.Trim(), m.Groups[3].Value.Trim());
+                skipSection = false;
+                continue;
+            }
+            if (current == null) continue;
+            if (line == "---") { Flush(); continue; }
+            if (line.StartsWith("### ", StringComparison.Ordinal))
+            {
+                skipSection = line == "### Änderung";
+                continue;
+            }
+            if (skipSection) continue;
+
+            var content = line.StartsWith("- ", StringComparison.Ordinal) ? line[2..] : line;
+            content = content.Trim();
+            if (content.Length == 0 || content == "(kein lesbarer Text)") continue;
+            body.Add(content);
+        }
+        Flush();
+        return result;
     }
 
     private static bool TryParseDateTime(string value, out DateTime result)

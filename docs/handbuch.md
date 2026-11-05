@@ -370,14 +370,15 @@ Jede Aufnahme landet als eigene Datei in `%APPDATA%\Clipwell\recordings\` (Name 
 
 **Öffnen:** `KB`-Button im Popup-Kopf oder Tray-Menü → "KB".
 
-Das Fenster nutzt dieselbe Kopfleiste und dieselben Buttons wie das Detailfenster. Links stehen oben **Dashboard** und **Gesamtübersicht**, darunter die Suche (Strg+F, über Titel, Anwendungen, Fenstertitel und Inhalt) und zwei getrennte Bereiche mit eigener Liste:
+Das Fenster nutzt dieselbe Kopfleiste und dieselben Buttons wie das Detailfenster. Links stehen oben **Dashboard** und **Gesamtübersicht**, darunter die Suche (Strg+F, über Titel, Anwendungen, Fenstertitel und Inhalt) und drei getrennte Bereiche mit eigener Liste:
 
 - **Sprachnotizen:** in die KB übernommene Notizen, neueste zuerst.
 - **Bildschirmaufnahmen:** Desktop-Aufnahmen, benannt nach den erfassten Anwendungen, mit Startzeit, Anzahl der Einträge und Dauer.
+- **Zwischenablage:** alle Einträge der Clipwell-History, neueste zuerst, mit Typ und Zeitpunkt. Rechts erscheint der Eintrag als Markdown (Code als Codeblock, Bilder mit erkanntem Text); Doppelklick öffnet das Detailfenster. Neue Kopien erscheinen automatisch.
 
 Ein Klick auf einen Bereichskopf oder einen Eintrag macht den Bereich aktiv (orange umrandet). Nur für den aktiven Bereich erscheint unten das passende Eingabefeld.
 
-**Auswahl:** Ein Klick wählt einen Artikel, Strg+Klick und Umschalt+Klick erweitern die Auswahl, auch über beide Bereiche hinweg. "Alle auswählen" im Bereichskopf fügt alle Artikel des Bereichs hinzu, "Alle"/"Keine" unten gelten für beide Bereiche. Rechts erscheint das Markdown des gewählten Artikels, bei mehreren eine zusammengefasste Vorschau.
+**Auswahl:** Ein Klick wählt einen Artikel, Strg+Klick und Umschalt+Klick erweitern die Auswahl, auch über die Bereiche hinweg. "Alle auswählen" im Bereichskopf fügt alle Artikel des Bereichs hinzu, "Alle"/"Keine" unten gelten für alle Bereiche. Rechts erscheint das Markdown des gewählten Artikels, bei mehreren eine zusammengefasste Vorschau.
 
 **Neue Bildschirmaufnahme** (Bereich Bildschirmaufnahmen aktiv): "Aufnahme starten" beginnt die Aufnahme und wählt sie aus, sodass neue Einträge rechts live mitlaufen. Darunter stehen Startzeit, Laufzeit und Anzahl der Einträge; derselbe Button beendet die Aufnahme.
 
@@ -396,10 +397,81 @@ Buttons oben: Kopieren (angezeigtes Markdown, landet nicht in der History), Expo
 **Exportieren** gilt für die ausgewählten Artikel, ohne Auswahl für alle angezeigten. Der Dialog bietet:
 
 - **Zusammengefasstes Markdown:** eine `.md`-Datei mit Inhaltsverzeichnis und allen Artikeln hintereinander (Überschriften eine Ebene tiefer).
-- **Alles als ZIP:** jede Sprachnotiz und Bildschirmaufnahme als eigene `.md`-Datei in den Ordnern `sprachnotizen` und `bildschirmaufnahmen`.
+- **Alles als ZIP:** jeder Artikel als eigene `.md`-Datei in den Ordnern `sprachnotizen`, `bildschirmaufnahmen` und `zwischenablage`.
 - **Gesamtübersicht beilegen:** als eigener Abschnitt bzw. als `uebersicht.md` im ZIP.
 
-**Löschen** wirkt auf alle ausgewählten Artikel: Bildschirmaufnahmen werden als Datei gelöscht (nicht die laufende), Sprachnotizen nur in ihrer KB-Fassung. Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das KB-Fenster automatisch.
+**Löschen** wirkt auf alle ausgewählten Artikel: Bildschirmaufnahmen werden als Datei gelöscht (nicht die laufende), Sprachnotizen nur in ihrer KB-Fassung, Zwischenablage-Einträge aus der Clipwell-History (wie Löschen im Popup). Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das KB-Fenster automatisch.
+
+### Semantische Suche
+
+**Öffnen:** "Semantische Suche" links im KB-Fenster oder Strg+K.
+
+Die semantische Suche findet Inhalte nach ihrer Bedeutung, nicht nur nach gleichen Wörtern. "Wie habe ich das VPN-Zertifikat erneuert" findet auch einen Eintrag, in dem "OpenVPN-Cert" und "Firmenportal" stehen, auch über Sprachen hinweg. Durchsucht werden Zwischenablage, Sprachnotizen und Bildschirmaufnahmen.
+
+**Modell:** Das Sprachmodell multilingual-e5-small (MIT-Lizenz, ca. 123 MB) wird mit Clipwell ausgeliefert (`models\e5-small\` neben `Clipwell.exe`). Die Suche läuft komplett lokal, es wird nichts gesendet. Nur wenn der Ordner fehlt oder beschädigt ist, erscheint ein Hinweis mit "Modell laden"; das holt das Modell von Hugging Face nach `%APPDATA%\Clipwell\models\e5-small\` und prüft die Prüfsumme.
+
+**Index:** Beim Öffnen der Suche wandelt Clipwell neue oder geänderte Inhalte im Hintergrund in Vektoren um, neueste zuerst. Der Fortschritt steht unter der Überschrift; die Suche liefert schon während des Aufbaus Treffer. Der erste Aufbau einer großen History dauert einige Minuten und belastet die CPU spürbar; danach kommen nur neue Inhalte dazu. Gespeichert werden nur Vektoren in `semantic.db`, kein Text.
+
+Nicht indiziert werden Farben, Bilder ohne OCR-Text und kurze Einträge ohne Leerzeichen (z. B. Passwörter, IDs, Codes).
+
+**Übersicht:** Solange das Suchfeld leer ist, listet die Suche alles, was im Index steht, neueste Einträge zuerst; die Chips filtern nach Quelle. Die Zeile unter der Überschrift nennt die Anzahl je Quelle (Zwischenablage-Einträge, Sprachnotizen, Bildwechsel aus Bildschirmaufnahmen).
+
+**Suchen:** Frage oder Stichworte eintippen, die Treffer erscheinen nach kurzer Pause. Enter sucht sofort und nimmt dabei auch Einträge auf, die seit dem Öffnen dazugekommen sind. Die Chips darunter schränken auf eine Quelle ein. Jeder Treffer zeigt Quelle, Datum, Ähnlichkeit in Prozent und "Worttreffer", wenn ein Suchwort wörtlich vorkommt. Fast gleiche Treffer, etwa derselbe Bildschirminhalt mehrmals aufgenommen, werden zusammengefasst ("+3 fast gleich"); die Vorschau rechts listet sie auf.
+
+| Aktion | Wirkung |
+|--------|---------|
+| Ähnliche | Sucht Einträge, die inhaltlich dem gewählten Treffer ähneln |
+| Öffnen / Doppelklick | Zwischenablage: Detailfenster. Sprachnotiz und Bildschirmaufnahme: Artikel in der KB, Aufnahmen an der Stelle des Bildwechsels |
+| Dubletten | Zeigt Gruppen fast gleicher Abschnitte der gewählten Quelle, größte zuerst |
+| Kopieren (oben) | Kopiert die Vorschau |
+| Index löschen | Entfernt alle gespeicherten Vektoren; der Index wird bei der nächsten Suche neu aufgebaut |
+
+Das Modell wird nur geladen, solange das KB-Fenster offen ist, und danach wieder freigegeben.
+
+### Brain (Wissensnetz)
+
+**Öffnen:** "Brain" links im KB-Fenster oder Strg+B.
+
+Das Brain zeigt alle indizierten Einträge als Netz: jeder Zwischenablage-Eintrag, jede Sprachnotiz und jeder Bildwechsel einer Bildschirmaufnahme ist ein Knoten, Bezüge zwischen ihnen sind Linien. Clipwell ermittelt die Bezüge selbst, lokal und ohne Netzwerk:
+
+| Bezug | Bedeutung | Linie |
+|-------|-----------|-------|
+| Inhaltlich | Bedeutung ähnlich (über der eingestellten Schwelle; jeder Eintrag verknüpft sich mit seinen bis zu 5 ähnlichsten) | Farbe des Themas, grau zwischen Themen |
+| Zeitlich | innerhalb von 5 Minuten entstanden (bis zu 3 nächste je Eintrag) | blau |
+| Gleiche Aufnahme | aufeinanderfolgende Bildwechsel derselben Bildschirmaufnahme | hellgrau |
+| Gleiche Webseite | gleiche Domain (kopierte URL, Quelle der Kopie oder Adresse in der Aufnahme), zeitlich verkettet | grün |
+
+**Themen:** Inhaltlich eng verknüpfte Einträge bilden ein Thema. Jedes Thema hat eine Farbe und einen Namen aus seinen typischen Stichworten (z. B. "Zertifikat · Vpn · Portal"). Einzelne Einträge ohne inhaltliche Nachbarn bleiben grau.
+
+**Darstellung:** Kreis = Zwischenablage, Raute = Sprachnotiz, Quadrat = Bildwechsel einer Aufnahme. Je mehr Verknüpfungen, desto größer der Knoten. Das Netz ordnet sich beim Öffnen selbst an (Verknüpftes rückt zusammen).
+
+| Bedienung | Wirkung |
+|-----------|---------|
+| Mausrad | Zoomt an der Mausposition |
+| Ziehen auf freier Fläche | Verschiebt die Ansicht |
+| Knoten ziehen | Verschiebt den Knoten (nach dem Anordnen) |
+| Klick auf Knoten | Zeigt rechts Details und alle Verknüpfungen mit Begründung, z. B. "inhaltlich 91 % · zeitlich nah (2 min)" |
+| Klick auf freie Fläche oder Esc | Zurück zur Themenliste (Esc leert vorher ein gefülltes Suchfeld) |
+| Doppelklick auf Knoten / Öffnen | Öffnet den Artikel in der KB |
+| Ähnliche | Wechselt in die semantische Suche mit ähnlichen Einträgen |
+| Pos1 / Einpassen | Zeigt das ganze Netz |
+| Neu anordnen | Berechnet das Layout neu |
+
+Rechts steht ohne Auswahl die **Themenliste**; ein Klick hebt das Thema hervor und zoomt darauf. Mit Auswahl stehen dort die **Verknüpfungen**; ein Klick springt zum verknüpften Eintrag.
+
+**Werkzeugleiste:**
+
+- **Suchfeld:** Getippte Wörter heben passende Knoten hervor (alle Wörter müssen vorkommen). Enter sucht nach Bedeutung und zoomt auf die Treffer.
+- **Quellen:** blendet Zwischenablage, Sprachnotizen oder Bildschirmaufnahmen aus dem Netz aus.
+- **Bezüge:** blendet Linienarten aus (die Themen bleiben).
+- **Ähnlichkeit ab:** wie ähnlich zwei Einträge sein müssen, damit eine inhaltliche Linie entsteht (80 bis 95 %, Standard 86 %). Niedriger gibt mehr Verknüpfungen und größere Themen, höher nur sehr enge Bezüge.
+- **Fokus:** hebt nur die Umgebung des gewählten Eintrags hervor (zwei Schritte weit).
+
+**Kopieren** (oben) liefert im Brain Markdown: mit Auswahl den Eintrag samt Verknüpfungen, ohne Auswahl alle Themen mit ihren Einträgen.
+
+Das Netz zeigt die neuesten 1000 Einträge. Es wird aus dem Index der semantischen Suche berechnet; neue Einträge kommen beim Öffnen und bei laufender Aufnahme automatisch dazu, bereits angeordnete Knoten behalten ihre Position.
+
+Die Einstellungen der Werkzeugleiste (Ähnlichkeit, Quellen, Bezüge, Fokus) merkt sich Clipwell in den Einstellungen und stellt sie beim nächsten Öffnen wieder her. Die Position verschobener Knoten wird nicht gespeichert.
 
 ---
 
@@ -558,12 +630,13 @@ Einstellungen → Daten → "History löschen". Optional können gepinnte Eintr�
 
 ## 17. Datenschutz und Privatsphäre
 
-- **Lokal only:** Alle Daten bleiben auf deinem Gerät. Clipwell sendet keine Daten ins Internet, außer für URL-Vorschauen.
+- **Lokal only:** Alle Daten bleiben auf deinem Gerät. Clipwell sendet keine Daten ins Internet, außer für URL-Vorschauen. Modell-Downloads (Diktat, semantische Suche) holen nur Dateien und senden keine Inhalte.
 - **URL-Vorschauen:** Nur aktiv, wenn in den Einstellungen aktiviert. Clipwell ruft Titel und Favicon der kopierten URL ab. Private, Loopback- und Link-Local-Adressen (127.x, 10.x, 192.168.x, 172.16–31.x, 169.254.x, fc00::/7) werden nie abgerufen.
 - **Überwachung pausieren:** Über Tray-Menü jederzeit möglich. Clipwell zeichnet dann nichts auf.
 - **URL-Cache:** Abgerufene Titel und Favicons werden 7 Tage in der Datenbank gecacht. Der Cache kann in den Einstellungen geleert werden.
 - **Desktop-Aufnahme:** Läuft nur nach ausdrücklichem Start und bleibt lokal. Sie speichert sichtbaren Text als unverschlüsseltes Markdown, auch vertrauliche Inhalte wie Chats oder Kundendaten. Vertrauliches nur bei pausierter Überwachung öffnen oder die Aufnahme danach im KB-Fenster löschen.
 - **Diktat:** Spracherkennung läuft lokal (Whisper). Audio wird nur im Arbeitsspeicher gehalten und nach der Transkription verworfen. Das Base-Modell wird mitgeliefert; Netzwerkzugriff gibt es nur, wenn ein größeres Modell gewählt und dessen Download bestätigt wird.
+- **Semantische Suche:** Läuft lokal mit dem mitgelieferten Modell, ohne Netzwerkzugriff. Nur wenn das Modell fehlt, kann es per Klick auf "Modell laden" geholt werden. Der Index `semantic.db` enthält nur Vektoren und Prüfsummen, keinen Text; aus Vektoren lassen sich Inhalte aber grob ableiten. Vektoren gelöschter Zwischenablage-Einträge werden beim nächsten Indexabgleich oder App-Start entfernt, "Index löschen" entfernt alle sofort.
 
 ---
 
@@ -581,6 +654,8 @@ Einstellungen → Daten → "History löschen". Optional können gepinnte Eintr�
 | Whisper-Sprachmodell Base (mitgeliefert) | `models\ggml-base.bin` neben `Clipwell.exe` |
 | Whisper-Sprachmodelle Small/Medium | `%APPDATA%\Clipwell\models\` |
 | Desktop-Aufnahmen | `%APPDATA%\Clipwell\recordings\*.md` |
+| Modell der semantischen Suche (mitgeliefert) | `models\e5-small\` neben `Clipwell.exe`; Ersatzkopie nur bei Bedarf in `%APPDATA%\Clipwell\models\e5-small\` |
+| Index der semantischen Suche (nur Vektoren) | `%APPDATA%\Clipwell\semantic.db` |
 | WAL-Datei (SQLite) | `%APPDATA%\Clipwell\history.db-wal` |
 | Wiederherstellungs-Backup | `%APPDATA%\Clipwell\history.db.broken-YYYYMMDD-HHMMSS` |
 | Auto-Backups | Konfigurierbarer Ordner, `clipwell-autobackup-YYYYMMDD-HHmmss.json` |
