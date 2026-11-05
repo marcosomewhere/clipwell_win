@@ -11,7 +11,7 @@
 | OCR | `Windows.Media.Ocr.OcrEngine` |
 | YAML | `YamlDotNet 18.1.0` (detection and validation) |
 | Dictation | `Whisper.net 1.9.1` with bundled `ggml-base.bin` |
-| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 148 tests |
+| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 182 tests |
 
 ## Project Layout
 
@@ -37,7 +37,10 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `OnboardingWindow` | First-run flow with hotkey test |
 | `PinboardWindow` | Always-on-top list of pinned entries |
 | `EyedropperWindow` | Transparent full-screen color picker |
-| `KnowledgeBaseWindow` | KB page: dashboard with counters and gauges, overall Markdown summary of clipboard history, exported notes and recordings, per-note/per-recording view, record/stop, copy, export, delete |
+| `KnowledgeBaseWindow` | KB page in the detail-window chrome: dashboard with counters and gauges, overall Markdown summary, article list (exported notes and recordings) with search, type filter, grouping by date/type and multi-selection; combined preview, record/stop, copy, export, bulk delete |
+| `KbExportDialog` | Export choice for the KB: combined Markdown or ZIP, optional overview |
+| `InlineDictation` | Dictation straight into a text box (popup quick note, KB "Neue Notiz"); owns the dictation while active, inserts at the caret |
+| `EditorChrome` | Shared header/button styles (`EditorChrome.xaml`) and light/dark brushes plus frame colors for KB window and export dialog |
 | `NotesWindow` | Standalone notes: list, search, autosaving editor, Whisper dictation at the caret, export to KB |
 
 ## Services
@@ -56,9 +59,11 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `MessageWindowService` | Hidden window for `WM_CLIPBOARDUPDATE` |
 | `AppPaths` | Data directory path resolution (`%APPDATA%\Clipwell`) |
 | `DesktopRecorderService` | Record mode: MTA background thread polls the foreground window via UI Automation (text only, no pixels), waits for a quiet period and appends Markdown snapshots |
+| `RecordingLayout` | Turns the cached UI Automation tree (`UiNode`) into lines: joins fragments on the same visual row, joins wrapped lines into paragraphs, drops container names that repeat their content, renders grid cells as Markdown tables; browser content-only mode keeps URL plus main landmark or document without navigation/banner/search/footer |
 | `RecordingMarkdown` | Recording file format: header, snapshot sections with full content or newly visible lines, footer; parser and directory loader |
 | `KnowledgeSummaryBuilder` | Builds the KB overview Markdown from clipboard entries, exported notes and parsed recordings |
 | `KnowledgeDashboard` | Counters and per-application/per-site statistics for the KB dashboard |
+| `KnowledgeExport` | KB date groups, combined Markdown (TOC, demoted headings) and ZIP export (notizen/, aufnahmen/, uebersicht.md) |
 | `NoteStore` | Notes as Markdown files (`notes\yyyy-MM-dd_HH-mm-ss.md`), load/create/save/delete, KB export as snapshot copy (`kb\notes`) |
 | `MicrophoneRecorder` | waveIn capture of the default microphone as 16 kHz mono floats (event notification plus capture thread) |
 | `DictationService` | Whisper.net speech-to-text: on-demand ggml model download to `models`, single active dictation with owner, cached `WhisperFactory` |
@@ -69,10 +74,11 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 Record button (popup, KB window, tray)
   -> App.ToggleRecording -> DesktopRecorderService.Start (new recordings\yyyy-MM-dd_HH-mm-ss.md)
   -> every 500 ms: GetForegroundWindow + title (skip own process, hung windows, dwm ghosts, paused monitoring)
-     -> new window/title stable >= 500 ms: UI Automation walk (TextPattern visible ranges, element names,
-        values; no password fields, no title/scroll/menu bars), retry up to 2x while < 5 lines (Chromium warm-up)
+     -> new window/title stable >= 500 ms: one GetUpdatedCache(TreeScope.Subtree) call, copied into UiNode tree
+        (TextPattern only for non-web documents/edits), RecordingLayout.Render (position-based lines, tables,
+        browser content-only filter; no password fields, no title/scroll/menu bars), retry up to 2x while < 5 lines (Chromium warm-up)
         -> RecordingMarkdown.FormatSnapshot (full content, or only lines new for this window) -> append + flush
-     -> same window: re-read every 2.5 s, append only lines never logged for this window
+     -> same window: re-read every 2.5 s (at least 4x the last capture time), append only lines never logged for this window
   -> SnapshotWritten -> KnowledgeBaseWindow refresh (debounced 1 s)
 Stop -> footer (end, duration, count) -> App.RecordingStateChanged (UI thread)
 ```

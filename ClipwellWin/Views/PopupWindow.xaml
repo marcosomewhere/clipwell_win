@@ -907,6 +907,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <ui:TextBox Grid.Column="0" x:Name="QuickNoteBox"
                                PlaceholderText="Schnellnotiz eingeben…"
                                FontSize="13" Background="Transparent"
@@ -915,6 +919,9 @@
                                AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120"
                                VerticalScrollBarVisibility="Auto"
                                PreviewKeyDown="QuickNoteBox_KeyDown" />
+                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" x:Name="QuickNoteStatus"
+                               Margin="2,4,0,0" FontSize="11" Visibility="Collapsed"
+                               Foreground="{DynamicResource PopupTextSubtleBrush}" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0"
                                 VerticalAlignment="Top">
                         <StackPanel.Resources>
@@ -946,13 +953,14 @@
                                 </Setter>
                             </Style>
                         </StackPanel.Resources>
-                        <Button Content="&#xE720;" Style="{StaticResource QuickNoteIconButton}"
-                                ToolTip="Weiter diktieren im Notizfenster"
+                        <Button x:Name="QuickNoteDictateButton" Content="&#xE720;" Style="{StaticResource QuickNoteIconButton}"
+                                ToolTip="Diktieren (lokal per Whisper), erneut klicken zum Beenden"
                                 Click="QuickNoteDictate_Click" />
                         <Button Content="&#xE8A7;" Style="{StaticResource QuickNoteIconButton}"
                                 ToolTip="Im Notizfenster öffnen (alle Notizen)"
                                 Click="QuickNoteOpenNotes_Click" />
-                        <Button Content="Speichern" Style="{StaticResource BulkBtnStyle}"
+                        <Button x:Name="QuickNoteSaveButton" Content="Speichern" Style="{StaticResource BulkBtnStyle}"
+                                ToolTip="Als Notiz speichern und in die KB übernehmen (Enter)"
                                 Click="QuickNoteSave_Click" />
                         <Button Content="✕" Width="28" Height="28" Padding="0"
                                 Background="Transparent" BorderThickness="0"

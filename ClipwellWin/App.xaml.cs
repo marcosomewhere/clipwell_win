@@ -84,7 +84,8 @@ public partial class App : System.Windows.Application
         _urlService = new UrlPreviewService();
         _recorder = new DesktopRecorderService(
             Path.Combine(AppPaths.DataDir, AppPaths.RecordingsFolderName),
-            () => _settings?.Settings.PauseMonitoring == true);
+            () => _settings?.Settings.PauseMonitoring == true,
+            () => _settings?.Settings.RecordingContentOnly != false);
         _recorder.StateChanged += (_, _) => Dispatcher.BeginInvoke(OnRecordingStateChanged);
         _dictation = new DictationService(AppPaths.ModelsDir,
             () => (_settings?.Settings.DictationModel ?? "base", _settings?.Settings.DictationLanguage ?? "de"));
@@ -1206,6 +1207,18 @@ public partial class App : System.Windows.Application
     internal event EventHandler? KnowledgeBaseChanged;
 
     internal void NotifyKnowledgeBaseChanged() => KnowledgeBaseChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Saves a quick note (popup or KB window) as a regular note and puts it into the KB right away.
+    /// Returns the KB file path. IO errors are left to the caller.
+    /// </summary>
+    internal string SaveQuickNote(string text)
+    {
+        var (note, kbPath) = NoteStore.CreateInKb(AppPaths.NotesDir, AppPaths.KbNotesDir, text, DateTime.Now);
+        _notes?.AddExternalNote(note);
+        NotifyKnowledgeBaseChanged();
+        return kbPath;
+    }
 
     internal void OpenNotes(NotesStartAction action = NotesStartAction.None, string? initialText = null)
     {

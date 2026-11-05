@@ -135,6 +135,15 @@ public static class NoteStore
         return path;
     }
 
+    /// <summary>Quick notes: saved as a regular note and exported to the KB in one step.</summary>
+    public static (Note Note, string KbPath) CreateInKb(string notesDir, string kbNotesDir, string text, DateTime now)
+    {
+        var note = Create(notesDir, text, now);
+        // Export no earlier than the file's write time, otherwise the note would show up as "KB veraltet".
+        var exported = note.Modified > now ? note.Modified : now;
+        return (note, ExportToKb(note, kbNotesDir, exported));
+    }
+
     public static List<KbNote> LoadKbNotes(string kbNotesDir)
     {
         var result = new List<KbNote>();

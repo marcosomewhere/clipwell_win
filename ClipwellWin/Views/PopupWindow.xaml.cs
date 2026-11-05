@@ -31,6 +31,7 @@ public partial class PopupWindow : Window
     private readonly App _app = null!;
     private readonly DispatcherTimer _timestampTimer;
     private ScrollViewer? _entryScrollViewer;
+    private readonly InlineDictation? _quickDictation;
 
     internal DateTime LastHiddenAtUtc { get; private set; } = DateTime.MinValue;
 
@@ -66,6 +67,8 @@ public partial class PopupWindow : Window
         {
             _app.RecordingStateChanged += (_, _) => UpdateRecordButton();
             UpdateRecordButton();
+            _quickDictation = new InlineDictation(_app, this, QuickNoteBox);
+            _quickDictation.Changed += UpdateQuickNoteDictationUi;
         }
 
         var s = _app?.CurrentSettings;
@@ -312,6 +315,8 @@ public partial class PopupWindow : Window
     private void RestoreQuickNoteDraft()
     {
         var draft = _app?.CurrentSettings.QuickNoteDraft ?? "";
+        // A dictation that finished while the popup was hidden already wrote into the box.
+        if (QuickNotePanel.Visibility == Visibility.Visible && QuickNoteBox.Text.Length > 0) return;
         if (!string.IsNullOrEmpty(draft))
         {
             QuickNotePanel.Visibility = Visibility.Visible;
@@ -434,6 +439,7 @@ public partial class PopupWindow : Window
     {
         bool show = QuickNotePanel.Visibility != Visibility.Visible;
         QuickNotePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) _quickDictation?.Cancel();
         if (show)
         {
             var draft = _app?.CurrentSettings.QuickNoteDraft ?? "";
@@ -444,37 +450,42 @@ public partial class PopupWindow : Window
     }
 
     private void QuickNoteSave_Click(object sender, RoutedEventArgs e)
-        => SaveQuickNote();
+        => _ = SaveQuickNoteAsync();
 
     private void QuickNoteCancel_Click(object sender, RoutedEventArgs e)
     {
-        QuickNotePanel.Visibility = Visibility.Collapsed;
-        QuickNoteBox.Text = "";
-        if (_app != null) { _app.CurrentSettings.QuickNoteDraft = ""; _app.SaveSettings(); }
+        _quickDictation?.Cancel();
+        ClearQuickNote();
     }
 
     private void QuickNoteBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
-            SaveQuickNote();
+            _ = SaveQuickNoteAsync();
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
         {
+            _quickDictation?.Cancel();
             QuickNotePanel.Visibility = Visibility.Collapsed;
             QuickNoteBox.Text = "";
             e.Handled = true;
         }
     }
 
-    private void SaveQuickNote()
+    private async Task SaveQuickNoteAsync()
     {
+        if (_quickDictation != null)
+        {
+            if (_quickDictation.IsWorking) return;
+            await _quickDictation.FinishAsync();
+        }
         var text = QuickNoteBox.Text.Trim();
-        if (string.IsNullOrEmpty(text)) return;
+        if (string.IsNullOrEmpty(text) || _app == null) return;
         try
         {
-            NoteStore.Create(AppPaths.NotesDir, text, DateTime.Now);
+            _app.SaveQuickNote(text);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
@@ -490,16 +501,49 @@ public partial class PopupWindow : Window
     {
         QuickNotePanel.Visibility = Visibility.Collapsed;
         QuickNoteBox.Text = "";
+        _quickDictation?.ClearStatus();
         if (_app != null) { _app.CurrentSettings.QuickNoteDraft = ""; _app.SaveSettings(); }
     }
 
     private void QuickNoteDictate_Click(object sender, RoutedEventArgs e)
-        => HandOverQuickNote(NotesStartAction.NewDictatedNote);
+    {
+        if (_quickDictation == null) return;
+        QuickNoteBox.Focus();
+        _ = _quickDictation.ToggleAsync();
+    }
 
-    private void QuickNoteOpenNotes_Click(object sender, RoutedEventArgs e)
-        => HandOverQuickNote(QuickNoteBox.Text.Trim().Length > 0 ? NotesStartAction.NewNote : NotesStartAction.None);
+    private void UpdateQuickNoteDictationUi()
+    {
+        if (_quickDictation == null) return;
+        var recording = _quickDictation.IsRecording;
+        QuickNoteDictateButton.Content = recording ? "" : "";
+        QuickNoteDictateButton.IsEnabled = !_quickDictation.IsBlocked && !_quickDictation.IsWorking;
+        QuickNoteDictateButton.ToolTip = _quickDictation.IsBlocked
+            ? "Ein anderes Fenster diktiert gerade"
+            : recording ? "Diktat beenden und Text einfügen" : "Diktieren (lokal per Whisper), erneut klicken zum Beenden";
+        if (recording)
+            QuickNoteDictateButton.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0x3B, 0x3B));
+        else
+            QuickNoteDictateButton.ClearValue(ForegroundProperty);
+        QuickNoteSaveButton.IsEnabled = !_quickDictation.IsWorking;
 
-    /// <summary>Moves the current quick-note text into the notes window, where it can be dictated into and edited.</summary>
+        var status = _quickDictation.StatusText;
+        QuickNoteStatus.Text = status;
+        QuickNoteStatus.Visibility = status.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (!recording && !_quickDictation.IsActive && QuickNotePanel.Visibility == Visibility.Visible && _app != null)
+        {
+            _app.CurrentSettings.QuickNoteDraft = QuickNoteBox.Text;
+        }
+    }
+
+    private async void QuickNoteOpenNotes_Click(object sender, RoutedEventArgs e)
+    {
+        if (_quickDictation is { IsWorking: true }) return;
+        if (_quickDictation != null) await _quickDictation.FinishAsync();
+        HandOverQuickNote(QuickNoteBox.Text.Trim().Length > 0 ? NotesStartAction.NewNote : NotesStartAction.None);
+    }
+
+    /// <summary>Moves the current quick-note text into the notes window for longer editing.</summary>
     private void HandOverQuickNote(NotesStartAction action)
     {
         if (_app == null) return;

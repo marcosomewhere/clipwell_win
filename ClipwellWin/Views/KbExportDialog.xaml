@@ -1,0 +1,108 @@
+<Window x:Class="ClipwellWin.Views.KbExportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Clipwell - Exportieren"
+        Width="460" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        SourceInitialized="Window_SourceInitialized"
+        Background="{DynamicResource EditorChromeBrush}"
+        Foreground="{DynamicResource OnboardingTextPrimaryBrush}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="EditorChrome.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="OptionStyle" TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+                <Setter Property="Margin" Value="0,0,0,8" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" CornerRadius="4" Padding="12,10" BorderThickness="1"
+                                    Background="{DynamicResource EditorPanelAltBrush}"
+                                    BorderBrush="{DynamicResource EditorBorderBrush}">
+                                <ContentPresenter />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorHoverBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorSelectedBrush}" />
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Height="2" VerticalAlignment="Top" Background="{DynamicResource AccentStripeBrush}" />
+
+        <StackPanel Grid.Row="1" Margin="20,18,20,8">
+            <TextBlock Text="Exportieren" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock x:Name="ScopeLabel" Margin="0,4,0,14" FontSize="12"
+                       Foreground="{DynamicResource EditorMutedBrush}" TextWrapping="Wrap" />
+
+            <RadioButton x:Name="CombinedOption" GroupName="Format" IsChecked="True" Style="{StaticResource OptionStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons" FontSize="16" Margin="0,2,12,0"
+                               Foreground="{DynamicResource OnboardingAccentBrush}" VerticalAlignment="Top" />
+                    <StackPanel>
+                        <TextBlock Text="Zusammengefasstes Markdown" FontWeight="SemiBold" />
+                        <TextBlock Text="Eine .md-Datei mit Inhaltsverzeichnis und allen Artikeln hintereinander."
+                                   FontSize="11.5" Margin="0,2,0,0" TextWrapping="Wrap" MaxWidth="350"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
+
+            <RadioButton x:Name="ZipOption" GroupName="Format" Style="{StaticResource OptionStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xF012;" FontFamily="Segoe Fluent Icons" FontSize="16" Margin="0,2,12,0"
+                               Foreground="{DynamicResource OnboardingAccentBrush}" VerticalAlignment="Top" />
+                    <StackPanel>
+                        <TextBlock Text="Alles als ZIP" FontWeight="SemiBold" />
+                        <TextBlock Text="Jede Sprachnotiz und Bildschirmaufnahme als eigene .md-Datei, sortiert in die Ordner sprachnotizen und bildschirmaufnahmen."
+                                   FontSize="11.5" Margin="0,2,0,0" TextWrapping="Wrap" MaxWidth="350"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
+
+            <CheckBox x:Name="OverviewCheck" Margin="2,6,0,0" Style="{StaticResource EditorCheckBoxStyle}"
+                      Content="Gesamtübersicht (Zwischenablage, Sprachnotizen, Bildschirmaufnahmen) beilegen" />
+        </StackPanel>
+
+        <Border Grid.Row="2" Margin="0,12,0,0" Padding="20,12"
+                BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Click="Export_Click" IsDefault="True" Style="{StaticResource PrimaryEditorButtonStyle}" Margin="0,0,10,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xEDE1;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="Exportieren" />
+                    </StackPanel>
+                </Button>
+                <Button IsCancel="True" Style="{StaticResource EditorButtonStyle}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12" Margin="0,0,8,0" />
+                        <TextBlock Text="Abbrechen" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

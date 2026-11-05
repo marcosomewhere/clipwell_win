@@ -70,6 +70,7 @@ public partial class SettingsWindow : FluentWindow
             _                 => 0,
         };
         UrlPreviewSwitch.IsChecked      = s.UrlPreviewEnabled;
+        RecordingContentOnlySwitch.IsChecked = s.RecordingContentOnly;
         UrlCacheTtlBox.Text = ClampInt(s.UrlCacheTtlDays, 1, 365, 7).ToString();
         SelectByTag(DictationModelBox, DictationService.NormalizeModel(s.DictationModel));
         SelectByTag(DictationLanguageBox, DictationService.NormalizeLanguage(s.DictationLanguage));
@@ -280,6 +281,12 @@ public partial class SettingsWindow : FluentWindow
     {
         _app.CurrentSettings.UrlPreviewEnabled = UrlPreviewSwitch.IsChecked == true;
         _app.CurrentSettings.UrlCacheTtlDays = ReadInt(UrlCacheTtlBox.Text, 1, 365, 7);
+        _app.SaveSettings();
+    }
+
+    private void RecordingContentOnly_Click(object sender, RoutedEventArgs e)
+    {
+        _app.CurrentSettings.RecordingContentOnly = RecordingContentOnlySwitch.IsChecked == true;
         _app.SaveSettings();
     }
 

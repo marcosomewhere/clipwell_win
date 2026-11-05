@@ -79,6 +79,20 @@ public sealed class NoteStoreTests : IDisposable
     }
 
     [Fact]
+    public void CreateInKb_SavesNoteAndKbSnapshotInOneStep()
+    {
+        var (note, kbPath) = NoteStore.CreateInKb(NotesDir, KbDir, "Diktat aus dem Popup", Now);
+
+        Assert.True(File.Exists(note.Path));
+        Assert.Equal(NoteStore.KbPathFor(KbDir, note.Id), kbPath);
+        Assert.True(note.IsInKb);
+        Assert.False(note.KbOutdated);
+        var kb = Assert.Single(NoteStore.LoadKbNotes(KbDir));
+        Assert.Equal("Diktat aus dem Popup", kb.Title);
+        Assert.True(Assert.Single(NoteStore.Load(NotesDir, KbDir)).IsInKb);
+    }
+
+    [Fact]
     public void KbOutdated_WhenModifiedAfterExport()
     {
         var note = new Note { Modified = Now.AddMinutes(10), KbExportedAt = Now };

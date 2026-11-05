@@ -18,17 +18,19 @@ public sealed class DesktopRecorderService : IDisposable
     // Chromium/Electron apps expose their accessibility tree only after the first UIA request.
     private const int MinLinesBeforeRetry = 5;
     private const int MaxWarmupRetries = 2;
-    private const int MaxNodes = 1500;
-    private const int MaxDepth = 40;
-    private const int MaxTextPatternChars = 6000;
+    private const int MaxNodes = 20000;
+    private const int MaxDepth = 100;
+    private const int MaxTextPatternChars = 20000;
     private const int MaxSeenLinesPerWindow = 5000;
-    private static readonly TimeSpan CaptureBudget = TimeSpan.FromMilliseconds(1500);
+    // Rechecks of a window whose tree is expensive to read are spaced out so the target app is not kept busy.
+    private const int RecheckCostFactor = 4;
     private static readonly TimeSpan StopJoinTimeout = TimeSpan.FromSeconds(3);
 
     private readonly string _directory;
     private readonly Func<bool> _isPaused;
+    private readonly Func<bool> _contentOnly;
     private readonly object _writeLock = new();
-    private readonly Dictionary<int, string> _appNames = [];
+    private readonly Dictionary<int, (string Display, string Process)?> _apps = [];
 
     private StreamWriter? _writer;
     private Thread? _thread;
@@ -44,10 +46,12 @@ public sealed class DesktopRecorderService : IDisposable
     /// <summary>Raised on a background thread after a snapshot was appended to the session file.</summary>
     public event EventHandler? SnapshotWritten;
 
-    public DesktopRecorderService(string directory, Func<bool> isPaused)
+    /// <param name="contentOnly">When true, browser windows are reduced to the URL and the page content.</param>
+    public DesktopRecorderService(string directory, Func<bool> isPaused, Func<bool> contentOnly)
     {
         _directory = directory;
         _isPaused = isPaused;
+        _contentOnly = contentOnly;
     }
 
     public string Directory => _directory;
@@ -126,6 +130,7 @@ public sealed class DesktopRecorderService : IDisposable
         string? currentKey = null;      // window whose state was last written
         string? currentLabel = null;
         var lastCapture = DateTime.MinValue;
+        var lastCaptureCostMs = 0.0;
         string? pendingKey = null;      // foreground window waiting for its quiet period
         var pendingSince = DateTime.MinValue;
         var warmupRetries = 0;
@@ -144,8 +149,9 @@ public sealed class DesktopRecorderService : IDisposable
                 // Skip Clipwell itself: recording the KB window would feed the log back into itself.
                 if (pid == 0 || pid == ownPid) continue;
 
-                var app = GetAppName((int)pid);
-                if (app is null) continue;
+                if (GetApp((int)pid) is not { } info) continue;
+                var (app, process) = info;
+                var isBrowser = RecordingLayout.IsBrowserProcess(process);
                 var title = GetWindowTitle(hwnd);
                 // Store apps all run inside the shared frame host process; the title names the actual app.
                 if (app == "Application Frame Host" && title.Length > 0) app = RecordingMarkdown.CleanAppName(title);
@@ -163,7 +169,9 @@ public sealed class DesktopRecorderService : IDisposable
                     }
                     if ((now - pendingSince).TotalMilliseconds < QuietPeriodMs) continue;
 
-                    var lines = CaptureLines(hwnd, token);
+                    var sw = Stopwatch.StartNew();
+                    var lines = CaptureLines(hwnd, _contentOnly(), isBrowser);
+                    lastCaptureCostMs = sw.Elapsed.TotalMilliseconds;
                     if (token.IsCancellationRequested) break;
                     if (lines.Count < MinLinesBeforeRetry && warmupRetries < MaxWarmupRetries)
                     {
@@ -183,10 +191,13 @@ public sealed class DesktopRecorderService : IDisposable
                 }
 
                 pendingKey = null;
-                if ((now - lastCapture).TotalMilliseconds < RecheckIntervalMs) continue;
+                var recheckMs = Math.Max(RecheckIntervalMs, lastCaptureCostMs * RecheckCostFactor);
+                if ((now - lastCapture).TotalMilliseconds < recheckMs) continue;
                 lastCapture = now;
 
-                var current = CaptureLines(hwnd, token);
+                var recheckWatch = Stopwatch.StartNew();
+                var current = CaptureLines(hwnd, _contentOnly(), isBrowser);
+                lastCaptureCostMs = recheckWatch.Elapsed.TotalMilliseconds;
                 if (token.IsCancellationRequested) break;
                 var state = windows[key];
                 if (!current.Any(l => !state.Seen.Contains(l))) continue;
@@ -234,21 +245,23 @@ public sealed class DesktopRecorderService : IDisposable
         return true;
     }
 
-    /// <summary>Returns the display name of the process, or null for system processes that should not be recorded.</summary>
-    private string? GetAppName(int pid)
+    /// <summary>Returns display and process name, or null for system processes that should not be recorded.</summary>
+    private (string Display, string Process)? GetApp(int pid)
     {
-        if (_appNames.TryGetValue(pid, out var cached)) return cached.Length == 0 ? null : cached;
+        if (_apps.TryGetValue(pid, out var cached)) return cached;
         var name = "Unbekannt";
+        var process = "";
         try
         {
             using var p = Process.GetProcessById(pid);
             // dwm owns the ghost window Windows shows for hung applications.
             if (string.Equals(p.ProcessName, "dwm", StringComparison.OrdinalIgnoreCase))
             {
-                _appNames[pid] = "";
+                _apps[pid] = null;
                 return null;
             }
-            name = p.ProcessName;
+            process = p.ProcessName;
+            name = process;
             try
             {
                 var description = p.MainModule?.FileVersionInfo.FileDescription;
@@ -257,123 +270,92 @@ public sealed class DesktopRecorderService : IDisposable
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException) { }
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { }
-        name = RecordingMarkdown.CleanAppName(name);
-        _appNames[pid] = name;
-        return name;
+        var result = (RecordingMarkdown.CleanAppName(name), process);
+        _apps[pid] = result;
+        return result;
     }
 
     private static CacheRequest BuildCacheRequest()
     {
-        var cache = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
+        // One cross-process call fetches the whole tree; walking it afterwards is local.
+        var cache = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Subtree };
         cache.TreeFilter = Automation.ControlViewCondition;
         cache.Add(AutomationElement.NameProperty);
         cache.Add(AutomationElement.ControlTypeProperty);
+        cache.Add(AutomationElement.LocalizedControlTypeProperty);
+        cache.Add(AutomationElement.BoundingRectangleProperty);
+        cache.Add(AutomationElement.FrameworkIdProperty);
         cache.Add(AutomationElement.IsOffscreenProperty);
         cache.Add(AutomationElement.IsPasswordProperty);
         cache.Add(AutomationElement.IsTextPatternAvailableProperty);
-        cache.Add(AutomationElement.IsValuePatternAvailableProperty);
+        cache.Add(AutomationElement.IsGridItemPatternAvailableProperty);
+        cache.Add(ValuePattern.ValueProperty);
+        cache.Add(GridItemPattern.RowProperty);
+        cache.Add(GridItemPattern.ColumnProperty);
         return cache;
     }
 
-    internal static List<string> CaptureLines(IntPtr hwnd, CancellationToken token)
+    internal static List<string> CaptureLines(IntPtr hwnd, bool contentOnly, bool isBrowser)
     {
-        var raw = new List<string>();
-        var cache = BuildCacheRequest();
-        var sw = Stopwatch.StartNew();
+        var root = AutomationElement.FromHandle(hwnd).GetUpdatedCache(BuildCacheRequest());
         var visited = 0;
-
-        using (cache.Activate())
-        {
-            var root = AutomationElement.FromHandle(hwnd);
-            var stack = new Stack<(AutomationElement Element, int Depth)>();
-            stack.Push((root, 0));
-
-            while (stack.Count > 0 && visited < MaxNodes && sw.Elapsed < CaptureBudget && !token.IsCancellationRequested)
-            {
-                var (el, depth) = stack.Pop();
-                visited++;
-                bool descend;
-                try
-                {
-                    descend = ReadElement(el, raw);
-                }
-                catch (Exception ex) when (ex is ElementNotAvailableException or COMException or InvalidOperationException)
-                {
-                    continue;
-                }
-                if (!descend || depth >= MaxDepth) continue;
-
-                AutomationElementCollection children;
-                try
-                {
-                    // One cross-process call per parent instead of one per sibling.
-                    children = el.FindAll(TreeScope.Children, Automation.ControlViewCondition);
-                }
-                catch (Exception ex) when (ex is ElementNotAvailableException or COMException or InvalidOperationException)
-                {
-                    continue;
-                }
-                // Reverse so the stack yields children in document order.
-                for (var i = children.Count - 1; i >= 0; i--) stack.Push((children[i], depth + 1));
-            }
-        }
-
-        return RecordingMarkdown.NormalizeLines(raw);
+        var tree = BuildNode(root, 0, ref visited);
+        return tree == null ? [] : RecordingMarkdown.NormalizeLines(RecordingLayout.Render(tree, contentOnly, isBrowser));
     }
 
-    /// <summary>Collects text for one element. Returns false when its children should not be visited.</summary>
-    private static bool ReadElement(AutomationElement el, List<string> raw)
-    {
-        var info = el.Cached;
-        if (info.IsPassword) return false;
-        var type = info.ControlType;
+    private static readonly ControlType[] SkippedTypes =
         // Window chrome and scrollbars only add noise like "Minimieren" or "Zurueck um kleine Menge".
-        if (type == ControlType.TitleBar || type == ControlType.ScrollBar || type == ControlType.MenuBar
-            || type == ControlType.Thumb)
-            return false;
+        [ControlType.TitleBar, ControlType.ScrollBar, ControlType.MenuBar, ControlType.Thumb];
 
-        var name = info.Name;
-        var offscreen = info.IsOffscreen;
-
-        if ((type == ControlType.Document || type == ControlType.Edit)
-            && !offscreen
-            && (bool)el.GetCachedPropertyValue(AutomationElement.IsTextPatternAvailableProperty))
+    private static UiNode? BuildNode(AutomationElement el, int depth, ref int visited)
+    {
+        AutomationElement.AutomationElementInformation info;
+        ControlType type;
+        try
         {
-            var text = ReadVisibleText(el);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                if (type == ControlType.Edit && !string.IsNullOrWhiteSpace(name)) raw.Add($"Eingabe \"{name}\":");
-                raw.Add(text);
-                return false;
-            }
+            info = el.Cached;
+            if (info.IsPassword) return null;
+            type = info.ControlType;
         }
-
-        if (offscreen) return true;
-
-        if (type == ControlType.Edit || type == ControlType.ComboBox)
+        catch (Exception ex) when (ex is ElementNotAvailableException or COMException or InvalidOperationException)
         {
-            var value = (bool)el.GetCachedPropertyValue(AutomationElement.IsValuePatternAvailableProperty) ? ReadValue(el) : null;
-            if (!string.IsNullOrWhiteSpace(value))
-                raw.Add(string.IsNullOrWhiteSpace(name) || string.Equals(name.Trim(), value.Trim(), StringComparison.Ordinal)
-                    ? value
-                    : $"{name}: {value}");
-            else if (!string.IsNullOrWhiteSpace(name))
-                raw.Add(name);
-            return type == ControlType.ComboBox;
+            return null;
         }
+        if (Array.IndexOf(SkippedTypes, type) >= 0) return null;
 
-        if (string.IsNullOrWhiteSpace(name)) return true;
-        if (type == ControlType.Button && RecordingMarkdown.IsWindowChromeName(name)) return false;
+        // Chromium and Firefox split their TextPattern output at every inline element; their tree reads better.
+        var isWeb = info.FrameworkId is "Chrome" or "Gecko";
+        string? patternText = null;
+        if (!isWeb && (type == ControlType.Document || type == ControlType.Edit) && !info.IsOffscreen
+            && el.GetCachedPropertyValue(AutomationElement.IsTextPatternAvailableProperty) is true)
+            patternText = ReadVisibleText(el);
 
-        if (type == ControlType.Image)
-            raw.Add($"[Bild] {name}");
-        else if (type == ControlType.Text || type == ControlType.Hyperlink || type == ControlType.Button
-            || type == ControlType.ListItem || type == ControlType.TreeItem || type == ControlType.DataItem
-            || type == ControlType.HeaderItem || type == ControlType.TabItem || type == ControlType.MenuItem
-            || type == ControlType.CheckBox || type == ControlType.RadioButton || type == ControlType.Header
-            || type == ControlType.StatusBar || type == ControlType.ToolTip)
-            raw.Add(name);
-        return true;
+        var hasGridItem = el.GetCachedPropertyValue(AutomationElement.IsGridItemPatternAvailableProperty) is true;
+        var node = new UiNode
+        {
+            Type = type,
+            Name = info.Name ?? "",
+            Value = type == ControlType.Edit || type == ControlType.ComboBox
+                ? el.GetCachedPropertyValue(ValuePattern.ValueProperty, true) as string
+                : null,
+            PatternText = string.IsNullOrWhiteSpace(patternText) ? null : patternText,
+            Bounds = info.BoundingRectangle,
+            IsOffscreen = info.IsOffscreen,
+            Landmark = RecordingLayout.ClassifyLandmark(type, info.LocalizedControlType),
+            GridRow = hasGridItem && el.GetCachedPropertyValue(GridItemPattern.RowProperty, true) is int row ? row : -1,
+            GridColumn = hasGridItem && el.GetCachedPropertyValue(GridItemPattern.ColumnProperty, true) is int col ? col : -1,
+        };
+        if (node.PatternText != null || depth >= MaxDepth) return node;
+
+        AutomationElementCollection children;
+        try { children = el.CachedChildren; }
+        catch (InvalidOperationException) { return node; }
+        foreach (AutomationElement child in children)
+        {
+            if (++visited > MaxNodes) break;
+            if (BuildNode(child, depth + 1, ref visited) is { } c) node.Children.Add(c);
+        }
+        return node;
     }
 
     private static string? ReadVisibleText(AutomationElement el)
@@ -391,18 +373,6 @@ public sealed class DesktopRecorderService : IDisposable
             return sb.ToString();
         }
         catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or COMException or ArgumentException)
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadValue(AutomationElement el)
-    {
-        try
-        {
-            return el.TryGetCurrentPattern(ValuePattern.Pattern, out var obj) && obj is ValuePattern vp ? vp.Current.Value : null;
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or COMException)
         {
             return null;
         }

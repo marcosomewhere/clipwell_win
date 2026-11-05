@@ -264,10 +264,10 @@ Notizen sind eine eigene Funktion neben der Zwischenablage-History. Jede Notiz i
 
 Über das Notizblock-Symbol in der Toolbar öffnet sich ein kleines Eingabefeld am unteren Rand des Popups.
 
-- **Enter** speichert die Notiz in die Notizen.
+- **Enter** oder **Speichern** legt die Notiz in den Notizen an und übernimmt sie sofort in die KB.
 - **Shift+Enter** fügt einen Zeilenumbruch ein.
-- **Esc** schließt das Eingabefeld ohne zu speichern.
-- **Mikrofon-Symbol:** übergibt den bisherigen Text ans Notizfenster und startet dort sofort das Diktat.
+- **Esc** schließt das Eingabefeld ohne zu speichern und bricht ein laufendes Diktat ab.
+- **Mikrofon-Symbol:** startet das Diktat direkt im Eingabefeld, das Symbol wird zum roten Stopp-Quadrat. Erneut klicken beendet die Aufnahme, der erkannte Text wird an der Cursorposition eingefügt. Speichern während der Aufnahme beendet sie vorher. Unter dem Feld steht die Aufnahmedauer bzw. "Wird transkribiert".
 - **Fenster-Symbol:** öffnet das Notizfenster (mit dem bisherigen Text als neue Notiz, falls etwas eingegeben ist).
 - **Tastenkürzel:** Standard Ctrl+N (konfigurierbar)
 
@@ -329,9 +329,13 @@ Das Popup schließt sich, und ein transparentes Vollbild-Overlay erscheint. Mit 
 
 Die Desktop-Aufnahme protokolliert, was im jeweils aktiven Fenster zu sehen ist, und speichert es fortlaufend als Markdown.
 
-**Starten und beenden:** Record-Symbol (Kreis) im Popup-Kopf, Button "Aufnahme starten" im KB-Fenster oder Tray-Menü → "Desktop aufzeichnen". Während der Aufnahme ist das Symbol rot (Stopp-Quadrat), das Tray-Icon zeigt "Aufnahme läuft". Derselbe Button beendet die Aufnahme.
+**Starten und beenden:** Record-Symbol (Kreis) im Popup-Kopf, "Aufnahme starten" unter "Neue Aufnahme" links im KB-Fenster oder Tray-Menü → "Desktop aufzeichnen". Während der Aufnahme ist das Symbol rot (Stopp-Quadrat), das Tray-Icon zeigt "Aufnahme läuft". Derselbe Button beendet die Aufnahme.
 
 **Was erfasst wird:** Clipwell liest den sichtbaren Text des Vordergrundfensters über die Windows-Bedienungshilfen-Schnittstelle (UI Automation): Fenstertitel, Anwendung, sichtbarer Dokumenttext, Beschriftungen, Links, Listen, Eingabewerte und Alternativtexte von Bildern. Es werden keine Screenshots aufgenommen.
+
+**Zeilen und Tabellen:** Textstücke, die nebeneinander in einer Zeile stehen, werden zu einer Zeile zusammengesetzt; umbrochene Zeilen eines Absatzes werden wieder zu einem Absatz verbunden. Tabellen, deren Zellen ihre Position melden (z. B. HTML-Tabellen im Browser), erscheinen als Markdown-Tabelle.
+
+**Nur Seiteninhalt (Browser):** Standardmäßig schreibt Clipwell bei Browsern (Chrome, Edge, Opera, Firefox, Brave, Vivaldi u. a.) nur die URL aus der Adressleiste und den Inhalt der Webseite. Tabs, Symbolleisten und Erweiterungen entfallen; Navigations-, Kopf-, Such- und Fußbereiche der Seite werden übersprungen, Seitenleisten ans Ende gestellt. Hat die Seite einen gekennzeichneten Hauptbereich, wird nur dieser geschrieben. Einstellungen → "Desktop-Aufnahme: nur Seiteninhalt" ausschalten, um wieder alles Sichtbare zu erfassen.
 
 **Wann ein Eintrag entsteht:** Clipwell prüft das aktive Fenster alle 0,5 Sekunden. Ein Fenster- oder Titelwechsel (z. B. neuer Browser-Tab) wird erfasst, sobald er 0,5 Sekunden stabil ist. Kurzes Durchklicken erzeugt dadurch keine Einträge. Bleibst du im selben Fenster, liest Clipwell alle 2,5 Sekunden neu und schreibt nur Zeilen, die für dieses Fenster noch nicht protokolliert wurden.
 
@@ -366,9 +370,20 @@ Jede Aufnahme landet als eigene Datei in `%APPDATA%\Clipwell\recordings\` (Name 
 
 **Öffnen:** `KB`-Button im Popup-Kopf oder Tray-Menü → "KB".
 
-Links steht oben das **Dashboard**, darunter die **Gesamtübersicht**, dann die exportierten Notizen ("Notiz: ...") und alle Aufnahmen (neueste zuerst, mit Anzahl der Einträge und Dauer). Rechts erscheint das Markdown des gewählten Eintrags.
+Das Fenster nutzt dieselbe Kopfleiste und dieselben Buttons wie das Detailfenster. Links stehen oben **Dashboard** und **Gesamtübersicht**, darunter die Suche (Strg+F, über Titel, Anwendungen, Fenstertitel und Inhalt) und zwei getrennte Bereiche mit eigener Liste:
 
-Das Dashboard zeigt die KB als Instrumententafel: Sieben-Segment-Zähler für Artikel in der KB (exportierte Notizen plus Aufnahmen), Notizen, Aufnahmen und Zwischenablage-Einträge; vier Analog-Instrumente für die laufende bzw. letzte Aufnahme (erfasste Bildwechsel, Fenster, Anwendungen, Minuten) samt Statusanzeige "AUFNAHME LÄUFT" oder "INAKTIV"; Kacheln mit erfassten Inhalten je Anwendung und kopierten Inhalten je Webseite; darunter alle gespeicherten Artikel, ein Klick öffnet den Artikel. Kopieren und Exportieren liefern auf dem Dashboard das Markdown der Gesamtübersicht.
+- **Sprachnotizen:** in die KB übernommene Notizen, neueste zuerst.
+- **Bildschirmaufnahmen:** Desktop-Aufnahmen, benannt nach den erfassten Anwendungen, mit Startzeit, Anzahl der Einträge und Dauer.
+
+Ein Klick auf einen Bereichskopf oder einen Eintrag macht den Bereich aktiv (orange umrandet). Nur für den aktiven Bereich erscheint unten das passende Eingabefeld.
+
+**Auswahl:** Ein Klick wählt einen Artikel, Strg+Klick und Umschalt+Klick erweitern die Auswahl, auch über beide Bereiche hinweg. "Alle auswählen" im Bereichskopf fügt alle Artikel des Bereichs hinzu, "Alle"/"Keine" unten gelten für beide Bereiche. Rechts erscheint das Markdown des gewählten Artikels, bei mehreren eine zusammengefasste Vorschau.
+
+**Neue Bildschirmaufnahme** (Bereich Bildschirmaufnahmen aktiv): "Aufnahme starten" beginnt die Aufnahme und wählt sie aus, sodass neue Einträge rechts live mitlaufen. Darunter stehen Startzeit, Laufzeit und Anzahl der Einträge; derselbe Button beendet die Aufnahme.
+
+**Neue Sprachnotiz** (Bereich Sprachnotizen aktiv): mit "Diktieren" sprechen oder tippen (erneut klicken beendet das Diktat, der Text landet an der Cursorposition). "Speichern" oder Strg+Enter legt die Notiz in den Notizen an, übernimmt sie sofort in die KB und wählt sie aus. Esc bricht ein laufendes Diktat ab.
+
+Das Dashboard zeigt die KB als Instrumententafel: Sieben-Segment-Zähler für Artikel in der KB, Sprachnotizen, Bildschirmaufnahmen und Zwischenablage-Einträge; vier Analog-Instrumente für die laufende bzw. letzte Bildschirmaufnahme (erfasste Bildwechsel, Fenster, Anwendungen, Minuten); Kacheln mit erfassten Inhalten je Anwendung und kopierten Inhalten je Webseite. Der Aufnahmestatus steht in der Kopfleiste. Kopieren liefert auf dem Dashboard das Markdown der Gesamtübersicht.
 
 Die Gesamtübersicht fasst alles zusammen:
 
@@ -376,7 +391,15 @@ Die Gesamtübersicht fasst alles zusammen:
 - **Notizen:** Anzahl und Liste der in die KB exportierten Notizen.
 - **Desktop-Aufnahmen:** Anzahl, erfasste Bildwechsel, Gesamtdauer, häufigste Anwendungen und je Aufnahme die besuchten Fenster.
 
-Buttons: Aufnahme starten/beenden, Aktualisieren, Kopieren (landet nicht in der History), Exportieren als `.md`, Ordner öffnen (Clipwell-Datenordner) und Löschen des gewählten Eintrags: bei einer Aufnahme die Datei (nicht während sie läuft), bei einer Notiz nur die KB-Fassung. Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das KB-Fenster automatisch.
+Buttons oben: Kopieren (angezeigtes Markdown, landet nicht in der History), Exportieren (Strg+E), Löschen (Entf), Aktualisieren (F5), Datenordner öffnen und Schließen (Esc).
+
+**Exportieren** gilt für die ausgewählten Artikel, ohne Auswahl für alle angezeigten. Der Dialog bietet:
+
+- **Zusammengefasstes Markdown:** eine `.md`-Datei mit Inhaltsverzeichnis und allen Artikeln hintereinander (Überschriften eine Ebene tiefer).
+- **Alles als ZIP:** jede Sprachnotiz und Bildschirmaufnahme als eigene `.md`-Datei in den Ordnern `sprachnotizen` und `bildschirmaufnahmen`.
+- **Gesamtübersicht beilegen:** als eigener Abschnitt bzw. als `uebersicht.md` im ZIP.
+
+**Löschen** wirkt auf alle ausgewählten Artikel: Bildschirmaufnahmen werden als Datei gelöscht (nicht die laufende), Sprachnotizen nur in ihrer KB-Fassung. Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das KB-Fenster automatisch.
 
 ---
 

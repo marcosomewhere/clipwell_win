@@ -82,7 +82,7 @@ Test:
 dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Current suite: 148 xUnit v3 tests.
+Current suite: 182 xUnit v3 tests.
 
 Portable single-file build:
 

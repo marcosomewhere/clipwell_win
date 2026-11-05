@@ -71,6 +71,14 @@ public partial class NotesWindow : Window
         Editor.Focus();
     }
 
+    /// <summary>Shows a note that was created elsewhere (quick note) without touching the open editor.</summary>
+    internal void AddExternalNote(Note note)
+    {
+        if (_notes.Any(n => n.Id == note.Id)) return;
+        _notes.Insert(0, note);
+        RefreshList(_current);
+    }
+
     private void LoadNotes(string? selectId)
     {
         try

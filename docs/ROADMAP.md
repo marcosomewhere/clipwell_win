@@ -67,7 +67,7 @@ Abgeleitet aus Code und Handbuch (Stand 2026-11-05), nicht aus Nutzertests. Prio
 | Niedrig | Echter Gaussian Blur im Bildeditor | Graue Ueberlagerung | Siehe Bekannte Grenzen in `STATUS.md` |
 | Mittel | Desktop-Aufnahme: Ausschlussliste fuer Apps/Fenstertitel und einstellbare Ruhezeit | Feste Werte (500 ms Takt, 500 ms Ruhe, 2,5 s Nachlesen), nur Clipwell und Passwortfelder ausgeschlossen | Settings-Seite "Aufnahme" |
 | Niedrig | Desktop-Aufnahme: optionaler OCR-Snapshot fuer textlose Inhalte | Nur UI Automation | Pixelaufnahme kann Corporate-Screen-Capture-Alarme ausloesen; nur als expliziter Einzelklick |
-| Niedrig | KB-Fenster: gerenderte Markdown-Vorschau und Suche ueber alle Aufnahmen | Rohes Markdown, keine Suche | Renderer aus dem Detailfenster wiederverwenden |
+| Niedrig | KB-Fenster: gerenderte Markdown-Vorschau | Rohes Markdown (Suche, Filter, Gruppierung und Mehrfachexport vorhanden) | Renderer aus dem Detailfenster wiederverwenden |
 | Mittel | Diktat: Live-Text waehrend des Sprechens und globaler Diktat-Hotkey | Transkription erst nach dem Stoppen, Start per Button/Strg+D/Tray | Whisper in Abschnitten (z. B. 5 s mit Ueberlappung) verarbeiten |
 | Niedrig | Notizen: Markdown-Vorschau, Tags und Uebernahme alter `NOTE`-History-Eintraege | Rohtext-Editor, alte Schnellnotizen bleiben in der History | Migration nur auf Wunsch |
 

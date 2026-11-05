@@ -29,7 +29,7 @@ dotnet publish ClipwellWin\ClipwellWin.csproj -c Release -r win-x64 --self-conta
 dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Aktuell: 148 Tests (xUnit v3 4.0.2 auf Microsoft Testing Platform, per `global.json` aktiviert). Release-Build und Tests sind Pflicht nach jeder Codeaenderung.
+Aktuell: 182 Tests (xUnit v3 4.0.2 auf Microsoft Testing Platform, per `global.json` aktiviert). Release-Build und Tests sind Pflicht nach jeder Codeaenderung.
 
 Dependency-Sicherheitsstatus: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wurde per `Microsoft.Data.Sqlite` 10.0.14 plus direktem `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 Override bereinigt; keine verwundbaren Pakete (auch transitiv, inkl. Whisper.net). Bei erneuten NuGet-Warnungen Status dokumentieren und separat per Dependency-Update bereinigen.
 
@@ -65,24 +65,24 @@ Dependency-Sicherheitsstatus: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wurde
 
 | Bereich | Dateien |
 | --- | --- |
-| Views | `PopupWindow`, `DetailWindow`, `SettingsWindow`, `OnboardingWindow`, `PinboardWindow`, `EyedropperWindow`, `KnowledgeBaseWindow`, `NotesWindow`, Helfer `DragGhost` und `KbInstruments` |
+| Views | `PopupWindow`, `DetailWindow`, `SettingsWindow`, `OnboardingWindow`, `PinboardWindow`, `EyedropperWindow`, `KnowledgeBaseWindow`, `KbExportDialog`, `NotesWindow`, Helfer `DragGhost`, `KbInstruments`, `InlineDictation` (Diktat direkt in ein Eingabefeld) und `EditorChrome` (gemeinsame Kopfleisten-Stile, `EditorChrome.xaml`) |
 | ViewModels | `PopupViewModel`, `EntryViewModel`, `ViewModelBase` |
-| Services | `DatabaseService`, `ClipboardProcessor`, `SyntaxService`, `ContentKindService`, `OcrService`, `UrlPreviewService`, `HtmlMarkdownConverter`, `ImageUtils`, `SettingsService`, `MessageWindowService`, `DesktopRecorderService`, `RecordingMarkdown`, `KnowledgeSummaryBuilder`, `KnowledgeDashboard`, `NoteStore`, `DictationService`, `MicrophoneRecorder` |
+| Services | `DatabaseService`, `ClipboardProcessor`, `SyntaxService`, `ContentKindService`, `OcrService`, `UrlPreviewService`, `HtmlMarkdownConverter`, `ImageUtils`, `SettingsService`, `MessageWindowService`, `DesktopRecorderService`, `RecordingLayout`, `RecordingMarkdown`, `KnowledgeSummaryBuilder`, `KnowledgeDashboard`, `KnowledgeExport`, `NoteStore`, `DictationService`, `MicrophoneRecorder` |
 | Models | `ClipboardEntry`, `AppSettings`, `EntryType`, `ThemeMode`, `HotkeyAction`, `CodeDetectionMode` |
 | Infrastruktur | `App.xaml.cs`, `NativeMethods.cs`, `Converters/Converters.cs`, `Services/AppPaths.cs` |
 
 ## Aktuelle Funktionen
 
 - Tray-App mit Single-Instance-Mutex und Hotkey-Fallbacks.
-- Popup mit Filter-Chips, Suche, Gruppen, Bulk-Aktionen, Schnellnotiz (speichert in die Notizen, nicht in die History), Pinboard und Eyedropper.
+- Popup mit Filter-Chips, Suche, Gruppen, Bulk-Aktionen, Schnellnotiz mit direktem Diktat (speichert in die Notizen und sofort in die KB, nicht in die History), Pinboard und Eyedropper.
 - Detailfenster mit editierbarem Text-/Code-Minieditor, Bildeditor, OCR-Ansicht und Farbdetails.
 - URL-Eintraege mit Browser-Sprung im Popup, Kontextmenue und Detailfenster.
 - Code-Eintraege zeigen als Badge nur `CODE`; die konkrete Sprache bleibt separat fuer Highlighting und Export.
 - SQLite-History mit WAL, URL-Cache, Export/Import, Auto-Backup, SecureDelete und Speicherlimits.
 - Datenschutz: Ueberwachung pausieren (Tray), URL-Preview-Opt-out und Private-/Loopback-Schutz.
-- Desktop-Aufnahme (Record-Button im Popup, KB-Fenster, Tray): liest sichtbaren Text des Vordergrundfensters per UI Automation (keine Pixel, kein Screen-Capture), schreibt jeden stabilen Wechsel als Markdown nach `recordings`. Clipwell-eigene Fenster und Passwortfelder werden uebersprungen, Monitoring-Pause gilt auch hier.
+- Desktop-Aufnahme (Record-Button im Popup, KB-Fenster, Tray): liest sichtbaren Text des Vordergrundfensters per UI Automation (keine Pixel, kein Screen-Capture), setzt Fragmente nach Bildschirmposition zu Zeilen und Absaetzen zusammen, Tabellen mit Zellpositionen werden Markdown-Tabellen (`RecordingLayout`), und schreibt jeden stabilen Wechsel als Markdown nach `recordings`. Browser standardmaessig nur URL plus Seiteninhalt (Einstellung "Desktop-Aufnahme: nur Seiteninhalt"). Clipwell-eigene Fenster und Passwortfelder werden uebersprungen, Monitoring-Pause gilt auch hier.
 - Notizen als eigene Funktion (`NotesWindow`, Tray-Untermenue "Notizen", Schnellnotiz-Panel im Popup): Markdown-Dateien mit Autosave, Suche, Diktat per Whisper (lokal, Mikrofon per waveIn, Base-Modell mitgeliefert, Small/Medium nach Rueckfrage geladen) und "In KB exportieren" (Schnappschuss nach `kb\notes`).
-- KB-Fenster (`KB`-Button im Popup, Tray "KB"): Dashboard mit Sieben-Segment-Zaehlern, Analog-Instrumenten zur aktuellen Aufnahme, Bibliotheksstatistik nach Anwendung/Webseite und Artikelliste (`KnowledgeDashboard`, `Views\KbInstruments.cs`), dazu Gesamtuebersicht ueber Clipboard-History, exportierte Notizen und alle Aufnahmen plus Einzelansicht je Notiz/Aufnahme, kopier- und exportierbar.
+- KB-Fenster (`KB`-Button im Popup, Tray "KB"): Dashboard mit Sieben-Segment-Zaehlern, Analog-Instrumenten zur aktuellen Aufnahme, Bibliotheksstatistik nach Anwendung/Webseite (`KnowledgeDashboard`, `ViewsKbInstruments.cs`), Gesamtuebersicht ueber Clipboard-History, Sprachnotizen und Bildschirmaufnahmen, links zwei getrennte Bereiche "Sprachnotizen" und "Bildschirmaufnahmen" mit Suche und bereichsuebergreifender Mehrfachauswahl; unten erscheint nur fuer den aktiven Bereich "Neue Sprachnotiz" (Diktat, `NoteStore.CreateInKb`) bzw. "Neue Bildschirmaufnahme". Export der Auswahl als zusammengefasstes Markdown oder ZIP (`KnowledgeExport`, `KbExportDialog`). Kopfleiste und Buttons wie im Detailfenster (`EditorChrome`). In der KB heissen Notizen "Sprachnotizen" und Desktop-Aufnahmen "Bildschirmaufnahmen".
 
 ## Clipboard-Event-Kette
 

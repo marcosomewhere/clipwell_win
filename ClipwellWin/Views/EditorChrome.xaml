@@ -1,0 +1,189 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Same look as the detail window header. EditorChrome.ApplyTheme swaps the brushes for the light theme. -->
+    <SolidColorBrush x:Key="EditorChromeBrush" Color="#0A0A0A" />
+    <SolidColorBrush x:Key="EditorPanelBrush" Color="#121212" />
+    <SolidColorBrush x:Key="EditorPanelAltBrush" Color="#191919" />
+    <SolidColorBrush x:Key="EditorBorderBrush" Color="#262626" />
+    <SolidColorBrush x:Key="EditorMutedBrush" Color="#9A9A9A" />
+    <SolidColorBrush x:Key="EditorHoverBrush" Color="#202020" />
+    <SolidColorBrush x:Key="EditorPressedBrush" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="EditorSelectedBrush" Color="#2B2016" />
+    <SolidColorBrush x:Key="EditorTextBodyBrush" Color="#0A0A0A" />
+    <SolidColorBrush x:Key="EditorTextBrush" Color="#EDEDED" />
+    <SolidColorBrush x:Key="EditorTextMutedBrush" Color="#8A8A8A" />
+    <SolidColorBrush x:Key="EditorSelectionTextBrush" Color="#0A0A0A" />
+
+    <!-- Empty on purpose: overrides the WPF-UI TextBlock style so text inherits its Foreground. -->
+    <Style TargetType="TextBlock" />
+
+    <Style x:Key="EditorButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource EditorPanelAltBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorPressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PrimaryEditorButtonStyle" TargetType="Button" BasedOn="{StaticResource EditorButtonStyle}">
+        <Setter Property="Background" Value="{DynamicResource OnboardingAccentBrush}" />
+        <Setter Property="Foreground" Value="#111418" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+    </Style>
+
+    <Style x:Key="IconEditorButtonStyle" TargetType="Button" BasedOn="{StaticResource EditorButtonStyle}">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Width" Value="32" />
+    </Style>
+
+    <!-- Chip-style toggle for filters and navigation entries. -->
+    <Style x:Key="ChipRadioStyle" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{DynamicResource EditorPanelAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource OnboardingAccentBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                            <Setter Property="Foreground" Value="#111418" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Left-aligned navigation entry (Dashboard, Gesamtübersicht). -->
+    <Style x:Key="NavRadioStyle" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
+                            BorderThickness="1" CornerRadius="4" Padding="10,7">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorSelectedBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="EditorTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{DynamicResource EditorTextBodyBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource EditorTextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CaretBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+        <Setter Property="SelectionTextBrush" Value="{DynamicResource EditorSelectionTextBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}"
+                                      VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="EditorCheckBoxStyle" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Box" Width="16" Height="16" CornerRadius="3" Margin="0,1,8,0" VerticalAlignment="Top"
+                                Background="{DynamicResource EditorPanelAltBrush}"
+                                BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="1">
+                            <TextBlock x:Name="Mark" Text="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="10"
+                                       Foreground="#111418" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="Collapsed" />
+                        </Border>
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{DynamicResource OnboardingAccentBrush}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                            <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

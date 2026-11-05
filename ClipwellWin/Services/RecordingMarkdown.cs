@@ -25,7 +25,7 @@ public static partial class RecordingMarkdown
     public const string FileTimestampFormat = "yyyy-MM-dd_HH-mm-ss";
     private const string TimeFormat = "HH:mm:ss";
     private const string DateTimeFormat = "yyyy-MM-dd HH:mm:ss";
-    private const int MaxLineLength = 500;
+    private const int MaxLineLength = 2000;
     public const int MaxLinesPerSnapshot = 400;
     private const double FullContentOverlapThreshold = 0.3;
 
@@ -40,6 +40,9 @@ public static partial class RecordingMarkdown
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
+
+    [GeneratedRegex(@"^\|(?: ?:?-{3,}:? ?\|)+$")]
+    private static partial Regex TableSeparatorRegex();
 
     public static string FileNameFor(DateTime start)
         => start.ToString(FileTimestampFormat, CultureInfo.InvariantCulture) + ".md";
@@ -77,9 +80,12 @@ public static partial class RecordingMarkdown
             {
                 // U+FFFC is the placeholder Chromium reports for embedded objects.
                 var line = WhitespaceRegex().Replace(part.Replace('￼', ' '), " ").Trim();
-                if (line.Length == 0 || !line.Any(char.IsLetterOrDigit)) continue;
+                if (line.Length == 0) continue;
+                // Every table repeats the same separator row, so it is exempt from the duplicate check.
+                var separator = TableSeparatorRegex().IsMatch(line);
+                if (!separator && !line.Any(char.IsLetterOrDigit)) continue;
                 if (line.Length > MaxLineLength) line = line[..MaxLineLength] + "…";
-                if (!seen.Add(line)) continue;
+                if (!separator && !seen.Add(line)) continue;
                 result.Add(line);
                 if (result.Count >= MaxLinesPerSnapshot) return result;
             }
@@ -176,9 +182,23 @@ public static partial class RecordingMarkdown
         return sb.ToString();
     }
 
+    public static bool IsTableLine(string line)
+        => line.Length > 1 && line[0] == '|' && line[^1] == '|';
+
+    /// <summary>Writes lines as a bullet list; Markdown table rows are written as is, set off from bullets by a blank line.</summary>
     private static void AppendBullets(StringBuilder sb, IEnumerable<string> lines)
     {
-        foreach (var line in lines) sb.Append("- ").Append(line).Append('\n');
+        var inTable = false;
+        var first = true;
+        foreach (var line in lines)
+        {
+            var table = IsTableLine(line);
+            if (table != inTable && !first) sb.Append('\n');
+            inTable = table;
+            first = false;
+            if (!table) sb.Append("- ");
+            sb.Append(line).Append('\n');
+        }
         sb.Append('\n');
     }
 

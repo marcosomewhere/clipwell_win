@@ -38,6 +38,9 @@ public class AppSettings
 
     public bool UrlPreviewEnabled { get; set; } = true;
 
+    /// <summary>Desktop recording keeps only URL and page content of browser windows.</summary>
+    public bool RecordingContentOnly { get; set; } = true;
+
     public double PopupWidth { get; set; } = 560;
     public double PopupHeight { get; set; } = 720;
 

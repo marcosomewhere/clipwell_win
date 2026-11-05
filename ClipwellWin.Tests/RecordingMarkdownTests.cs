@@ -48,6 +48,23 @@ public class RecordingMarkdownTests
     }
 
     [Fact]
+    public void NormalizeLines_KeepsRepeatedTableSeparators()
+    {
+        var lines = RecordingMarkdown.NormalizeLines(["| a | b |", "| --- | --- |", "| c | d |", "| --- | --- |"]);
+
+        Assert.Equal(["| a | b |", "| --- | --- |", "| c | d |", "| --- | --- |"], lines);
+    }
+
+    [Fact]
+    public void FormatSnapshot_WritesTableRowsWithoutBullets()
+    {
+        var md = RecordingMarkdown.FormatSnapshot(Start, "Opera", "Seite",
+            ["Intro", "| a | b |", "| --- | --- |", "| c | d |", "Schluss"], null, null);
+
+        Assert.Contains("- Intro\n\n| a | b |\n| --- | --- |\n| c | d |\n\n- Schluss\n\n", md);
+    }
+
+    [Fact]
     public void NormalizeLines_DropsObjectPlaceholdersAndSymbolOnlyLines()
     {
         var lines = RecordingMarkdown.NormalizeLines(["￼", " - | ", "￼ Chat", "11:45:28"]);
