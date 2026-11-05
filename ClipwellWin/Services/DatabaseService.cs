@@ -746,7 +746,7 @@ public class DatabaseService : IDisposable
     {
         var entries = LoadAll();
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("# Clipwell History Export");
+        sb.AppendLine($"# {AppNames.App} History Export");
         sb.AppendLine();
         sb.AppendLine($"Exportiert: {DateTime.Now:dd.MM.yyyy HH:mm}  ");
         sb.AppendLine($"Eintraege: {entries.Count}");

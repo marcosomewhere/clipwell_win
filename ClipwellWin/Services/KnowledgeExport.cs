@@ -32,7 +32,7 @@ public static class KnowledgeExport
 
     public static string KindLabel(KbArticleKind kind) => kind switch
     {
-        KbArticleKind.Note => "Sprachnotizen",
+        KbArticleKind.Note => AppNames.VoiceNotes,
         KbArticleKind.Recording => "Bildschirmaufnahmen",
         _ => "Zwischenablage",
     };
@@ -113,7 +113,7 @@ public static class KnowledgeExport
     public static string BuildCombined(IReadOnlyList<KbArticle> articles, DateTime now, string? overview = null)
     {
         var sb = new StringBuilder();
-        sb.Append("# Clipwell KB - Export\n\n");
+        sb.Append("# ").Append(AppNames.KnowledgeBase).Append(" - Export\n\n");
         sb.Append("Stand: ").Append(now.ToString("dd.MM.yyyy HH:mm", De)).Append('\n');
         sb.Append("Artikel: ").Append(articles.Count.ToString(De)).Append("\n\n");
 

@@ -43,7 +43,7 @@ public class KnowledgeExportTests
 
         var md = KnowledgeExport.BuildCombined(articles, new DateTime(2026, 11, 5, 12, 0, 0), "# Übersicht\n\nText");
 
-        Assert.StartsWith("# Clipwell KB - Export\n", md);
+        Assert.StartsWith("# Ideenkombinat - Export\n", md);
         Assert.Contains("Artikel: 2", md);
         Assert.Contains("1. Sprachnotiz: Einkauf (05.11.2026 09:00)", md);
         Assert.Contains("2. Bildschirmaufnahme: Edge (04.11.2026 08:30)", md);
@@ -73,7 +73,7 @@ public class KnowledgeExportTests
 
             using var zip = ZipFile.OpenRead(zipPath);
             var names = zip.Entries.Select(e => e.FullName).OrderBy(n => n, StringComparer.Ordinal).ToList();
-            Assert.Equal(["bildschirmaufnahmen/rec.md", "sprachnotizen/same-2.md", "sprachnotizen/same.md", "uebersicht.md",
+            Assert.Equal(["bildschirmaufnahmen/rec.md", "sprechwerk/same-2.md", "sprechwerk/same.md", "uebersicht.md",
                 "zwischenablage/2026-11-05_00-00-00_7.md"], names);
             using var reader = new StreamReader(zip.GetEntry("bildschirmaufnahmen/rec.md")!.Open());
             Assert.Equal("Aufnahme\nZeile", reader.ReadToEnd());

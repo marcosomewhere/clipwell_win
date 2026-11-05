@@ -209,7 +209,7 @@ public partial class KnowledgeBaseWindow
         {
             App.LogCrash(ex);
             if (_semanticClosed) return;
-            MessageBox.Show(this, $"Modell konnte nicht geladen werden: {ex.Message}", "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"Modell konnte nicht geladen werden: {ex.Message}", AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -225,7 +225,7 @@ public partial class KnowledgeBaseWindow
             "Alle gespeicherten Vektoren der semantischen Suche löschen?\n\n" +
             "Zwischenablage, Sprachnotizen und Bildschirmaufnahmen bleiben unverändert. " +
             "Der Index wird bei der nächsten Suche oder beim nächsten Öffnen neu aufgebaut.",
-            "Clipwell", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            AppNames.App, MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
 
         _semanticSyncCts?.Cancel();
@@ -369,7 +369,7 @@ public partial class KnowledgeBaseWindow
 
     private string EmptySearchText()
         => _semanticModelInstalled
-            ? "Noch nichts indiziert. Die Suche umfasst Zwischenablage (Text, Code, URLs, OCR-Text von Bildern), Sprachnotizen der KB und Bildschirmaufnahmen."
+            ? $"Noch nichts indiziert. Die Suche umfasst Zwischenablage (Text, Code, URLs, OCR-Text von Bildern), Sprachnotizen im {AppNames.KnowledgeBase} und Bildschirmaufnahmen."
             : "Für die semantische Suche zuerst oben das Modell laden.";
 
     // ---- Results ---------------------------------------------------------------------------------------------
@@ -497,7 +497,7 @@ public partial class KnowledgeBaseWindow
         {
             StatusLabel.Text = c.Source == SemanticSource.Clipboard
                 ? "Der Eintrag ist nicht mehr in der Zwischenablage-History."
-                : "Der Artikel ist nicht mehr in der KB.";
+                : $"Der Artikel ist nicht mehr im {AppNames.KnowledgeBase}.";
             return;
         }
         if (!FilterItem(item))

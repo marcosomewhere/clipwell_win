@@ -108,7 +108,7 @@ public sealed class NoteStoreTests : IDisposable
 
         var md = KnowledgeSummaryBuilder.Build([], [], Now, notes);
 
-        Assert.Contains("## Notizen\n\n- Exportierte Notizen: 1\n\n- 05.11.2026 09:15 · Idee Projekt X\n", md);
+        Assert.Contains("## Sprechwerk\n\n- Exportierte Notizen: 1\n\n- 05.11.2026 09:15 · Idee Projekt X\n", md);
     }
 
     [Theory]

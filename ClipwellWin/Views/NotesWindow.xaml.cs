@@ -108,13 +108,13 @@ public partial class NotesWindow : Window
         NoteList.ItemsSource = items;
         NoteList.SelectedItem = select == null ? null : items.FirstOrDefault(i => i.Note == select);
         _suppressEvents = false;
-        StatusLabel.Text = $"{_notes.Count} Notizen · Ordner: {AppPaths.NotesDir}";
+        StatusLabel.Text = $"{_notes.Count} Sprachnotizen · Ordner: {AppPaths.NotesDir}";
     }
 
     private static string Subtitle(Note n)
     {
         var text = n.Modified.ToString("dd.MM.yyyy HH:mm", De);
-        if (n.IsInKb) text += n.KbOutdated ? " · KB veraltet" : " · in KB";
+        if (n.IsInKb) text += n.KbOutdated ? $" · {AppNames.KnowledgeBase} veraltet" : $" · im {AppNames.KnowledgeBase}";
         return text;
     }
 
@@ -153,9 +153,9 @@ public partial class NotesWindow : Window
         KbButton.IsEnabled = _current != null || Editor.Text.Trim().Length > 0;
         KbLabel.Text = _current switch
         {
-            { IsInKb: true } when _dirty || _current.KbOutdated => "KB aktualisieren",
-            { IsInKb: true } => "In KB",
-            _ => "In KB exportieren",
+            { IsInKb: true } when _dirty || _current.KbOutdated => $"{AppNames.KnowledgeBase} aktualisieren",
+            { IsInKb: true } => $"Im {AppNames.KnowledgeBase}",
+            _ => $"Ins {AppNames.KnowledgeBase}",
         };
     }
 
@@ -299,14 +299,14 @@ public partial class NotesWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Export in die KB fehlgeschlagen: {ex.Message}", "Clipwell",
+            MessageBox.Show(this, $"Export ins {AppNames.KnowledgeBase} fehlgeschlagen: {ex.Message}", AppNames.App,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         RefreshList(_current);
         UpdateEditorState();
         _app.NotifyKnowledgeBaseChanged();
-        StatusLabel.Text = "In die KB exportiert.";
+        StatusLabel.Text = $"Ins {AppNames.KnowledgeBase} übernommen.";
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)
@@ -333,9 +333,9 @@ public partial class NotesWindow : Window
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (_current == null) return;
-        var hint = _current.IsInKb ? "\n\nDie in die KB exportierte Fassung bleibt erhalten." : "";
+        var hint = _current.IsInKb ? $"\n\nDie Fassung im {AppNames.KnowledgeBase} bleibt erhalten." : "";
         var answer = MessageBox.Show(this, $"Notiz \"{_current.Title}\" endgültig löschen?{hint}",
-            "Clipwell", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            AppNames.App, MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
         try
         {
@@ -343,7 +343,7 @@ public partial class NotesWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Löschen fehlgeschlagen: {ex.Message}", "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"Löschen fehlgeschlagen: {ex.Message}", AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         _notes.Remove(_current);

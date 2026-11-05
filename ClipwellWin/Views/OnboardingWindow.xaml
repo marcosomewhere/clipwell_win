@@ -1,7 +1,7 @@
 <Window x:Class="ClipwellWin.Views.OnboardingWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clipwell - Willkommen"
+        Title="Merkautomat – Willkommen"
         Width="760" Height="620"
         MinWidth="720" MinHeight="580"
         WindowStyle="SingleBorderWindow"
@@ -95,11 +95,11 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,18">
-            <TextBlock Text="Willkommen bei Clipwell"
+            <TextBlock Text="Willkommen beim Merkautomat"
                        FontSize="24"
                        FontWeight="SemiBold"
                        Margin="0,0,0,6" />
-            <TextBlock Text="Richte den globalen Hotkey ein. Danach läuft Clipwell im Infobereich neben der Uhr."
+            <TextBlock Text="Richte den globalen Hotkey ein. Danach läuft der Merkautomat im Infobereich neben der Uhr."
                        FontSize="13"
                        Style="{StaticResource MutedText}" />
         </StackPanel>
@@ -229,7 +229,7 @@
                                    FontSize="14"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,6" />
-                        <TextBlock Text="Nach dem Start findest du Clipwell im Infobereich. Rechtsklick öffnet Menü, Einstellungen und Beenden."
+                        <TextBlock Text="Nach dem Start findest du den Merkautomat im Infobereich. Rechtsklick öffnet Menü, Kontrollstation und Beenden."
                                    FontSize="12"
                                    Style="{StaticResource MutedText}" />
                     </StackPanel>
@@ -250,7 +250,7 @@
             <StackPanel Grid.Column="1"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right">
-                <Button Content="Einstellungen"
+                <Button Content="Kontrollstation"
                         MinWidth="116"
                         Height="38"
                         Margin="0,0,10,0"

@@ -2723,7 +2723,7 @@ public partial class DetailWindow : Window
 
     private static string BuildPlainTextHtml(string text, string? title)
     {
-        var safeTitle = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(title) ? "Clipwell Export" : title);
+        var safeTitle = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(title) ? $"{AppNames.App} Export" : title);
         var body = System.Net.WebUtility.HtmlEncode(text).Replace("\r\n", "\n").Replace("\n", "<br>\r\n");
         return $$"""
             <!DOCTYPE html>

@@ -15,7 +15,7 @@ public static class KnowledgeSummaryBuilder
         IReadOnlyList<KbNote>? notes = null)
     {
         var sb = new StringBuilder();
-        sb.Append("# Clipwell KB - Gesamtübersicht\n\n");
+        sb.Append("# ").Append(AppNames.KnowledgeBase).Append(" - Gesamtübersicht\n\n");
         sb.Append("Stand: ").Append(now.ToString("dd.MM.yyyy HH:mm", De)).Append("\n\n");
 
         AppendClipboard(sb, entries, now);
@@ -104,10 +104,10 @@ public static class KnowledgeSummaryBuilder
 
     private static void AppendNotes(StringBuilder sb, IReadOnlyList<KbNote> notes)
     {
-        sb.Append("## Notizen\n\n");
+        sb.Append("## ").Append(AppNames.VoiceNotes).Append("\n\n");
         if (notes.Count == 0)
         {
-            sb.Append("Noch keine Notizen in der KB. Im Notizfenster über \"In KB exportieren\" übernehmen.\n\n");
+            sb.Append($"Noch keine Sprachnotizen im {AppNames.KnowledgeBase}. Im {AppNames.VoiceNotes} über \"Ins {AppNames.KnowledgeBase}\" übernehmen.\n\n");
             return;
         }
 
@@ -122,7 +122,7 @@ public static class KnowledgeSummaryBuilder
         sb.Append("## Desktop-Aufnahmen\n\n");
         if (sessions.Count == 0)
         {
-            sb.Append("Noch keine Aufnahmen. Aufnahme über den Record-Button im Popup, im KB-Fenster oder im Tray starten.\n");
+            sb.Append($"Noch keine Aufnahmen. Aufnahme über den Record-Button im Popup, im {AppNames.KnowledgeBase} oder im Tray starten.\n");
             return;
         }
 

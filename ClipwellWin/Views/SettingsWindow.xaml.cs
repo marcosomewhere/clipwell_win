@@ -316,7 +316,7 @@ public partial class SettingsWindow : FluentWindow
         {
             Title    = "History als JSON exportieren",
             Filter   = "JSON-Datei|*.json",
-            FileName = $"clipwell-history-{DateTime.Now:yyyyMMdd-HHmmss}.json",
+            FileName = $"merkautomat-history-{DateTime.Now:yyyyMMdd-HHmmss}.json",
         };
         if (dlg.ShowDialog() != true) return;
         try
@@ -333,7 +333,7 @@ public partial class SettingsWindow : FluentWindow
         {
             Title    = "History als SQLite-Backup exportieren",
             Filter   = "SQLite-Datenbank|*.db",
-            FileName = $"clipwell-backup-{DateTime.Now:yyyyMMdd-HHmmss}.db",
+            FileName = $"merkautomat-backup-{DateTime.Now:yyyyMMdd-HHmmss}.db",
         };
         if (dlg.ShowDialog() != true) return;
         try
@@ -350,7 +350,7 @@ public partial class SettingsWindow : FluentWindow
         {
             Title    = "History als CSV exportieren",
             Filter   = "CSV-Datei|*.csv",
-            FileName = $"clipwell-history-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+            FileName = $"merkautomat-history-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
         };
         if (dlg.ShowDialog() != true) return;
         try
@@ -367,7 +367,7 @@ public partial class SettingsWindow : FluentWindow
         {
             Title    = "History als Markdown exportieren",
             Filter   = "Markdown-Datei|*.md",
-            FileName = $"clipwell-history-{DateTime.Now:yyyyMMdd-HHmmss}.md",
+            FileName = $"merkautomat-history-{DateTime.Now:yyyyMMdd-HHmmss}.md",
         };
         if (dlg.ShowDialog() != true) return;
         try
@@ -391,7 +391,7 @@ public partial class SettingsWindow : FluentWindow
             var (count, skipped, errors) = _app.Database.ImportFromJsonDetailed(dlg.FileName);
             var msg = $"{count} Einträge importiert";
             if (skipped > 0) msg += $", {skipped} Duplikate übersprungen";
-            msg += ". Bitte Clipwell neu starten.";
+            msg += $". Bitte {AppNames.App} neu starten.";
             if (errors.Count > 0)
                 msg += $"\n\nWarnungen ({errors.Count}):\n" + string.Join("\n", errors.Take(5));
             ShowInfo(msg);
@@ -456,7 +456,7 @@ public partial class SettingsWindow : FluentWindow
         System.IO.File.WriteAllText(path, json);
         _skipSaveOnClose = true;
 
-        ShowInfo("Einstellungen zurückgesetzt. Bitte Clipwell neu starten.");
+        ShowInfo($"Einstellungen zurückgesetzt. Bitte {AppNames.App} neu starten.");
     }
 
     private void AutoBackupSwitch_Click(object sender, RoutedEventArgs e)
@@ -565,8 +565,8 @@ public partial class SettingsWindow : FluentWindow
         => Process.Start(new ProcessStartInfo("https://github.com/marcosomewhere/clipwell_win") { UseShellExecute = true });
 
     private void ShowError(string msg) =>
-        MessageBox.Show(msg, "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageBox.Show(msg, AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
 
     private void ShowInfo(string msg) =>
-        MessageBox.Show(msg, "Clipwell", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show(msg, AppNames.App, MessageBoxButton.OK, MessageBoxImage.Information);
 }

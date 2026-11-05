@@ -1,4 +1,4 @@
-# Clipwell für Windows — Benutzerhandbuch
+# Merkautomat für Windows — Benutzerhandbuch
 
 ## Inhalt
 
@@ -11,12 +11,12 @@
 7. [Einträge einfügen und kopieren](#7-einträge-einfügen-und-kopieren)
 8. [Einträge pinnen, löschen, organisieren](#8-einträge-pinnen-löschen-organisieren)
 9. [Bulk-Aktionen](#9-bulk-aktionen)
-10. [Notizen und Diktat](#10-notizen-und-diktat)
-11. [Pinboard](#11-pinboard)
+10. [Sprechwerk: Sprachnotizen und Diktat](#10-sprechwerk-sprachnotizen-und-diktat)
+11. [Pinstation](#11-pinstation)
 12. [Eyedropper — Farben vom Bildschirm](#12-eyedropper--farben-vom-bildschirm)
-13. [Desktop-Aufnahme und KB](#13-desktop-aufnahme-und-kb)
+13. [Desktop-Aufnahme und Ideenkombinat](#13-desktop-aufnahme-und-ideenkombinat)
 14. [Detailfenster](#14-detailfenster)
-15. [Einstellungen](#15-einstellungen)
+15. [Kontrollstation](#15-kontrollstation)
 16. [Export, Import und Backup](#16-export-import-und-backup)
 17. [Datenschutz und Privatsphäre](#17-datenschutz-und-privatsphäre)
 18. [Datenpfade](#18-datenpfade)
@@ -26,9 +26,9 @@
 
 ## 1. Überblick
 
-Clipwell ist ein lokaler Windows-Clipboard-Manager, der im Hintergrund als Tray-App läuft. Er zeichnet automatisch auf, was du in die Zwischenablage kopierst, und öffnet auf Tastendruck ein tastaturgesteuertes Popup, über das du jeden früheren Eintrag gezielt einfügen, suchen oder verwalten kannst.
+Merkautomat ist ein lokaler Windows-Clipboard-Manager, der im Hintergrund als Tray-App läuft. Er zeichnet automatisch auf, was du in die Zwischenablage kopierst, und öffnet auf Tastendruck ein tastaturgesteuertes Popup, über das du jeden früheren Eintrag gezielt einfügen, suchen oder verwalten kannst.
 
-**Was Clipwell aufzeichnet:**
+**Was Merkautomat aufzeichnet:**
 
 | Typ | Beschreibung |
 |-----|-------------|
@@ -39,6 +39,18 @@ Clipwell ist ein lokaler Windows-Clipboard-Manager, der im Hintergrund als Tray-
 | Bild | Kopierte Bilder aus Browser, Office, Screenshot-Tool etc. |
 
 Alle Daten verbleiben lokal auf deinem Gerät in einer SQLite-Datenbank.
+
+**Die Bereiche:**
+
+| Name | Bereich |
+|------|---------|
+| Merkautomat | Die Anwendung selbst: Tray, Popup und Zwischenablage-History |
+| Ideenkombinat | Wissensbasis mit Dashboard, Suche, Brain, Sprachnotizen, Bildschirmaufnahmen und Zwischenablage |
+| Pinstation | Fenster mit allen angepinnten Einträgen |
+| Sprechwerk | Sprachnotizen mit lokalem Diktat (Whisper) |
+| Kontrollstation | Einstellungen |
+
+Programmdatei (`Clipwell.exe`) und Datenordner (`%APPDATA%\Clipwell`) behalten ihren bisherigen Namen.
 
 ---
 
@@ -53,7 +65,7 @@ Alle Daten verbleiben lokal auf deinem Gerät in einer SQLite-Datenbank.
 Clipwell.exe
 ```
 
-Beim ersten Start legt Clipwell automatisch seinen Datenpfad unter `%APPDATA%\Clipwell\` an, registriert sich optional im Autostart und öffnet das Onboarding.
+Beim ersten Start legt Merkautomat automatisch seinen Datenpfad unter `%APPDATA%\Clipwell\` an, registriert sich optional im Autostart und öffnet das Onboarding.
 
 ---
 
@@ -70,14 +82,14 @@ Das Onboarding erscheint nur einmal. Es kann nicht manuell erneut geöffnet werd
 
 ## 4. Tray-Icon und Grundbedienung
 
-Clipwell lebt als Icon in der Windows-Taskleiste (Systembereich). Ein Linksklick auf das Icon öffnet oder schließt das Popup. Ein Rechtsklick öffnet das Kontextmenü:
+Merkautomat lebt als Icon in der Windows-Taskleiste (Systembereich). Ein Linksklick auf das Icon öffnet oder schließt das Popup. Ein Rechtsklick öffnet das Kontextmenü:
 
 | Menüeintrag | Funktion |
 |-------------|----------|
 | Öffnen | Popup öffnen |
-| Pinboard | Pinboard-Fenster ein-/ausblenden |
-| Einstellungen | Einstellungsfenster öffnen |
-| Beenden | Clipwell vollständig beenden |
+| Pinstation | Pinstation-Fenster ein-/ausblenden |
+| Kontrollstation | Einstellungen öffnen |
+| Beenden | Merkautomat vollständig beenden |
 
 **Überwachung pausieren:** Über das Tray-Menü kann die Clipboard-Überwachung temporär angehalten werden. Solange die Überwachung pausiert ist, werden keine neuen Einträge aufgezeichnet.
 
@@ -87,7 +99,7 @@ Clipwell lebt als Icon in der Windows-Taskleiste (Systembereich). Ein Linksklick
 
 ### Öffnen
 
-Der Standard-Hotkey ist **Win+Shift+V**. Dieser kann in den Einstellungen geändert werden.
+Der Standard-Hotkey ist **Win+Shift+V**. Dieser kann in der Kontrollstation geändert werden.
 
 Das Popup öffnet sich am Mauszeiger. Per Linksklick auf das Tray-Icon öffnet es sich zentriert über der Taskleiste.
 
@@ -122,7 +134,7 @@ Das Popup öffnet sich am Mauszeiger. Per Linksklick auf das Tray-Icon öffnet e
 | Kreis | Desktop-Aufnahme starten/beenden; während der Aufnahme rot hinterlegt |
 | Stift | Schnellnotiz öffnen/schließen; geöffnet orange umrandet (Tooltip zeigt das Tastenkürzel) |
 | Pipette | Farbe vom Bildschirm wählen |
-| KB-Symbol | Wissensbasis öffnen |
+| Ideenkombinat-Symbol | Ideenkombinat öffnen |
 | Liste | Mehrfachauswahl ein/aus; aktiv orange umrandet |
 
 ### Größe und Position
@@ -154,7 +166,7 @@ Die Chips unterhalb des Suchfelds filtern nach Eintragstyp:
 
 ### Volltextsuche
 
-Tippen im Suchfeld durchsucht Inhalt, OCR-Text (bei Bildern), URL-Titel und erkannte Sprache gleichzeitig. Groß-/Kleinschreibung spielt keine Rolle. Bei sehr großer History (mehr als 1000 Einträge) nutzt Clipwell einen Suchindex, damit die Suche schnell bleibt.
+Tippen im Suchfeld durchsucht Inhalt, OCR-Text (bei Bildern), URL-Titel und erkannte Sprache gleichzeitig. Groß-/Kleinschreibung spielt keine Rolle. Bei sehr großer History (mehr als 1000 Einträge) nutzt Merkautomat einen Suchindex, damit die Suche schnell bleibt.
 
 ### Regex-Suche
 
@@ -162,7 +174,7 @@ Der Button `.*` rechts im Suchfeld schaltet auf reguläre Ausdrücke um, z. B. `
 
 ### Suchhistorie
 
-Clipwell merkt sich die letzten 5 Suchen. Sie erscheinen als Liste, wenn das Suchfeld leer ist und den Fokus hat.
+Merkautomat merkt sich die letzten 5 Suchen. Sie erscheinen als Liste, wenn das Suchfeld leer ist und den Fokus hat.
 
 ### Sortierung
 
@@ -199,10 +211,10 @@ Beim Eingeben erscheinen Vorschläge für Präfixe und vorhandene Werte.
 ### Einfügen (Paste)
 
 **Enter** oder **Doppelklick** fügt den ausgewählten Eintrag ein:
-1. Clipwell schreibt den Inhalt in die Zwischenablage.
+1. Merkautomat schreibt den Inhalt in die Zwischenablage.
 2. Das Popup schließt sich.
 3. Das vorher aktive Fenster wird in den Vordergrund gebracht.
-4. Clipwell sendet automatisch Ctrl+V.
+4. Merkautomat sendet automatisch Ctrl+V.
 
 **Ctrl+Enter** fügt als reinen Text ein. Mit **Enter** bleibt bei Inhalten aus dem Browser die Formatierung erhalten (Tabellen, Listen, Überschriften, Links), sofern das Zielprogramm HTML annimmt, etwa Word, Outlook oder Confluence. Rich-Text aus Word (RTF) wird weiterhin als reiner Text gespeichert.
 
@@ -230,7 +242,7 @@ Angepinnte Einträge erscheinen immer in der Gruppe "Gepinnt" ganz oben und werd
 
 - Hover-Button (Pin-Symbol) beim Überfahren
 - Rechtsklick → Pinnen/Lösen
-- **Tastenkürzel:** Standard Ctrl+P (konfigurierbar in Einstellungen)
+- **Tastenkürzel:** Standard Ctrl+P (konfigurierbar in der Kontrollstation)
 
 ### Löschen
 
@@ -266,30 +278,30 @@ Im Bulk-Modus erscheinen Checkboxen links neben jedem Eintrag. Folgende Aktionen
 | Löschen | Ausgewählte Einträge löschen (mit Bestätigungsdialog) |
 | Abbrechen | Bulk-Modus beenden |
 
-Ohne Auswahl beim Export: Clipwell fragt, ob die gesamte History exportiert werden soll.
+Ohne Auswahl beim Export: Merkautomat fragt, ob die gesamte History exportiert werden soll.
 
 ---
 
-## 10. Notizen und Diktat
+## 10. Sprechwerk: Sprachnotizen und Diktat
 
-Notizen sind eine eigene Funktion neben der Zwischenablage-History. Jede Notiz ist eine Markdown-Datei in `%APPDATA%\Clipwell\notes\`.
+Das Sprechwerk verwaltet Sprachnotizen, getrennt von der Zwischenablage-History. Jede Notiz ist eine Markdown-Datei in `%APPDATA%\Clipwell\notes\`.
 
 ### Schnellnotiz im Popup
 
 Über das Notizblock-Symbol in der Toolbar öffnet sich ein kleines Eingabefeld am unteren Rand des Popups.
 
-- **Enter** oder **Speichern** legt die Notiz in den Notizen an und übernimmt sie sofort in die KB.
+- **Enter** oder **Speichern** legt die Notiz im Sprechwerk an und übernimmt sie sofort ins Ideenkombinat.
 - **Shift+Enter** fügt einen Zeilenumbruch ein.
 - **Esc** schließt das Eingabefeld ohne zu speichern und bricht ein laufendes Diktat ab.
 - **Mikrofon-Symbol:** startet das Diktat direkt im Eingabefeld, das Symbol wird zum roten Stopp-Quadrat. Erneut klicken beendet die Aufnahme, der erkannte Text wird an der Cursorposition eingefügt. Speichern während der Aufnahme beendet sie vorher. Unter dem Feld steht die Aufnahmedauer bzw. "Wird transkribiert".
-- **Fenster-Symbol:** öffnet das Notizfenster (mit dem bisherigen Text als neue Notiz, falls etwas eingegeben ist).
+- **Fenster-Symbol:** öffnet das Sprechwerk (mit dem bisherigen Text als neue Notiz, falls etwas eingegeben ist).
 - **Tastenkürzel:** Standard Ctrl+N (konfigurierbar)
 
 Ältere Schnellnotizen, die noch als gepinnte Einträge mit dem Badge "NOTE" in der History stehen, bleiben dort unverändert.
 
-### Notizfenster
+### Sprechwerk-Fenster
 
-**Öffnen:** Tray-Menü → "Notizen" → "Notizen öffnen", "Neue Notiz" oder "Neue Sprachnotiz (diktieren)".
+**Öffnen:** Tray-Menü → "Sprechwerk" → "Sprechwerk öffnen", "Neue Notiz" oder "Neue Sprachnotiz (diktieren)".
 
 Links stehen alle Notizen (neueste zuerst) mit Suchfeld, rechts der Editor. Änderungen werden nach kurzer Pause automatisch gespeichert; eine leer gewordene Notiz wird beim Wechseln entfernt. Der Titel einer Notiz ist ihre erste Zeile.
 
@@ -297,33 +309,33 @@ Links stehen alle Notizen (neueste zuerst) mit Suchfeld, rechts der Editor. Änd
 | --- | --- | --- |
 | Neu | Strg+N | Neue, leere Notiz |
 | Diktieren | Strg+D | Aufnahme starten; erneut klicken beendet sie und fügt den erkannten Text an der Cursorposition ein |
-| In KB exportieren | Strg+E | Übernimmt die Notiz in die KB |
+| Ins Ideenkombinat | Strg+E | Übernimmt die Notiz ins Ideenkombinat |
 | Kopieren | | Notiztext in die Zwischenablage (ohne History-Eintrag) |
 | Ordner öffnen, Löschen | | Notizordner im Explorer, Notiz löschen |
 
 ### Diktat
 
-Das Diktat läuft komplett lokal mit Whisper; Audio verlässt den Rechner nicht und wird nicht gespeichert. Das Sprachmodell "Base" ist bereits enthalten (Ordner `models` neben `Clipwell.exe`), Diktieren funktioniert also sofort und offline. Die größeren Modelle "Small" und "Medium" lädt Clipwell erst nach Rückfrage einmalig nach `%APPDATA%\Clipwell\models\`. Modellgröße und Sprache (Deutsch, Englisch, Automatisch) stehen unter Einstellungen → Allgemein → "Diktat (Whisper, lokal)"; größere Modelle erkennen genauer, brauchen aber länger.
+Das Diktat läuft komplett lokal mit Whisper; Audio verlässt den Rechner nicht und wird nicht gespeichert. Das Sprachmodell "Base" ist bereits enthalten (Ordner `models` neben `Clipwell.exe`), Diktieren funktioniert also sofort und offline. Die größeren Modelle "Small" und "Medium" lädt Merkautomat erst nach Rückfrage einmalig nach `%APPDATA%\Clipwell\models\`. Modellgröße und Sprache (Deutsch, Englisch, Automatisch) stehen unter Einstellungen → Allgemein → "Diktat (Whisper, lokal)"; größere Modelle erkennen genauer, brauchen aber länger.
 
 Während der Aufnahme ist der Button rot, unten rechts laufen Pegel und Dauer mit. Nach dem Beenden steht "Transkribiere ..." in der Statusleiste, bis der Text eingefügt ist. Man kann jederzeit zwischendurch diktieren und dazwischen tippen. Es läuft immer nur ein Diktat gleichzeitig.
 
 Voraussetzung: ein Mikrofon, und unter Windows-Einstellungen → Datenschutz → Mikrofon muss der Zugriff für Desktop-Apps erlaubt sein.
 
-### Export in die KB
+### Export ins Ideenkombinat
 
-"In KB exportieren" legt eine Kopie der Notiz in `%APPDATA%\Clipwell\kb\notes\` ab. Die Kopie bleibt so, wie sie beim Export war: Wird die Notiz später geändert, zeigt die Liste "KB veraltet" und der Button heißt "KB aktualisieren". Wird die Notiz gelöscht, bleibt die KB-Fassung erhalten.
+"Ins Ideenkombinat" legt eine Kopie der Notiz in `%APPDATA%\Clipwell\kb\notes\` ab. Die Kopie bleibt so, wie sie beim Export war: Wird die Notiz später geändert, zeigt die Liste "Ideenkombinat veraltet" und der Button heißt "Ideenkombinat aktualisieren". Wird die Notiz gelöscht, bleibt die Fassung im Ideenkombinat erhalten.
 
 ---
 
-## 11. Pinboard
+## 11. Pinstation
 
-Das Pinboard ist ein separates, immer-im-Vordergrund-Fenster, das alle angepinnten Einträge anzeigt.
+Die Pinstation ist ein separates, immer-im-Vordergrund-Fenster, das alle angepinnten Einträge anzeigt.
 
-**Öffnen:** Tray-Menü → Pinboard oder Tastenkürzel Ctrl+B (konfigurierbar) im Popup.
+**Öffnen:** Tray-Menü → Pinstation oder Tastenkürzel Ctrl+B (konfigurierbar) im Popup.
 
 Die Reihenfolge lässt sich per Drag & Drop ändern: Der gezogene Eintrag wird farbig umrandet, eine Linie oben oder unten am Zieleintrag zeigt, wo er landet. Ein Ablegen im leeren Bereich unter der Liste verschiebt ihn ans Ende. Dieselbe Reihenfolge gilt für die Gruppe "Gepinnt" im Popup; neu gepinnte Einträge stehen dort oben.
 
-Im Pinboard können Einträge ebenfalls per Klick oder Tastatur eingefügt werden. Das Pinboard bleibt offen, während das Popup geöffnet und geschlossen wird.
+In der Pinstation können Einträge ebenfalls per Klick oder Tastatur eingefügt werden. Die Pinstation bleibt offen, während das Popup geöffnet und geschlossen wird.
 
 ---
 
@@ -337,21 +349,21 @@ Das Popup schließt sich, und ein transparentes Vollbild-Overlay erscheint. Mit 
 
 ---
 
-## 13. Desktop-Aufnahme und KB
+## 13. Desktop-Aufnahme und Ideenkombinat
 
 ### Aufnahme
 
 Die Desktop-Aufnahme protokolliert, was im jeweils aktiven Fenster zu sehen ist, und speichert es fortlaufend als Markdown.
 
-**Starten und beenden:** Record-Symbol (Kreis) im Popup-Kopf, "Aufnahme starten" unter "Neue Aufnahme" links im KB-Fenster oder Tray-Menü → "Desktop aufzeichnen". Während der Aufnahme ist das Symbol rot (Stopp-Quadrat), das Tray-Icon zeigt "Aufnahme läuft". Derselbe Button beendet die Aufnahme.
+**Starten und beenden:** Record-Symbol (Kreis) im Popup-Kopf, "Aufnahme starten" unter "Neue Aufnahme" links im Ideenkombinat oder Tray-Menü → "Desktop aufzeichnen". Während der Aufnahme ist das Symbol rot (Stopp-Quadrat), das Tray-Icon zeigt "Aufnahme läuft". Derselbe Button beendet die Aufnahme.
 
-**Was erfasst wird:** Clipwell liest den sichtbaren Text des Vordergrundfensters über die Windows-Bedienungshilfen-Schnittstelle (UI Automation): Fenstertitel, Anwendung, sichtbarer Dokumenttext, Beschriftungen, Links, Listen, Eingabewerte und Alternativtexte von Bildern. Es werden keine Screenshots aufgenommen.
+**Was erfasst wird:** Merkautomat liest den sichtbaren Text des Vordergrundfensters über die Windows-Bedienungshilfen-Schnittstelle (UI Automation): Fenstertitel, Anwendung, sichtbarer Dokumenttext, Beschriftungen, Links, Listen, Eingabewerte und Alternativtexte von Bildern. Es werden keine Screenshots aufgenommen.
 
 **Zeilen und Tabellen:** Textstücke, die nebeneinander in einer Zeile stehen, werden zu einer Zeile zusammengesetzt; umbrochene Zeilen eines Absatzes werden wieder zu einem Absatz verbunden. Tabellen, deren Zellen ihre Position melden (z. B. HTML-Tabellen im Browser), erscheinen als Markdown-Tabelle.
 
-**Nur Seiteninhalt (Browser):** Standardmäßig schreibt Clipwell bei Browsern (Chrome, Edge, Opera, Firefox, Brave, Vivaldi u. a.) nur die URL aus der Adressleiste und den Inhalt der Webseite. Tabs, Symbolleisten und Erweiterungen entfallen; Navigations-, Kopf-, Such- und Fußbereiche der Seite werden übersprungen, Seitenleisten ans Ende gestellt. Hat die Seite einen gekennzeichneten Hauptbereich, wird nur dieser geschrieben. Einstellungen → "Desktop-Aufnahme: nur Seiteninhalt" ausschalten, um wieder alles Sichtbare zu erfassen.
+**Nur Seiteninhalt (Browser):** Standardmäßig schreibt Merkautomat bei Browsern (Chrome, Edge, Opera, Firefox, Brave, Vivaldi u. a.) nur die URL aus der Adressleiste und den Inhalt der Webseite. Tabs, Symbolleisten und Erweiterungen entfallen; Navigations-, Kopf-, Such- und Fußbereiche der Seite werden übersprungen, Seitenleisten ans Ende gestellt. Hat die Seite einen gekennzeichneten Hauptbereich, wird nur dieser geschrieben. Einstellungen → "Desktop-Aufnahme: nur Seiteninhalt" ausschalten, um wieder alles Sichtbare zu erfassen.
 
-**Wann ein Eintrag entsteht:** Clipwell prüft das aktive Fenster alle 0,5 Sekunden. Ein Fenster- oder Titelwechsel (z. B. neuer Browser-Tab) wird erfasst, sobald er 0,5 Sekunden stabil ist. Kurzes Durchklicken erzeugt dadurch keine Einträge. Bleibst du im selben Fenster, liest Clipwell alle 2,5 Sekunden neu und schreibt nur Zeilen, die für dieses Fenster noch nicht protokolliert wurden.
+**Wann ein Eintrag entsteht:** Merkautomat prüft das aktive Fenster alle 0,5 Sekunden. Ein Fenster- oder Titelwechsel (z. B. neuer Browser-Tab) wird erfasst, sobald er 0,5 Sekunden stabil ist. Kurzes Durchklicken erzeugt dadurch keine Einträge. Bleibst du im selben Fenster, liest Merkautomat alle 2,5 Sekunden neu und schreibt nur Zeilen, die für dieses Fenster noch nicht protokolliert wurden.
 
 **Aufbau eines Eintrags:**
 
@@ -372,7 +384,7 @@ Bleibt man im selben Fenster und ändert sich nur ein Teil (z. B. Scrollen), ste
 
 **Was nicht erfasst wird:**
 
-- Clipwell-eigene Fenster (Popup, KB-Fenster usw.).
+- Merkautomat-eigene Fenster (Popup, Ideenkombinat usw.).
 - Passwortfelder.
 - Alles, solange "Überwachung pausieren" aktiv ist.
 - Hängende Fenster ("Keine Rückmeldung").
@@ -380,15 +392,15 @@ Bleibt man im selben Fenster und ändert sich nur ein Teil (z. B. Scrollen), ste
 
 Jede Aufnahme landet als eigene Datei in `%APPDATA%\Clipwell\recordings\` (Name `JJJJ-MM-TT_hh-mm-ss.md`) und endet mit Ende-Zeit, Dauer und Anzahl der Einträge.
 
-### KB
+### Ideenkombinat
 
-**Öffnen:** KB-Symbol in der Aktionsleiste des Popups oder Tray-Menü → "KB" (mit demselben Symbol).
+**Öffnen:** Ideenkombinat-Symbol in der Aktionsleiste des Popups oder Tray-Menü → "Ideenkombinat" (mit demselben Symbol).
 
 Das Fenster nutzt dieselbe Kopfleiste und dieselben Buttons wie das Detailfenster. Links stehen oben **Dashboard** und **Gesamtübersicht**, darunter die Suche (Strg+F, über Titel, Anwendungen, Fenstertitel und Inhalt) und drei getrennte Bereiche mit eigener Liste:
 
-- **Sprachnotizen:** in die KB übernommene Notizen, neueste zuerst.
+- **Sprechwerk:** ins Ideenkombinat übernommene Sprachnotizen, neueste zuerst.
 - **Bildschirmaufnahmen:** Desktop-Aufnahmen, benannt nach den erfassten Anwendungen, mit Startzeit, Anzahl der Einträge und Dauer.
-- **Zwischenablage:** alle Einträge der Clipwell-History, neueste zuerst, mit Typ und Zeitpunkt. Rechts erscheint der Eintrag als Markdown (Code als Codeblock, Bilder mit erkanntem Text); Doppelklick öffnet das Detailfenster. Neue Kopien erscheinen automatisch.
+- **Zwischenablage:** alle Einträge der Merkautomat-History, neueste zuerst, mit Typ und Zeitpunkt. Rechts erscheint der Eintrag als Markdown (Code als Codeblock, Bilder mit erkanntem Text); Doppelklick öffnet das Detailfenster. Neue Kopien erscheinen automatisch.
 
 Ein Klick auf einen Bereichskopf oder einen Eintrag macht den Bereich aktiv (orange umrandet). Nur für den aktiven Bereich erscheint unten das passende Eingabefeld.
 
@@ -396,14 +408,14 @@ Ein Klick auf einen Bereichskopf oder einen Eintrag macht den Bereich aktiv (ora
 
 **Neue Bildschirmaufnahme** (Bereich Bildschirmaufnahmen aktiv): Der Button mit dem "KB REC"-Logo beginnt die Aufnahme (während sie läuft, zeigt er ein rotes Stopp-Symbol) und wählt sie aus, sodass neue Einträge rechts live mitlaufen. Darunter stehen Startzeit, Laufzeit und Anzahl der Einträge; derselbe Button beendet die Aufnahme.
 
-**Neue Sprachnotiz** (Bereich Sprachnotizen aktiv): mit "Diktieren" sprechen oder tippen (erneut klicken beendet das Diktat, der Text landet an der Cursorposition). "Speichern" oder Strg+Enter legt die Notiz in den Notizen an, übernimmt sie sofort in die KB und wählt sie aus. Esc bricht ein laufendes Diktat ab.
+**Neue Sprachnotiz** (Bereich Sprechwerk aktiv): mit "Diktieren" sprechen oder tippen (erneut klicken beendet das Diktat, der Text landet an der Cursorposition). "Speichern" oder Strg+Enter legt die Notiz in den Notizen an, übernimmt sie sofort ins Ideenkombinat und wählt sie aus. Esc bricht ein laufendes Diktat ab.
 
-Das Dashboard zeigt die KB als Instrumententafel: Sieben-Segment-Zähler für Artikel in der KB, Sprachnotizen, Bildschirmaufnahmen und Zwischenablage-Einträge; vier Analog-Instrumente für die laufende bzw. letzte Bildschirmaufnahme (erfasste Bildwechsel, Fenster, Anwendungen, Minuten); Kacheln mit erfassten Inhalten je Anwendung und kopierten Inhalten je Webseite. Der Aufnahmestatus steht in der Kopfleiste. Kopieren liefert auf dem Dashboard das Markdown der Gesamtübersicht.
+Das Dashboard zeigt das Ideenkombinat als Instrumententafel: Sieben-Segment-Zähler für Artikel im Ideenkombinat, Sprachnotizen, Bildschirmaufnahmen und Zwischenablage-Einträge; vier Analog-Instrumente für die laufende bzw. letzte Bildschirmaufnahme (erfasste Bildwechsel, Fenster, Anwendungen, Minuten); Kacheln mit erfassten Inhalten je Anwendung und kopierten Inhalten je Webseite. Der Aufnahmestatus steht in der Kopfleiste. Kopieren liefert auf dem Dashboard das Markdown der Gesamtübersicht.
 
 Die Gesamtübersicht fasst alles zusammen:
 
 - **Zwischenablage:** Anzahl Einträge und gepinnte, Zeitraum, Verteilung nach Typ, Einträge der letzten 7 Tage, häufigste Domains, Inhaltsarten, meistgenutzte, gepinnte und zuletzt kopierte Einträge.
-- **Notizen:** Anzahl und Liste der in die KB exportierten Notizen.
+- **Sprechwerk:** Anzahl und Liste der ins Ideenkombinat exportierten Notizen.
 - **Desktop-Aufnahmen:** Anzahl, erfasste Bildwechsel, Gesamtdauer, häufigste Anwendungen und je Aufnahme die besuchten Fenster.
 
 Buttons oben: Kopieren (angezeigtes Markdown, landet nicht in der History), Exportieren (Strg+E), Löschen (Entf), Aktualisieren (F5), Datenordner öffnen und Schließen (Esc).
@@ -414,17 +426,17 @@ Buttons oben: Kopieren (angezeigtes Markdown, landet nicht in der History), Expo
 - **Alles als ZIP:** jeder Artikel als eigene `.md`-Datei in den Ordnern `sprachnotizen`, `bildschirmaufnahmen` und `zwischenablage`.
 - **Gesamtübersicht beilegen:** als eigener Abschnitt bzw. als `uebersicht.md` im ZIP.
 
-**Löschen** wirkt auf alle ausgewählten Artikel: Bildschirmaufnahmen werden als Datei gelöscht (nicht die laufende), Sprachnotizen nur in ihrer KB-Fassung, Zwischenablage-Einträge aus der Clipwell-History (wie Löschen im Popup). Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das KB-Fenster automatisch.
+**Löschen** wirkt auf alle ausgewählten Artikel: Bildschirmaufnahmen werden als Datei gelöscht (nicht die laufende), Sprachnotizen nur in ihrer Fassung im Ideenkombinat, Zwischenablage-Einträge aus der Merkautomat-History (wie Löschen im Popup). Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das Ideenkombinat automatisch.
 
 ### Semantische Suche
 
-**Öffnen:** "Semantische Suche" links im KB-Fenster oder Strg+K.
+**Öffnen:** "Semantische Suche" links im Ideenkombinat oder Strg+K.
 
 Die semantische Suche findet Inhalte nach ihrer Bedeutung, nicht nur nach gleichen Wörtern. "Wie habe ich das VPN-Zertifikat erneuert" findet auch einen Eintrag, in dem "OpenVPN-Cert" und "Firmenportal" stehen, auch über Sprachen hinweg. Durchsucht werden Zwischenablage, Sprachnotizen und Bildschirmaufnahmen.
 
-**Modell:** Das Sprachmodell multilingual-e5-small (MIT-Lizenz, ca. 123 MB) wird mit Clipwell ausgeliefert (`models\e5-small\` neben `Clipwell.exe`). Die Suche läuft komplett lokal, es wird nichts gesendet. Nur wenn der Ordner fehlt oder beschädigt ist, erscheint ein Hinweis mit "Modell laden"; das holt das Modell von Hugging Face nach `%APPDATA%\Clipwell\models\e5-small\` und prüft die Prüfsumme.
+**Modell:** Das Sprachmodell multilingual-e5-small (MIT-Lizenz, ca. 123 MB) wird mit Merkautomat ausgeliefert (`models\e5-small\` neben `Clipwell.exe`). Die Suche läuft komplett lokal, es wird nichts gesendet. Nur wenn der Ordner fehlt oder beschädigt ist, erscheint ein Hinweis mit "Modell laden"; das holt das Modell von Hugging Face nach `%APPDATA%\Clipwell\models\e5-small\` und prüft die Prüfsumme.
 
-**Index:** Beim Öffnen der Suche wandelt Clipwell neue oder geänderte Inhalte im Hintergrund in Vektoren um, neueste zuerst. Der Fortschritt steht unter der Überschrift; die Suche liefert schon während des Aufbaus Treffer. Der erste Aufbau einer großen History dauert einige Minuten und belastet die CPU spürbar; danach kommen nur neue Inhalte dazu. Gespeichert werden nur Vektoren in `semantic.db`, kein Text.
+**Index:** Beim Öffnen der Suche wandelt Merkautomat neue oder geänderte Inhalte im Hintergrund in Vektoren um, neueste zuerst. Der Fortschritt steht unter der Überschrift; die Suche liefert schon während des Aufbaus Treffer. Der erste Aufbau einer großen History dauert einige Minuten und belastet die CPU spürbar; danach kommen nur neue Inhalte dazu. Gespeichert werden nur Vektoren in `semantic.db`, kein Text.
 
 Nicht indiziert werden Farben, Bilder ohne OCR-Text und kurze Einträge ohne Leerzeichen (z. B. Passwörter, IDs, Codes).
 
@@ -435,18 +447,18 @@ Nicht indiziert werden Farben, Bilder ohne OCR-Text und kurze Einträge ohne Lee
 | Aktion | Wirkung |
 |--------|---------|
 | Ähnliche | Sucht Einträge, die inhaltlich dem gewählten Treffer ähneln |
-| Öffnen / Doppelklick | Zwischenablage: Detailfenster. Sprachnotiz und Bildschirmaufnahme: Artikel in der KB, Aufnahmen an der Stelle des Bildwechsels |
+| Öffnen / Doppelklick | Zwischenablage: Detailfenster. Sprachnotiz und Bildschirmaufnahme: Artikel im Ideenkombinat, Aufnahmen an der Stelle des Bildwechsels |
 | Dubletten | Zeigt Gruppen fast gleicher Abschnitte der gewählten Quelle, größte zuerst |
 | Kopieren (oben) | Kopiert die Vorschau |
 | Index löschen | Entfernt alle gespeicherten Vektoren; der Index wird bei der nächsten Suche neu aufgebaut |
 
-Das Modell wird nur geladen, solange das KB-Fenster offen ist, und danach wieder freigegeben.
+Das Modell wird nur geladen, solange das Ideenkombinat offen ist, und danach wieder freigegeben.
 
 ### Brain (Wissensnetz)
 
-**Öffnen:** "Brain" links im KB-Fenster oder Strg+B.
+**Öffnen:** "Brain" links im Ideenkombinat oder Strg+B.
 
-Das Brain zeigt alle indizierten Einträge als Netz: jeder Zwischenablage-Eintrag, jede Sprachnotiz und jeder Bildwechsel einer Bildschirmaufnahme ist ein Knoten, Bezüge zwischen ihnen sind Linien. Clipwell ermittelt die Bezüge selbst, lokal und ohne Netzwerk:
+Das Brain zeigt alle indizierten Einträge als Netz: jeder Zwischenablage-Eintrag, jede Sprachnotiz und jeder Bildwechsel einer Bildschirmaufnahme ist ein Knoten, Bezüge zwischen ihnen sind Linien. Merkautomat ermittelt die Bezüge selbst, lokal und ohne Netzwerk:
 
 | Bezug | Bedeutung | Linie |
 |-------|-----------|-------|
@@ -466,7 +478,7 @@ Das Brain zeigt alle indizierten Einträge als Netz: jeder Zwischenablage-Eintra
 | Knoten ziehen | Verschiebt den Knoten (nach dem Anordnen) |
 | Klick auf Knoten | Zeigt rechts Details und alle Verknüpfungen mit Begründung, z. B. "inhaltlich 91 % · zeitlich nah (2 min)" |
 | Klick auf freie Fläche oder Esc | Zurück zur Themenliste (Esc leert vorher ein gefülltes Suchfeld) |
-| Doppelklick auf Knoten / Öffnen | Öffnet den Artikel in der KB |
+| Doppelklick auf Knoten / Öffnen | Öffnet den Artikel im Ideenkombinat |
 | Ähnliche | Wechselt in die semantische Suche mit ähnlichen Einträgen |
 | Pos1 / Einpassen | Zeigt das ganze Netz |
 | Neu anordnen | Berechnet das Layout neu |
@@ -485,7 +497,7 @@ Rechts steht ohne Auswahl die **Themenliste**; ein Klick hebt das Thema hervor u
 
 Das Netz zeigt die neuesten 1000 Einträge. Es wird aus dem Index der semantischen Suche berechnet; neue Einträge kommen beim Öffnen und bei laufender Aufnahme automatisch dazu, bereits angeordnete Knoten behalten ihre Position.
 
-Die Einstellungen der Werkzeugleiste (Ähnlichkeit, Quellen, Bezüge, Fokus) merkt sich Clipwell in den Einstellungen und stellt sie beim nächsten Öffnen wieder her. Die Position verschobener Knoten wird nicht gespeichert.
+Die Einstellungen der Werkzeugleiste (Ähnlichkeit, Quellen, Bezüge, Fokus) merkt sich Merkautomat in den Einstellungen und stellt sie beim nächsten Öffnen wieder her. Die Position verschobener Knoten wird nicht gespeichert.
 
 ---
 
@@ -556,9 +568,9 @@ Jeder Wert kann einzeln in die Zwischenablage kopiert werden.
 
 ---
 
-## 15. Einstellungen
+## 15. Kontrollstation
 
-Öffnen über Tray-Menü → Einstellungen.
+Öffnen über Tray-Menü → Kontrollstation. Hier liegen alle Einstellungen.
 
 ### Hotkey
 
@@ -568,14 +580,14 @@ Jeder Wert kann einzeln in die Zwischenablage kopiert werden.
 | Manuelle Eingabe | Modifier-Checkboxen + Buchstabe |
 | Hotkey-Aktion | "Popup öffnen" oder "Letzten Eintrag einfügen" |
 
-Der Hotkey wird sofort registriert. Bei Konflikten zeigt Clipwell den Windows-Fehlercode und versucht automatisch Fallback-Kombinationen (Win+Shift, Ctrl+Shift, Ctrl+Alt, Win+Alt).
+Der Hotkey wird sofort registriert. Bei Konflikten zeigt Merkautomat den Windows-Fehlercode und versucht automatisch Fallback-Kombinationen (Win+Shift, Ctrl+Shift, Ctrl+Alt, Win+Alt).
 
 ### Allgemein
 
 | Option | Beschreibung |
 |--------|-------------|
 | Design | System / Dunkel / Hell |
-| Autostart | Clipwell beim Windows-Login starten |
+| Autostart | Merkautomat beim Windows-Login starten |
 | Maximale Einträge | Älteste unpinnierte Einträge werden überschrieben (50–5000, Standard 500) |
 | Maximales Alter | Einträge älter als N Tage automatisch löschen (0 = deaktiviert) |
 | Max. DB-Größe | Datenbank auf N MB beschränken (0 = deaktiviert) |
@@ -595,7 +607,7 @@ Der Hotkey wird sofort registriert. Bei Konflikten zeigt Clipwell den Windows-Fe
 | Auto-Backup aktivieren | Tägliches JSON-Backup beim Start |
 | Backup-Verzeichnis | Zielordner für automatische Backups |
 
-Clipwell behält die letzten 7 automatischen Backups. Ältere werden gelöscht.
+Merkautomat behält die letzten 7 automatischen Backups. Ältere werden gelöscht.
 
 ### Shortcuts (Popup-Tastenkürzel)
 
@@ -606,7 +618,7 @@ Vier Aktionen im Popup können mit eigenen Tastenkombinationen belegt werden:
 | Eintrag pinnen | Ctrl+P |
 | Details öffnen | F2 |
 | Schnellnotiz | Ctrl+N |
-| Pinboard | Ctrl+B |
+| Pinstation | Ctrl+B |
 
 Jeder Shortcut kann mit beliebiger Kombination aus Ctrl, Alt, Shift, Win und einem Buchstaben (A–Z) oder F1–F12 belegt werden.
 
@@ -620,17 +632,17 @@ Zeigt Version und Build sowie einen Link zum Quellcode auf GitHub.
 
 ### JSON-Export
 
-Popup → Bulk-Modus → Exportieren, oder Einstellungen → Daten.
+Popup → Bulk-Modus → Exportieren, oder Kontrollstation → Daten.
 
 Exportiert die History als lesbares JSON-Format inklusive Bilder, Thumbnails, Pin-Reihenfolge und Nutzungsmetadaten.
 
 ### JSON-Import
 
-Einstellungen → Daten → Importieren. Doppelte Einträge (gleicher Timestamp und Inhalt) werden beim Import übersprungen.
+Kontrollstation → Daten → Importieren. Doppelte Einträge (gleicher Timestamp und Inhalt) werden beim Import übersprungen.
 
 ### SQLite-Backup
 
-Einstellungen → Daten → SQLite-Kopie exportieren. Erstellt eine vollständige Kopie der `history.db` — ideal als Backup oder für die Übertragung auf einen anderen PC.
+Kontrollstation → Daten → SQLite-Kopie exportieren. Erstellt eine vollständige Kopie der `history.db` — ideal als Backup oder für die Übertragung auf einen anderen PC.
 
 ### Sicheres Löschen
 
@@ -638,17 +650,17 @@ Rechtsklick auf einen Eintrag → "Sicher löschen" entfernt den Eintrag und fü
 
 ### Gesamte History löschen
 
-Einstellungen → Daten → "History löschen". Optional können gepinnte Einträge beibehalten werden.
+Kontrollstation → Daten → "History löschen". Optional können gepinnte Einträge beibehalten werden.
 
 ---
 
 ## 17. Datenschutz und Privatsphäre
 
-- **Lokal only:** Alle Daten bleiben auf deinem Gerät. Clipwell sendet keine Daten ins Internet, außer für URL-Vorschauen. Modell-Downloads (Diktat, semantische Suche) holen nur Dateien und senden keine Inhalte.
-- **URL-Vorschauen:** Nur aktiv, wenn in den Einstellungen aktiviert. Clipwell ruft Titel und Favicon der kopierten URL ab. Private, Loopback- und Link-Local-Adressen (127.x, 10.x, 192.168.x, 172.16–31.x, 169.254.x, fc00::/7) werden nie abgerufen.
-- **Überwachung pausieren:** Über Tray-Menü jederzeit möglich. Clipwell zeichnet dann nichts auf.
-- **URL-Cache:** Abgerufene Titel und Favicons werden 7 Tage in der Datenbank gecacht. Der Cache kann in den Einstellungen geleert werden.
-- **Desktop-Aufnahme:** Läuft nur nach ausdrücklichem Start und bleibt lokal. Sie speichert sichtbaren Text als unverschlüsseltes Markdown, auch vertrauliche Inhalte wie Chats oder Kundendaten. Vertrauliches nur bei pausierter Überwachung öffnen oder die Aufnahme danach im KB-Fenster löschen.
+- **Lokal only:** Alle Daten bleiben auf deinem Gerät. Merkautomat sendet keine Daten ins Internet, außer für URL-Vorschauen. Modell-Downloads (Diktat, semantische Suche) holen nur Dateien und senden keine Inhalte.
+- **URL-Vorschauen:** Nur aktiv, wenn in der Kontrollstation aktiviert. Merkautomat ruft Titel und Favicon der kopierten URL ab. Private, Loopback- und Link-Local-Adressen (127.x, 10.x, 192.168.x, 172.16–31.x, 169.254.x, fc00::/7) werden nie abgerufen.
+- **Überwachung pausieren:** Über Tray-Menü jederzeit möglich. Merkautomat zeichnet dann nichts auf.
+- **URL-Cache:** Abgerufene Titel und Favicons werden 7 Tage in der Datenbank gecacht. Der Cache kann in der Kontrollstation geleert werden.
+- **Desktop-Aufnahme:** Läuft nur nach ausdrücklichem Start und bleibt lokal. Sie speichert sichtbaren Text als unverschlüsseltes Markdown, auch vertrauliche Inhalte wie Chats oder Kundendaten. Vertrauliches nur bei pausierter Überwachung öffnen oder die Aufnahme danach im Ideenkombinat löschen.
 - **Diktat:** Spracherkennung läuft lokal (Whisper). Audio wird nur im Arbeitsspeicher gehalten und nach der Transkription verworfen. Das Base-Modell wird mitgeliefert; Netzwerkzugriff gibt es nur, wenn ein größeres Modell gewählt und dessen Download bestätigt wird.
 - **Semantische Suche:** Läuft lokal mit dem mitgelieferten Modell, ohne Netzwerkzugriff. Nur wenn das Modell fehlt, kann es per Klick auf "Modell laden" geholt werden. Der Index `semantic.db` enthält nur Vektoren und Prüfsummen, keinen Text; aus Vektoren lassen sich Inhalte aber grob ableiten. Vektoren gelöschter Zwischenablage-Einträge werden beim nächsten Indexabgleich oder App-Start entfernt, "Index löschen" entfernt alle sofort.
 
@@ -664,7 +676,7 @@ Einstellungen → Daten → "History löschen". Optional können gepinnte Eintr�
 | Onboarding-Marker | `%APPDATA%\Clipwell\onboarding.seen` |
 | Bildeditor-Stilspeicher | `%APPDATA%\Clipwell\editor-styles.json` |
 | Notizen | `%APPDATA%\Clipwell\notes\*.md` |
-| In die KB exportierte Notizen | `%APPDATA%\Clipwell\kb\notes\*.md` |
+| Ins Ideenkombinat exportierte Notizen | `%APPDATA%\Clipwell\kb\notes\*.md` |
 | Whisper-Sprachmodell Base (mitgeliefert) | `models\ggml-base.bin` neben `Clipwell.exe` |
 | Whisper-Sprachmodelle Small/Medium | `%APPDATA%\Clipwell\models\` |
 | Desktop-Aufnahmen | `%APPDATA%\Clipwell\recordings\*.md` |
@@ -680,29 +692,29 @@ Einstellungen → Daten → "History löschen". Optional können gepinnte Eintr�
 
 ### Popup öffnet sich nicht
 
-1. Prüfe, ob Clipwell als Tray-Icon sichtbar ist.
-2. Öffne die Einstellungen und prüfe, ob der Hotkey registriert wurde (grüner Status).
-3. Falls der Hotkey blockiert ist: andere Anwendung verwendet dieselbe Kombination. Hotkey in den Einstellungen ändern.
+1. Prüfe, ob Merkautomat als Tray-Icon sichtbar ist.
+2. Öffne die Kontrollstation und prüfe, ob der Hotkey registriert wurde (grüner Status).
+3. Falls der Hotkey blockiert ist: andere Anwendung verwendet dieselbe Kombination. Hotkey in der Kontrollstation ändern.
 4. Prüfe das Fehlerprotokoll unter `%APPDATA%\Clipwell\clipwell.log`.
 
 ### Clipboard wird nicht aufgezeichnet
 
 1. Prüfe, ob "Überwachung pausieren" im Tray-Menü aktiv ist.
-2. Starte Clipwell neu (Tray → Beenden, dann `Clipwell.exe` erneut starten).
+2. Starte Merkautomat neu (Tray → Beenden, dann `Clipwell.exe` erneut starten).
 
 ### Datenbank-Fehler beim Start
 
-Clipwell erkennt beschädigte Datenbanken über `quick_check` und bietet an, die Datei zu sichern und mit einer neuen, leeren History zu starten. Das kaputte File wird als `history.db.broken-...` archiviert.
+Merkautomat erkennt beschädigte Datenbanken über `quick_check` und bietet an, die Datei zu sichern und mit einer neuen, leeren History zu starten. Das kaputte File wird als `history.db.broken-...` archiviert.
 
 ### Kein Autostart
 
-Prüfe, ob Clipwell Schreibzugriff auf den Registry-Schlüssel hat:
+Prüfe, ob Merkautomat Schreibzugriff auf den Registry-Schlüssel hat:
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`
 
 ### URL-Vorschau fehlt
 
 - Prüfe Internetverbindung.
-- Prüfe, ob URL-Vorschau in den Einstellungen aktiviert ist.
+- Prüfe, ob URL-Vorschau in der Kontrollstation aktiviert ist.
 - Private/lokale Adressen werden grundsätzlich nicht abgerufen.
 - Rechtsklick → "URL-Vorschau neu laden" erzwingt einen neuen Abruf.
 

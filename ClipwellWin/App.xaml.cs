@@ -246,8 +246,8 @@ public partial class App : System.Windows.Application
         {
             LogCrash(ex);
             var answer = MessageBox.Show(
-                "Die Clipwell-Datenbank ist defekt oder gesperrt. Soll Clipwell die Datei sichern und mit einer neuen History starten?",
-                "Clipwell Datenbank-Recovery",
+                $"Die {AppNames.App}-Datenbank ist defekt oder gesperrt. Soll {AppNames.App} die Datei sichern und mit einer neuen History starten?",
+                $"{AppNames.App} Datenbank-Recovery",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
             if (answer != MessageBoxResult.Yes) return null;
@@ -262,7 +262,7 @@ public partial class App : System.Windows.Application
                 LogCrash(resetEx);
                 MessageBox.Show(
                     $"Die Datenbank konnte nicht zurückgesetzt werden. Details stehen in {Path.Combine(DatabaseService.DataDir, "clipwell.log")}.",
-                    "Clipwell",
+                    AppNames.App,
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 return null;
@@ -431,7 +431,7 @@ public partial class App : System.Windows.Application
     {
         _trayIcon = new NotifyIcon
         {
-            Text = "Clipwell",
+            Text = AppNames.App,
             Icon = CreateTrayIcon(),
             Visible = true,
         };
@@ -439,19 +439,19 @@ public partial class App : System.Windows.Application
         var menu = new ContextMenuStrip();
         menu.Items.Add("Öffnen", null, (_, _) => ShowPopup());
         menu.Items.Add(new ToolStripSeparator());
-        _pinboardMenuItem = new ToolStripMenuItem("Pinboard");
+        _pinboardMenuItem = new ToolStripMenuItem(AppNames.Pinboard);
         _pinboardMenuItem.Click += (_, _) => TogglePinboard();
         menu.Items.Add(_pinboardMenuItem);
         _recordMenuItem = new ToolStripMenuItem("Desktop aufzeichnen");
         _recordMenuItem.Click += (_, _) => ToggleRecording();
         menu.Items.Add(_recordMenuItem);
-        var notesMenu = new ToolStripMenuItem("Notizen");
-        notesMenu.DropDownItems.Add("Notizen öffnen", null, (_, _) => OpenNotes());
+        var notesMenu = new ToolStripMenuItem(AppNames.VoiceNotes);
+        notesMenu.DropDownItems.Add($"{AppNames.VoiceNotes} öffnen", null, (_, _) => OpenNotes());
         notesMenu.DropDownItems.Add("Neue Notiz", null, (_, _) => OpenNotes(NotesStartAction.NewNote));
         notesMenu.DropDownItems.Add("Neue Sprachnotiz (diktieren)", null, (_, _) => OpenNotes(NotesStartAction.NewDictatedNote));
         menu.Items.Add(notesMenu);
-        menu.Items.Add("KB", LoadKbMenuIcon(), (_, _) => OpenKnowledgeBase());
-        menu.Items.Add("Einstellungen", null, (_, _) => OpenSettings());
+        menu.Items.Add(AppNames.KnowledgeBase, LoadKbMenuIcon(), (_, _) => OpenKnowledgeBase());
+        menu.Items.Add(AppNames.Settings, null, (_, _) => OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Beenden", null, (_, _) => ExitApp());
 
@@ -464,7 +464,7 @@ public partial class App : System.Windows.Application
         var error = _msgWin?.LastHotkeyError ?? 0;
         _trayIcon?.ShowBalloonTip(
             5000,
-            "Clipwell Hotkey nicht aktiv",
+            $"{AppNames.App} Hotkey nicht aktiv",
             $"Die Tastenkombination ist schon belegt oder wurde von Windows blockiert. Fehlercode: {error}",
             ToolTipIcon.Warning);
     }
@@ -473,7 +473,7 @@ public partial class App : System.Windows.Application
     {
         _trayIcon?.ShowBalloonTip(
             7000,
-            "Clipwell Hotkey-Fallback aktiv",
+            $"{AppNames.App} Hotkey-Fallback aktiv",
             $"{FormatHotkey(requestedModifiers, requestedVk)} ist belegt. Fuer diese Sitzung wurde {FormatHotkey(_registeredHotkeyModifiers, _registeredHotkeyVk)} registriert; die Einstellung wurde nicht ueberschrieben.",
             ToolTipIcon.Warning);
     }
@@ -1029,7 +1029,7 @@ public partial class App : System.Windows.Application
         if (!TryWriteEntryToClipboard(vm, plainText))
         {
             _ignoreNextClipboard = false;
-            _trayIcon?.ShowBalloonTip(3000, "Clipwell", ClipboardBusyMessage, ToolTipIcon.Warning);
+            _trayIcon?.ShowBalloonTip(3000, AppNames.App, ClipboardBusyMessage, ToolTipIcon.Warning);
             return;
         }
 
@@ -1066,7 +1066,7 @@ public partial class App : System.Windows.Application
         if (!TryWriteEntryToClipboard(vm, plainText))
         {
             _ignoreNextClipboard = false;
-            _trayIcon?.ShowBalloonTip(3000, "Clipwell", ClipboardBusyMessage, ToolTipIcon.Warning);
+            _trayIcon?.ShowBalloonTip(3000, AppNames.App, ClipboardBusyMessage, ToolTipIcon.Warning);
             return;
         }
         RecordEntryUsed(vm);
@@ -1192,7 +1192,7 @@ public partial class App : System.Windows.Application
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             LogCrash(ex);
-            MessageBox.Show($"Die Aufnahme konnte nicht gestartet werden: {ex.Message}", "Clipwell",
+            MessageBox.Show($"Die Aufnahme konnte nicht gestartet werden: {ex.Message}", AppNames.App,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -1207,10 +1207,10 @@ public partial class App : System.Windows.Application
         }
         if (_trayIcon != null)
         {
-            _trayIcon.Text = recording ? "Clipwell - Aufnahme läuft" : "Clipwell";
+            _trayIcon.Text = recording ? $"{AppNames.App} - Aufnahme läuft" : AppNames.App;
             if (recording)
                 _trayIcon.ShowBalloonTip(3000, "Desktop-Aufnahme läuft",
-                    "Sichtbarer Text des Vordergrundfensters wird als Markdown gespeichert. Beenden über Tray, Popup oder KB-Fenster.",
+                    $"Sichtbarer Text des Vordergrundfensters wird als Markdown gespeichert. Beenden über Tray, Popup oder {AppNames.KnowledgeBase}.",
                     ToolTipIcon.Info);
         }
         RecordingStateChanged?.Invoke(this, EventArgs.Empty);
@@ -1298,7 +1298,7 @@ public partial class App : System.Windows.Application
         var dictation = Dictation;
         if (dictation.IsBusyFor(owner))
         {
-            MessageBox.Show(ownerWindow, "Ein anderes Fenster diktiert gerade. Bitte dort zuerst beenden.", "Clipwell",
+            MessageBox.Show(ownerWindow, "Ein anderes Fenster diktiert gerade. Bitte dort zuerst beenden.", AppNames.App,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return null;
         }
@@ -1320,7 +1320,7 @@ public partial class App : System.Windows.Application
                 var answer = MessageBox.Show(ownerWindow,
                     $"Für das Diktat wird das Whisper-Sprachmodell '{dictation.ModelName}' (ca. {size} MB) einmalig heruntergeladen " +
                     $"und unter {AppPaths.ModelsDir} gespeichert. Die Spracherkennung läuft danach komplett lokal.\n\nJetzt herunterladen?",
-                    "Clipwell - Diktat", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    $"{AppNames.App} - {AppNames.VoiceNotes}", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (answer != MessageBoxResult.Yes) return null;
                 await dictation.DownloadModelAsync(owner);
             }
@@ -1332,7 +1332,7 @@ public partial class App : System.Windows.Application
         {
             LogCrash(ex);
             dictation.Cancel();
-            MessageBox.Show(ownerWindow, $"Diktat fehlgeschlagen: {ex.Message}", "Clipwell",
+            MessageBox.Show(ownerWindow, $"Diktat fehlgeschlagen: {ex.Message}", AppNames.App,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return null;
         }

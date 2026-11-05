@@ -1,7 +1,7 @@
 <Window x:Class="ClipwellWin.Views.KbExportDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clipwell - Exportieren"
+        Title="Merkautomat – Exportieren"
         Width="460" SizeToContent="Height"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"

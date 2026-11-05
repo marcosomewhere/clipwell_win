@@ -5,7 +5,7 @@
         xmlns:conv="clr-namespace:ClipwellWin.Converters"
         xmlns:vm="clr-namespace:ClipwellWin.ViewModels"
         xmlns:models="clr-namespace:ClipwellWin.Models"
-        Title="Clipwell"
+        Title="Merkautomat"
         Width="560"
         Height="720"
         MinWidth="500" MinHeight="620"
@@ -639,7 +639,7 @@
                                            Fill="{DynamicResource PopupBorderBrush}" />
 
                                 <Button Style="{StaticResource HeaderToolButton}"
-                                        ToolTip="Wissensbasis: Dashboard, Suche, Brain, Notizen, Aufnahmen und Zwischenablage"
+                                        ToolTip="Ideenkombinat: Dashboard, Suche, Brain, Sprechwerk, Aufnahmen und Zwischenablage"
                                         Click="KnowledgeBase_Click">
                                     <Image Source="/Clipwell;component/Assets/kb-icon-16.png" Width="16" Height="16"
                                            RenderOptions.BitmapScalingMode="HighQuality" />
@@ -910,10 +910,10 @@
                                 ToolTip="Diktieren (lokal per Whisper), erneut klicken zum Beenden"
                                 Click="QuickNoteDictate_Click" />
                         <Button Content="&#xE8A7;" Style="{StaticResource QuickNoteIconButton}"
-                                ToolTip="Im Notizfenster öffnen (alle Notizen)"
+                                ToolTip="Im Sprechwerk öffnen (alle Sprachnotizen)"
                                 Click="QuickNoteOpenNotes_Click" />
                         <Button x:Name="QuickNoteSaveButton" Content="Speichern" Style="{StaticResource BulkBtnStyle}"
-                                ToolTip="Als Notiz speichern und in die KB übernehmen (Enter)"
+                                ToolTip="Als Sprachnotiz speichern und ins Ideenkombinat übernehmen (Enter)"
                                 Click="QuickNoteSave_Click" />
                         <Button Content="✕" Width="28" Height="28" Padding="0"
                                 Background="Transparent" BorderThickness="0"

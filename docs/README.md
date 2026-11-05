@@ -1,6 +1,8 @@
-# Clipwell for Windows
+# Merkautomat for Windows
 
-Clipwell is a local-first Windows clipboard manager built with WPF, .NET 10 and SQLite. It runs in the tray, records clipboard history and opens a keyboard-first popup for search, copy and paste.
+Merkautomat (code name and binary: Clipwell) is a local-first Windows clipboard manager built with WPF, .NET 10 and SQLite. It runs in the tray, records clipboard history and opens a keyboard-first popup for search, copy and paste.
+
+User-facing names: Merkautomat (app), Ideenkombinat (knowledge base), Pinstation (pinboard), Sprechwerk (voice notes), Kontrollstation (settings). Executable, data folder (`%APPDATA%\Clipwell`), namespaces and project files keep the code name.
 
 ## Features
 
@@ -12,13 +14,13 @@ Clipwell is a local-first Windows clipboard manager built with WPF, .NET 10 and 
 - Image support with thumbnail, zoom/pan, precise annotations, crop/resize/expand and duplicate-image suppression.
 - URL previews with title/favicon cache, opt-out setting and loopback/private-network protection.
 - URL quick links open entries in the default browser from popup or details.
-- Pinboard window for always-on-top pinned entries.
+- Pinstation: always-on-top window with the pinned entries.
 - Eyedropper overlay for picking screen colors into history and clipboard.
 - Desktop recording: after pressing Record, the visible text of the foreground window is read through UI Automation (no screenshots) and every stable change is appended as Markdown.
-- Notes as a separate feature: notes window with search and autosave, local Whisper dictation into the note, export to the internal KB; tray submenu "Notizen".
-- KB window: overall Markdown summary of clipboard history, exported notes and all recordings, per-item view, copy and export.
-- KB semantic search: local embedding model (multilingual-e5-small, bundled) finds clipboard entries, voice notes and recordings by meaning; hybrid ranking with word matches, similar entries and near-duplicate detection.
-- KB "Brain": knowledge network of all indexed items with links by meaning, time, recording and website, automatic topics with keyword names, interactive force layout, focus and search.
+- Sprechwerk: voice notes window with search and autosave, local Whisper dictation into the note, export to the Ideenkombinat; tray submenu "Sprechwerk".
+- Ideenkombinat (knowledge base window): overall Markdown summary of clipboard history, exported notes and all recordings, per-item view, copy and export.
+- Ideenkombinat semantic search: local embedding model (multilingual-e5-small, bundled) finds clipboard entries, voice notes and recordings by meaning; hybrid ranking with word matches, similar entries and near-duplicate detection.
+- Ideenkombinat "Brain": knowledge network of all indexed items with links by meaning, time, recording and website, automatic topics with keyword names, interactive force layout, focus and search.
 - Export/import as JSON, SQLite backup export, auto-backup rotation and secure delete via VACUUM.
 - Privacy controls: monitoring pause via tray menu.
 - SQLite recovery prompt when `quick_check` fails.

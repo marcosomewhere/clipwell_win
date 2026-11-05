@@ -10,6 +10,8 @@
     <AssemblyName>Clipwell</AssemblyName>
     <RootNamespace>ClipwellWin</RootNamespace>
     <Version>1.2.0</Version>
+    <Product>Merkautomat</Product>
+    <AssemblyTitle>Merkautomat</AssemblyTitle>
     <Copyright>(c) 2026 Marco Seefeldt</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>

@@ -376,7 +376,7 @@ public partial class KnowledgeBaseWindow : Window
         ClipboardCount.Text = searching ? $"{clips} von {_clipboardItems.Count}" : clips.ToString(De);
         NotesEmpty.Text = searching ? "Keine Treffer." : "Noch keine Sprachnotizen. Bereich anklicken und unten diktieren oder schreiben.";
         RecordingsEmpty.Text = searching ? "Keine Treffer." : "Noch keine Bildschirmaufnahmen. Bereich anklicken und unten starten.";
-        ClipboardEmpty.Text = searching ? "Keine Treffer." : "Noch nichts kopiert. Alles, was Clipwell aus der Zwischenablage aufnimmt, erscheint hier.";
+        ClipboardEmpty.Text = searching ? "Keine Treffer." : $"Noch nichts kopiert. Alles, was {AppNames.App} aus der Zwischenablage aufnimmt, erscheint hier.";
         NotesEmpty.Visibility = notes == 0 ? Visibility.Visible : Visibility.Collapsed;
         RecordingsEmpty.Visibility = recordings == 0 ? Visibility.Visible : Visibility.Collapsed;
         ClipboardEmpty.Visibility = clips == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -627,13 +627,13 @@ public partial class KnowledgeBaseWindow : Window
 
         var stamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm", CultureInfo.InvariantCulture);
         var save = dialog.AsZip
-            ? new SaveFileDialog { Filter = "ZIP-Archiv (*.zip)|*.zip", FileName = $"clipwell-kb-{stamp}.zip" }
+            ? new SaveFileDialog { Filter = "ZIP-Archiv (*.zip)|*.zip", FileName = $"ideenkombinat-{stamp}.zip" }
             : new SaveFileDialog
             {
                 Filter = "Markdown (*.md)|*.md",
                 FileName = scope.Count == 1 && !dialog.IncludeOverview
                     ? scope[0].Entry != null ? KnowledgeExport.ClipboardFileName(scope[0].Entry!) : Path.GetFileName(scope[0].FilePath)
-                    : $"clipwell-kb-{stamp}.md",
+                    : $"ideenkombinat-{stamp}.md",
             };
         if (save.ShowDialog(this) != true) return;
 
@@ -656,7 +656,7 @@ public partial class KnowledgeBaseWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(this, $"Export fehlgeschlagen: {ex.Message}", "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"Export fehlgeschlagen: {ex.Message}", AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -687,18 +687,18 @@ public partial class KnowledgeBaseWindow : Window
             var item = targets[0];
             question = item.ArticleKind switch
             {
-                KbArticleKind.Note => $"Sprachnotiz \"{item.Title}\" aus der KB entfernen?\n\nDie Originalnotiz im Notizfenster bleibt erhalten.",
-                KbArticleKind.Clipboard => $"Zwischenablage-Eintrag \"{item.Title}\" aus der Clipwell-History löschen?",
+                KbArticleKind.Note => $"Sprachnotiz \"{item.Title}\" aus dem {AppNames.KnowledgeBase} entfernen?\n\nDie Originalnotiz im {AppNames.VoiceNotes} bleibt erhalten.",
+                KbArticleKind.Clipboard => $"Zwischenablage-Eintrag \"{item.Title}\" aus der {AppNames.App}-History löschen?",
                 _ => $"Bildschirmaufnahme vom {item.DateLabel} endgültig löschen?",
             };
         }
         else
         {
             question = $"{targets.Count} Artikel löschen ({SelectionBreakdown(targets)})?\n\n"
-                + "Sprachnotizen werden nur aus der KB entfernt, die Originale im Notizfenster bleiben erhalten. "
-                + "Bildschirmaufnahmen werden endgültig gelöscht, Zwischenablage-Einträge aus der Clipwell-History.";
+                + $"Sprachnotizen werden nur aus dem {AppNames.KnowledgeBase} entfernt, die Originale im {AppNames.VoiceNotes} bleiben erhalten. "
+                + $"Bildschirmaufnahmen werden endgültig gelöscht, Zwischenablage-Einträge aus der {AppNames.App}-History.";
         }
-        if (MessageBox.Show(this, question, "Clipwell", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (MessageBox.Show(this, question, AppNames.App, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         var failed = new List<string>();
         foreach (var item in targets.Where(i => i.Entry == null))
@@ -711,7 +711,7 @@ public partial class KnowledgeBaseWindow : Window
         ClearSelection();
         Reload();
         if (failed.Count > 0)
-            MessageBox.Show(this, "Löschen fehlgeschlagen:\n" + string.Join("\n", failed), "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Löschen fehlgeschlagen:\n" + string.Join("\n", failed), AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -808,12 +808,12 @@ public partial class KnowledgeBaseWindow : Window
         {
             _pendingSelectPath = null;
             App.LogCrash(ex);
-            MessageBox.Show(this, $"Sprachnotiz konnte nicht gespeichert werden: {ex.Message}", "Clipwell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"Sprachnotiz konnte nicht gespeichert werden: {ex.Message}", AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         NoteInput.Text = "";
         _noteDictation.ClearStatus();
-        NoteStatus.Text = "Gespeichert und in die KB übernommen.";
+        NoteStatus.Text = $"Gespeichert und ins {AppNames.KnowledgeBase} übernommen.";
     }
 
     private void UpdateNoteDictationUi()

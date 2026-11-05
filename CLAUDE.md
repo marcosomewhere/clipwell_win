@@ -7,6 +7,20 @@ Gilt fuer Claude Code und Codex. AGENTS.md und CLAUDE.md muessen inhaltlich iden
 WPF Clipboard-Manager fuer Windows. .NET 10, WPF-UI 4.3.0 (Lepo), SQLite WAL mit FTS5, YamlDotNet fuer YAML-Erkennung, Whisper.net 1.9.1 (lokales Diktat), Microsoft.ML.OnnxRuntime 1.31.1 plus Microsoft.ML.Tokenizers 2.0.1 (lokale Embeddings fuer die semantische KB-Suche).
 Laeuft im Tray und oeffnet per Hotkey ein tastaturgesteuertes Popup.
 
+## Namen in der Oberflaeche
+
+| Bereich | Name fuer Nutzer | Code-Name |
+| --- | --- | --- |
+| Hauptanwendung | Merkautomat | Clipwell |
+| Knowledge Base | Ideenkombinat | KB, `KnowledgeBaseWindow` |
+| Pinboard | Pinstation | `PinboardWindow` |
+| Sprachnotizen (Whisper) | Sprechwerk | Notes, `NotesWindow` |
+| Einstellungen | Kontrollstation | `SettingsWindow` |
+
+- Sichtbare Texte nutzen die Konstanten in `Services\AppNames.cs` (in XAML stehen die Namen direkt). Neue Texte nie mit "Clipwell", "KB", "Pinboard" oder "Notizen" als Bereichsname schreiben.
+- Ein einzelner Eintrag bleibt "Sprachnotiz"/"Notiz"; "Einstellungen" bleibt fuer die Einstellungswerte selbst (z. B. "Einstellungen zurücksetzen").
+- Technische Namen bleiben `Clipwell`: `Clipwell.exe`, `%APPDATA%\Clipwell`, Namespaces, Projektdateien, Autostart-Eintrag, Mutex/Fensterklassen, Drag-Format, User-Agent, Auto-Backup-Dateien (`clipwell-autobackup-*`). Produktname in den Dateieigenschaften ist Merkautomat (`<Product>`).
+
 ## Build & Start
 
 ```powershell

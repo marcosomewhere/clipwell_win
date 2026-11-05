@@ -371,7 +371,7 @@ public partial class PopupWindow : Window
         var selected = _vm.GetSelectedViewModels();
         if (selected.Count == 0) return;
         var r = System.Windows.MessageBox.Show(
-            $"{selected.Count} Einträge löschen?", "Clipwell",
+            $"{selected.Count} Einträge löschen?", AppNames.App,
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question);
         if (r == System.Windows.MessageBoxResult.Yes)
@@ -507,7 +507,7 @@ public partial class PopupWindow : Window
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
             App.LogCrash(ex);
-            System.Windows.MessageBox.Show(this, $"Notiz konnte nicht gespeichert werden: {ex.Message}", "Clipwell",
+            System.Windows.MessageBox.Show(this, $"Notiz konnte nicht gespeichert werden: {ex.Message}", AppNames.App,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
