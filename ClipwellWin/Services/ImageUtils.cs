@@ -6,6 +6,33 @@ namespace ClipwellWin.Services;
 
 public static class ImageUtils
 {
+    /// <summary>Header bytes needed by <see cref="TryReadImageSize"/>.</summary>
+    public const int ImageHeaderBytes = 32;
+
+    /// <summary>Pixel size from a PNG, GIF or BMP header without decoding the image.</summary>
+    public static bool TryReadImageSize(ReadOnlySpan<byte> head, out int width, out int height)
+    {
+        width = height = 0;
+        if (head.Length >= 24 && head[0] == 0x89 && head[1] == (byte)'P' && head[2] == (byte)'N' && head[3] == (byte)'G')
+        {
+            width = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(head[16..]);
+            height = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(head[20..]);
+        }
+        else if (head.Length >= 10 && head[0] == (byte)'G' && head[1] == (byte)'I' && head[2] == (byte)'F')
+        {
+            width = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(head[6..]);
+            height = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(head[8..]);
+        }
+        else if (head.Length >= 26 && head[0] == (byte)'B' && head[1] == (byte)'M')
+        {
+            width = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(head[18..]);
+            height = Math.Abs(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(head[22..]));
+        }
+        if (width > 0 && height > 0 && width <= 100_000 && height <= 100_000) return true;
+        width = height = 0;
+        return false;
+    }
+
     // OnLoad plus Freeze releases the stream and makes the bitmap usable across threads.
     public static BitmapImage? LoadBitmap(byte[] data, int decodePixelWidth = 0)
     {

@@ -437,6 +437,8 @@ public class DatabaseService : IDisposable
         public required int HtmlContent { get; init; }
         public required int HasHtml { get; init; }
         public required int SourceUrl { get; init; }
+        /// <summary>First bytes of ImageData (lite loading), enough for the pixel size.</summary>
+        public required int ImageHead { get; init; }
 
         public static HistoryColumns From(SqliteDataReader r, bool includeImageData)
             => new()
@@ -461,6 +463,7 @@ public class DatabaseService : IDisposable
                 HtmlContent = OptionalOrdinal(r, "HtmlContent"),
                 HasHtml = OptionalOrdinal(r, "HasHtml"),
                 SourceUrl = OptionalOrdinal(r, "SourceUrl"),
+                ImageHead = OptionalOrdinal(r, "ImageHead"),
             };
 
         private static int OptionalOrdinal(SqliteDataReader r, string name)
@@ -473,6 +476,15 @@ public class DatabaseService : IDisposable
     }
 
     private static ClipboardEntry ReadEntry(SqliteDataReader r, HistoryColumns col)
+    {
+        var entry = ReadEntryFields(r, col);
+        if (col.ImageHead >= 0 && !r.IsDBNull(col.ImageHead)
+            && ImageUtils.TryReadImageSize((byte[])r[col.ImageHead], out var w, out var h))
+            entry.ImageSize = (w, h);
+        return entry;
+    }
+
+    private static ClipboardEntry ReadEntryFields(SqliteDataReader r, HistoryColumns col)
     {
         return new ClipboardEntry
         {
@@ -508,7 +520,8 @@ public class DatabaseService : IDisposable
             cmd.CommandText = @"SELECT Id, Type, Content, ThumbnailData, OcrText, Language,
                                        UrlTitle, UrlFavicon, HexColor, ContentKind, DetectionReason,
                                        IsPinned, PinOrder, Timestamp, UseCount, LastUsedAt, SourceUrl,
-                                       CASE WHEN HtmlContent IS NULL THEN 0 ELSE 1 END AS HasHtml
+                                       CASE WHEN HtmlContent IS NULL THEN 0 ELSE 1 END AS HasHtml,
+                                       substr(ImageData, 1, 32) AS ImageHead
                                 FROM History ORDER BY IsPinned DESC, Timestamp DESC";
             using var reader = cmd.ExecuteReader();
             var columns = HistoryColumns.From(reader, includeImageData: false);

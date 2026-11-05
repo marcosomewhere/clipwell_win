@@ -85,7 +85,7 @@ Test:
 dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Current suite: 221 xUnit v3 tests (one network test for the fallback model download runs only with `CLIPWELL_E5_DOWNLOAD=1`).
+Current suite: 234 xUnit v3 tests (one network test for the fallback model download runs only with `CLIPWELL_E5_DOWNLOAD=1`).
 
 Portable single-file build:
 

@@ -319,9 +319,9 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,16,0">
-                    <TextBlock Text="&#xE82D;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                               Foreground="{DynamicResource OnboardingAccentBrush}"
-                               VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Image Source="/Clipwell;component/Assets/kb-icon-16.png" Width="16" Height="16"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           VerticalAlignment="Center" Margin="0,0,10,0" />
                     <TextBlock Text="Wissensbasis" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Text="|" Foreground="{DynamicResource EditorMutedBrush}" Margin="14,0" VerticalAlignment="Center" />
                     <Ellipse x:Name="HeaderStateDot" Width="8" Height="8" Margin="0,0,6,0" Fill="#FF6B6B6B" VerticalAlignment="Center" />
@@ -524,6 +524,8 @@
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 ToolTip="Bildschirmaufnahme starten oder beenden">
                             <StackPanel Orientation="Horizontal">
+                                <Image Source="/Clipwell;component/Assets/kb-rec-logo.png" Height="24" Margin="0,0,12,0"
+                                       RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center" />
                                 <TextBlock x:Name="RecordIcon" Text="&#xE7C8;" FontFamily="Segoe Fluent Icons" FontSize="13"
                                            Margin="0,0,8,0" VerticalAlignment="Center" />
                                 <TextBlock x:Name="RecordLabel" Text="Aufnahme starten" VerticalAlignment="Center" />

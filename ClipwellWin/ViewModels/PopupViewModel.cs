@@ -134,7 +134,8 @@ public class PopupViewModel : ViewModelBase
 
     public string SortModeLabel => _sortMode switch
     {
-        "Neueste" => "Sort",
+        "Häufig" => "Häufig genutzt",
+        "Selten" => "Selten genutzt",
         var m     => m,
     };
 

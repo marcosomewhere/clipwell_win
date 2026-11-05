@@ -111,6 +111,20 @@ Das Popup öffnet sich am Mauszeiger. Per Linksklick auf das Tray-Icon öffnet e
 
 **Gruppen:** Einträge werden automatisch gruppiert in: Gepinnt, Heute, Gestern, Diese Woche, Früher.
 
+**Zeitangaben** passen zu den Gruppen: Heutiges erscheint relativ ("vor 6 Min.", "vor 3 Std."), Gestriges mit Uhrzeit ("Gestern, 23:37"), Einträge dieser Woche mit Wochentag ("Di, 14:05"), ältere mit Datum.
+
+**Bilder** zeigen als Titel ihre Größe ("Bild 1280×720") und darunter den erkannten Text in Anführungszeichen, oder "Kein Text erkannt".
+
+**Aktionsleiste** rechts neben dem Suchfeld, in zwei Gruppen:
+
+| Symbol | Aktion |
+|--------|--------|
+| Kreis | Desktop-Aufnahme starten/beenden; während der Aufnahme rot hinterlegt |
+| Stift | Schnellnotiz öffnen/schließen; geöffnet orange umrandet (Tooltip zeigt das Tastenkürzel) |
+| Pipette | Farbe vom Bildschirm wählen |
+| KB-Symbol | Wissensbasis öffnen |
+| Liste | Mehrfachauswahl ein/aus; aktiv orange umrandet |
+
 ### Größe und Position
 
 Das Popup lässt sich per Drag am oberen Rand verschieben. Die rechte, linke und untere Kante können zum Vergrößern gezogen werden. Größe und Position werden beim Schließen gespeichert.
@@ -152,7 +166,7 @@ Clipwell merkt sich die letzten 5 Suchen. Sie erscheinen als Liste, wenn das Suc
 
 ### Sortierung
 
-Über den Sortier-Button in der Chip-Leiste lässt sich die Reihenfolge wählen: Neueste zuerst, Älteste zuerst, Häufig verwendet oder Selten verwendet. Gepinnte Einträge bleiben immer oben.
+Der Sortier-Chip rechts in der Chip-Leiste zeigt die aktuelle Reihenfolge ("Neueste", "Älteste", "Häufig genutzt", "Selten genutzt") und öffnet per Klick die Auswahl. Weicht die Sortierung vom Standard ab, ist der Chip hervorgehoben. Gepinnte Einträge bleiben immer oben.
 
 ### Suchpräfixe
 
@@ -368,7 +382,7 @@ Jede Aufnahme landet als eigene Datei in `%APPDATA%\Clipwell\recordings\` (Name 
 
 ### KB
 
-**Öffnen:** `KB`-Button im Popup-Kopf oder Tray-Menü → "KB".
+**Öffnen:** KB-Symbol in der Aktionsleiste des Popups oder Tray-Menü → "KB" (mit demselben Symbol).
 
 Das Fenster nutzt dieselbe Kopfleiste und dieselben Buttons wie das Detailfenster. Links stehen oben **Dashboard** und **Gesamtübersicht**, darunter die Suche (Strg+F, über Titel, Anwendungen, Fenstertitel und Inhalt) und drei getrennte Bereiche mit eigener Liste:
 
@@ -380,7 +394,7 @@ Ein Klick auf einen Bereichskopf oder einen Eintrag macht den Bereich aktiv (ora
 
 **Auswahl:** Ein Klick wählt einen Artikel, Strg+Klick und Umschalt+Klick erweitern die Auswahl, auch über die Bereiche hinweg. "Alle auswählen" im Bereichskopf fügt alle Artikel des Bereichs hinzu, "Alle"/"Keine" unten gelten für alle Bereiche. Rechts erscheint das Markdown des gewählten Artikels, bei mehreren eine zusammengefasste Vorschau.
 
-**Neue Bildschirmaufnahme** (Bereich Bildschirmaufnahmen aktiv): "Aufnahme starten" beginnt die Aufnahme und wählt sie aus, sodass neue Einträge rechts live mitlaufen. Darunter stehen Startzeit, Laufzeit und Anzahl der Einträge; derselbe Button beendet die Aufnahme.
+**Neue Bildschirmaufnahme** (Bereich Bildschirmaufnahmen aktiv): Der Button mit dem "KB REC"-Logo ("Aufnahme starten") beginnt die Aufnahme und wählt sie aus, sodass neue Einträge rechts live mitlaufen. Darunter stehen Startzeit, Laufzeit und Anzahl der Einträge; derselbe Button beendet die Aufnahme.
 
 **Neue Sprachnotiz** (Bereich Sprachnotizen aktiv): mit "Diktieren" sprechen oder tippen (erneut klicken beendet das Diktat, der Text landet an der Cursorposition). "Speichern" oder Strg+Enter legt die Notiz in den Notizen an, übernimmt sie sofort in die KB und wählt sie aus. Esc bricht ein laufendes Diktat ab.
 

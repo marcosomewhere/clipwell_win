@@ -450,7 +450,7 @@ public partial class App : System.Windows.Application
         notesMenu.DropDownItems.Add("Neue Notiz", null, (_, _) => OpenNotes(NotesStartAction.NewNote));
         notesMenu.DropDownItems.Add("Neue Sprachnotiz (diktieren)", null, (_, _) => OpenNotes(NotesStartAction.NewDictatedNote));
         menu.Items.Add(notesMenu);
-        menu.Items.Add("KB", null, (_, _) => OpenKnowledgeBase());
+        menu.Items.Add("KB", LoadKbMenuIcon(), (_, _) => OpenKnowledgeBase());
         menu.Items.Add("Einstellungen", null, (_, _) => OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Beenden", null, (_, _) => ExitApp());
@@ -512,6 +512,27 @@ public partial class App : System.Windows.Application
     internal static void ApplyAppIcon(Window window)
     {
         window.Icon = CreateAppIconImageSource(32);
+    }
+
+    /// <summary>KB symbol shared by tray menu, popup and KB window.</summary>
+    internal const string KbIconUri = "pack://application:,,,/Clipwell;component/Assets/kb-icon-16.png";
+
+    private static System.Drawing.Image? LoadKbMenuIcon()
+    {
+        try
+        {
+            var info = GetResourceStream(new Uri(KbIconUri));
+            if (info == null) return null;
+            using var stream = info.Stream;
+            using var source = System.Drawing.Image.FromStream(stream);
+            // Detach from the stream, which is disposed here.
+            return new Bitmap(source);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException)
+        {
+            LogCrash(ex);
+            return null;
+        }
     }
 
     private static void FillRoundedRect(Graphics g, System.Drawing.Brush br, float x, float y, float w, float h, float r)

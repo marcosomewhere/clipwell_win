@@ -29,7 +29,7 @@ dotnet publish ClipwellWin\ClipwellWin.csproj -c Release -r win-x64 --self-conta
 dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Aktuell: 221 Tests (xUnit v3 4.0.2 auf Microsoft Testing Platform, per `global.json` aktiviert). Ein Test laeuft nur mit `CLIPWELL_E5_DOWNLOAD=1` (Fallback-Download des Embedding-Modells, Netzwerk), sonst uebersprungen; der Test mit dem echten Embedding-Modell nutzt die mitgelieferte Kopie in der Build-Ausgabe. Release-Build und Tests sind Pflicht nach jeder Codeaenderung.
+Aktuell: 234 Tests (xUnit v3 4.0.2 auf Microsoft Testing Platform, per `global.json` aktiviert). Ein Test laeuft nur mit `CLIPWELL_E5_DOWNLOAD=1` (Fallback-Download des Embedding-Modells, Netzwerk), sonst uebersprungen; der Test mit dem echten Embedding-Modell nutzt die mitgelieferte Kopie in der Build-Ausgabe. Release-Build und Tests sind Pflicht nach jeder Codeaenderung.
 
 Dependency-Sicherheitsstatus: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wurde per `Microsoft.Data.Sqlite` 10.0.14 plus direktem `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 Override bereinigt; keine verwundbaren Pakete (auch transitiv, inkl. Whisper.net, ONNX Runtime, Microsoft.ML.Tokenizers, Google.Protobuf). Bei erneuten NuGet-Warnungen Status dokumentieren und separat per Dependency-Update bereinigen.
 
@@ -76,7 +76,8 @@ Dependency-Sicherheitsstatus: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wurde
 ## Aktuelle Funktionen
 
 - Tray-App mit Single-Instance-Mutex und Hotkey-Fallbacks.
-- Popup mit Filter-Chips, Suche, Gruppen, Bulk-Aktionen, Schnellnotiz mit direktem Diktat (speichert in die Notizen und sofort in die KB, nicht in die History), Pinboard und Eyedropper.
+- Popup mit Filter-Chips, Sortier-Chip, Suche, Gruppen, Bulk-Aktionen, Schnellnotiz mit direktem Diktat (speichert in die Notizen und sofort in die KB, nicht in die History), Pinboard und Eyedropper. Kopf-Aktionen als gerahmte Leiste (Stil `HeaderToolButton`, Zustand ueber `Tag` "recording"/"active"); Bilder mit Titel "Bild BxH" (Groesse aus dem Bildkopf, `ImageUtils.TryReadImageSize`) und OCR als Unterzeile; Zeitangaben je Gruppe (`EntryViewModel.FormatTime`).
+- Eigene Grafiken in `ClipwellWin\Assets` als WPF-Resource: `kb-icon-16.png` (KB-Symbol in Popup, KB-Fenster, Tray) und `kb-rec-logo.png` ("KB REC" auf dem Aufnahme-Button der KB), Quelle `D:\dev\Browser-Addons\KnowledgeAssistant\KnowledgebaseRecorder\assets`.
 - Detailfenster mit editierbarem Text-/Code-Minieditor, Bildeditor, OCR-Ansicht und Farbdetails.
 - URL-Eintraege mit Browser-Sprung im Popup, Kontextmenue und Detailfenster.
 - Code-Eintraege zeigen als Badge nur `CODE`; die konkrete Sprache bleibt separat fuer Highlighting und Export.

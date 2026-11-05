@@ -95,35 +95,67 @@ public class EntryViewModel : ViewModelBase
         }
     }
 
-    // Zweite Zeile im Popup: für URLs die echte URL statt nochmals den Titel
+    /// <summary>
+    /// Bold first line in the popup: the page title of a URL, "Bild 1280×720" for images, otherwise none
+    /// (plain entries show their text in the second line only).
+    /// </summary>
+    public string? HeadlineText => Entry.Type switch
+    {
+        EntryType.Url => string.IsNullOrWhiteSpace(Entry.UrlTitle) ? null : Entry.UrlTitle,
+        EntryType.Image => ImageHeadline(Entry.ImageSize),
+        _ => null,
+    };
+
+    public static string ImageHeadline((int Width, int Height) size)
+        => size.Width > 0 && size.Height > 0 ? $"Bild {size.Width}×{size.Height}" : "Bild";
+
+    /// <summary>Second line: the URL itself, the recognized text of an image in quotes, otherwise the content.</summary>
     public string SublineText
     {
         get
         {
-            if (Entry.Type == EntryType.Url)
+            switch (Entry.Type)
             {
-                var url = Entry.Content ?? "";
-                return url.Length > 200 ? url[..200] : url;
+                case EntryType.Url:
+                    var url = Entry.Content ?? "";
+                    return url.Length > 200 ? url[..200] : url;
+                case EntryType.Image:
+                    return OcrSubline(Entry.OcrText);
+                default:
+                    return PreviewText;
             }
-            return PreviewText;
         }
     }
 
-    public string RelativeTime
+    public static string OcrSubline(string? ocr)
     {
-        get
+        if (string.IsNullOrWhiteSpace(ocr)) return "Kein Text erkannt";
+        var flat = string.Join(' ', ocr.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (flat.Length > 200) flat = flat[..200];
+        return $"„{flat}“";
+    }
+
+    public string RelativeTime => FormatTime(Entry.Timestamp, DateTime.Now);
+
+    private static readonly System.Globalization.CultureInfo De = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+
+    /// <summary>
+    /// Today relative ("vor 6 Min."), yesterday and this week with weekday and clock time, older with the date.
+    /// Matches the list groups, so an entry under "Gestern" never says "vor 40 Min.".
+    /// </summary>
+    public static string FormatTime(DateTime timestamp, DateTime now)
+    {
+        var day = timestamp.Date;
+        if (day >= now.Date)
         {
-            var diff = DateTime.Now - Entry.Timestamp;
+            var diff = now - timestamp;
             if (diff.TotalSeconds < 60) return "gerade eben";
             if (diff.TotalMinutes < 60) return $"vor {(int)diff.TotalMinutes} Min.";
-            if (diff.TotalHours < 24) return $"vor {(int)diff.TotalHours} Std.";
-            if (diff.TotalDays < 7)
-            {
-                var days = (int)diff.TotalDays;
-                return days == 1 ? "vor 1 Tag" : $"vor {days} Tagen";
-            }
-            return Entry.Timestamp.ToString("dd.MM.yyyy");
+            return $"vor {(int)diff.TotalHours} Std.";
         }
+        if (day == now.Date.AddDays(-1)) return "Gestern, " + timestamp.ToString("HH:mm", De);
+        if (day > now.Date.AddDays(-7)) return timestamp.ToString("ddd", De).TrimEnd('.') + ", " + timestamp.ToString("HH:mm", De);
+        return timestamp.ToString("dd.MM.yyyy", De);
     }
 
     private BitmapImage? _thumbnail;
@@ -201,6 +233,7 @@ public class EntryViewModel : ViewModelBase
     public void RefreshPreview()
     {
         OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(HeadlineText));
         OnPropertyChanged(nameof(SublineText));
         OnPropertyChanged(nameof(BadgeText));
         OnPropertyChanged(nameof(DetailBadgeText));
@@ -237,6 +270,8 @@ public class EntryViewModel : ViewModelBase
         OnPropertyChanged(nameof(ContentKind));
         OnPropertyChanged(nameof(DetectionReason));
         OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(HeadlineText));
+        OnPropertyChanged(nameof(SublineText));
         OnPropertyChanged(nameof(BadgeText));
         OnPropertyChanged(nameof(DetailBadgeText));
     }
@@ -252,6 +287,8 @@ public class EntryViewModel : ViewModelBase
         OnPropertyChanged(nameof(ContentKind));
         OnPropertyChanged(nameof(DetectionReason));
         OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(HeadlineText));
+        OnPropertyChanged(nameof(SublineText));
         OnPropertyChanged(nameof(BadgeText));
         OnPropertyChanged(nameof(DetailBadgeText));
     }
@@ -263,5 +300,7 @@ public class EntryViewModel : ViewModelBase
         OnPropertyChanged(nameof(Favicon));
         OnPropertyChanged(nameof(UrlTitle));
         OnPropertyChanged(nameof(PreviewText));
+        OnPropertyChanged(nameof(HeadlineText));
+        OnPropertyChanged(nameof(SublineText));
     }
 }

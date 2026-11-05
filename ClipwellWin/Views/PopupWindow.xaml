@@ -339,8 +339,8 @@
 
                 <!-- Spalte 3: Inhalt -->
                 <StackPanel Grid.Column="3" Margin="10,0,8,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding UrlTitle}"
-                               Visibility="{Binding UrlTitle, Converter={StaticResource NullToVis}}"
+                    <TextBlock Text="{Binding HeadlineText}"
+                               Visibility="{Binding HeadlineText, Converter={StaticResource NullToVis}}"
                                FontSize="13" FontWeight="Medium"
                                Foreground="{DynamicResource PopupTextPrimaryBrush}"
                                TextTrimming="CharacterEllipsis" />
@@ -352,7 +352,7 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding UrlTitle, Converter={StaticResource NullToVis}}" Value="Visible">
+                                        <DataTrigger Binding="{Binding HeadlineText, Converter={StaticResource NullToVis}}" Value="Visible">
                                             <Setter Property="Foreground" Value="{DynamicResource PopupTextMutedBrush}" />
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -420,6 +420,45 @@
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+
+        <!-- Header toolbar button: same size for all actions; Tag "active" (panel/mode open) or "recording". -->
+        <Style x:Key="HeaderToolButton" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource PopupTextSubtleBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent" BorderThickness="1" BorderBrush="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="recording">
+                                <Setter TargetName="Bd" Property="Background" Value="#33E83B3B" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#99E83B3B" />
+                                <Setter Property="Foreground" Value="#FFE83B3B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <!-- Root-Border mit abgerundeten Ecken und Hintergrund -->
@@ -572,120 +611,52 @@
                             </ToggleButton.Style>
                         </ToggleButton>
 
-                        <!-- Header-Aktionsbuttons (Record + KB + Eyedropper + Schnellnotiz + Mehrfachauswahl) -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal">
-                            <StackPanel.Resources>
-                                <Style x:Key="HeaderIconButton" TargetType="Button">
-                                    <Setter Property="Width" Value="32" />
-                                    <Setter Property="Height" Value="32" />
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                    <Setter Property="Foreground" Value="{DynamicResource PopupTextSubtleBrush}" />
-                                    <Setter Property="Cursor" Value="Hand" />
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
-                                                        Width="32" Height="32">
-                                                    <TextBlock Text="{TemplateBinding Content}"
-                                                               FontFamily="{TemplateBinding FontFamily}"
-                                                               FontSize="{TemplateBinding FontSize}"
-                                                               FontWeight="{TemplateBinding FontWeight}"
-                                                               Foreground="{TemplateBinding Foreground}"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </StackPanel.Resources>
-                            <Button x:Name="RecordButton" Style="{StaticResource HeaderIconButton}"
-                                    Content="&#xE7C8;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                    ToolTip="Desktop-Aufnahme starten (sichtbarer Text als Markdown)"
-                                    Click="Record_Click" />
-                            <Button Style="{StaticResource HeaderIconButton}"
-                                    Content="KB" FontFamily="Segoe UI" FontSize="11" FontWeight="Bold"
-                                    ToolTip="KB: Dashboard, Gesamtübersicht und Aufnahmen"
-                                    Click="KnowledgeBase_Click" />
-                            <Button Content="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                    Width="32" Height="32"
-                                    Background="Transparent" BorderThickness="0"
-                                    Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
-                                    ToolTip="Farbe vom Bildschirm wählen" Click="Eyedropper_Click">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
-                                                Width="32" Height="32">
-                                            <TextBlock Text="{TemplateBinding Content}"
-                                                       FontFamily="{TemplateBinding FontFamily}"
-                                                       FontSize="{TemplateBinding FontSize}"
-                                                       Foreground="{TemplateBinding Foreground}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                            <Button Content="&#xE70F;" FontFamily="Segoe Fluent Icons" FontSize="16"
-                                    Width="32" Height="32"
-                                    Background="Transparent" BorderThickness="0"
-                                    Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
-                                    ToolTip="Schnellnotiz erstellen" Click="ToggleQuickNote_Click">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
-                                                Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
-                                            <TextBlock Text="{TemplateBinding Content}"
-                                                       FontFamily="{TemplateBinding FontFamily}"
-                                                       FontSize="{TemplateBinding FontSize}"
-                                                       Foreground="{TemplateBinding Foreground}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                            <Button Content="&#xE762;" FontFamily="Segoe Fluent Icons" FontSize="14"
-                                    Width="32" Height="32"
-                                    Background="Transparent" BorderThickness="0"
-                                    Foreground="{DynamicResource PopupTextSubtleBrush}" Cursor="Hand"
-                                    ToolTip="Mehrfachauswahl" Click="ToggleBulkMode_Click">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
-                                                Width="32" Height="32">
-                                            <TextBlock Text="{TemplateBinding Content}"
-                                                       FontFamily="{TemplateBinding FontFamily}"
-                                                       FontSize="{TemplateBinding FontSize}"
-                                                       Foreground="{TemplateBinding Foreground}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                        </StackPanel>
+                        <!-- Header toolbar: capture (record, quick note, eyedropper) | view (KB, multi-select) -->
+                        <Border Grid.Column="2" Margin="6,0,0,0" Padding="2" CornerRadius="8" VerticalAlignment="Center"
+                                Background="{DynamicResource PopupChipBrush}"
+                                BorderBrush="{DynamicResource PopupBorderBrush}" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="RecordButton" Style="{StaticResource HeaderToolButton}"
+                                        Content="&#xE7C8;"
+                                        ToolTip="Desktop-Aufnahme starten (sichtbarer Text als Markdown)"
+                                        Click="Record_Click" />
+                                <Button x:Name="QuickNoteButton" Content="&#xE70F;" ToolTip="Schnellnotiz"
+                                        ToolTipOpening="QuickNoteButton_ToolTipOpening" Click="ToggleQuickNote_Click">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource HeaderToolButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Visibility, ElementName=QuickNotePanel}" Value="Visible">
+                                                    <Setter Property="Tag" Value="active" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Style="{StaticResource HeaderToolButton}" Content="&#xE790;"
+                                        ToolTip="Farbe vom Bildschirm wählen" Click="Eyedropper_Click" />
+
+                                <Rectangle Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"
+                                           Fill="{DynamicResource PopupBorderBrush}" />
+
+                                <Button Style="{StaticResource HeaderToolButton}"
+                                        ToolTip="Wissensbasis: Dashboard, Suche, Brain, Notizen, Aufnahmen und Zwischenablage"
+                                        Click="KnowledgeBase_Click">
+                                    <Image Source="/Clipwell;component/Assets/kb-icon-16.png" Width="16" Height="16"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Button>
+                                <Button Content="&#xE762;" ToolTip="Mehrfachauswahl" Click="ToggleBulkMode_Click">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource HeaderToolButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsBulkMode}" Value="True">
+                                                    <Setter Property="Tag" Value="active" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </Border>
                     </Grid>
 
                     <!-- Filter-Chip-Leiste (Typ) + Häufigkeits-Sort-Toggle -->
@@ -740,19 +711,13 @@
                         <Button Grid.Column="1"
                                 x:Name="SortMenuButton"
                                 Content="{Binding SortModeLabel}"
-                                FontFamily="Segoe UI"
-                                FontSize="9"
-                                FontWeight="SemiBold"
-                                MinWidth="28" Height="20"
-                                Padding="6,0"
                                 Margin="4,0,0,0"
+                                Padding="{DynamicResource FilterChipPadding}"
+                                FontSize="{DynamicResource FilterChipFontSize}"
                                 ToolTip="Sortierung wählen"
                                 Cursor="Hand"
                                 VerticalAlignment="Center"
                                 Foreground="{DynamicResource PopupTextMutedBrush}"
-                                Background="Transparent"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource PopupBorderBrush}"
                                 Click="SortMenuButton_Click">
                             <Button.ContextMenu>
                                 <ContextMenu Opened="SortContextMenu_Opened">
@@ -763,40 +728,28 @@
                                     <MenuItem Header="Selten verwendet" IsCheckable="True" Tag="Selten"  Click="SortMenuItem_Click" />
                                 </ContextMenu>
                             </Button.ContextMenu>
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border x:Name="Bd" CornerRadius="4"
-                                                        Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        MinWidth="{TemplateBinding MinWidth}"
-                                                        Height="{TemplateBinding Height}"
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <TextBlock Text="{TemplateBinding Content}"
-                                                               FontFamily="{TemplateBinding FontFamily}"
-                                                               FontSize="{TemplateBinding FontSize}"
-                                                               FontWeight="{TemplateBinding FontWeight}"
-                                                               Foreground="{TemplateBinding Foreground}"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
-                                                    </Trigger>
-                                                    <DataTrigger Binding="{Binding IsSortCustom}" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
-                                                        <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
-                                                    </DataTrigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Button.Style>
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" CornerRadius="12" Background="{DynamicResource PopupChipBrush}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold"
+                                                       Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}" />
+                                            <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons" FontSize="8" Margin="5,1,0,0"
+                                                       VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsSortCustom}" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+                                        </DataTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
                         </Button>
                     </Grid>
 

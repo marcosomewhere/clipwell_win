@@ -12,7 +12,7 @@
 | YAML | `YamlDotNet 18.1.0` (detection and validation) |
 | Dictation | `Whisper.net 1.9.1` with bundled `ggml-base.bin` |
 | Embeddings | `Microsoft.ML.OnnxRuntime 1.31.1`, `Microsoft.ML.Tokenizers 2.0.1`, multilingual-e5-small bundled as `models\e5-small` |
-| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 221 tests |
+| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 234 tests |
 
 ## Project Layout
 

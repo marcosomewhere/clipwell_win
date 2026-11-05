@@ -407,10 +407,27 @@ public partial class PopupWindow : Window
         RecordButton.ToolTip = recording
             ? "Desktop-Aufnahme beenden"
             : "Desktop-Aufnahme starten (sichtbarer Text als Markdown)";
-        if (recording)
-            RecordButton.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0x3B, 0x3B));
-        else
-            RecordButton.ClearValue(ForegroundProperty);
+        RecordButton.Tag = recording ? "recording" : null;
+    }
+
+    private void QuickNoteButton_ToolTipOpening(object sender, ToolTipEventArgs e)
+    {
+        var s = _app.CurrentSettings;
+        var keys = ShortcutText(s.KeyQuickNote, s.KeyQuickNoteCtrl, s.KeyQuickNoteAlt, s.KeyQuickNoteShift, s.KeyQuickNoteWin);
+        QuickNoteButton.ToolTip = keys.Length == 0 ? "Schnellnotiz" : $"Schnellnotiz ({keys})";
+    }
+
+    /// <summary>Readable shortcut such as "Ctrl+N", in the notation of the settings window.</summary>
+    public static string ShortcutText(string? key, bool ctrl, bool alt, bool shift, bool win)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return "";
+        var parts = new List<string>();
+        if (ctrl) parts.Add("Ctrl");
+        if (alt) parts.Add("Alt");
+        if (shift) parts.Add("Shift");
+        if (win) parts.Add("Win");
+        parts.Add(key.Trim());
+        return string.Join("+", parts);
     }
 
     private void Eyedropper_Click(object sender, RoutedEventArgs e)

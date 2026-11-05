@@ -27,6 +27,11 @@
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\kb-icon-16.png" />
+    <Resource Include="Assets\kb-rec-logo.png" />
+  </ItemGroup>
+
   <!-- The Whisper base model (MIT) ships next to the EXE under models\. It is too large for git, so a fresh
        checkout downloads it once into Tools\whisper (gitignored) and verifies its SHA256. -->
   <PropertyGroup>

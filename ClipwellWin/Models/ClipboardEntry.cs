@@ -42,6 +42,24 @@ public class ClipboardEntry
         set => _hasHtml = value;
     }
 
+    private (int Width, int Height)? _imageSize;
+
+    /// <summary>
+    /// Pixel size read from the image header. Lite entries carry no image data, so the database passes the size
+    /// from the first bytes of the blob; (0, 0) when unknown.
+    /// </summary>
+    public (int Width, int Height) ImageSize
+    {
+        get
+        {
+            if (_imageSize is { } known) return known;
+            if (ImageData == null) return (0, 0);
+            _imageSize = Services.ImageUtils.TryReadImageSize(ImageData, out var w, out var h) ? (w, h) : (0, 0);
+            return _imageSize.Value;
+        }
+        set => _imageSize = value;
+    }
+
     public string PreviewText => Type switch
     {
         EntryType.Image => OcrText?.Length > 0 ? OcrText : "(Bild)",
