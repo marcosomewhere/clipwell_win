@@ -180,11 +180,6 @@ public class PopupViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedCount));
     }
 
-    public void DeleteSelected()
-    {
-        DeleteEntries(Entries.Where(e => e.IsSelected).ToList());
-    }
-
     public void DeleteEntries(List<EntryViewModel> entries)
     {
         foreach (var vm in entries)
@@ -217,9 +212,6 @@ public class PopupViewModel : ViewModelBase
 
     public List<EntryViewModel> GetSelectedViewModels()
         => Entries.Where(e => e.IsSelected).ToList();
-
-    public List<ClipboardEntry> GetSelectedEntries()
-        => Entries.Where(e => e.IsSelected).Select(e => e.Entry).ToList();
 
     private EntryViewModel? _selected;
     public EntryViewModel? SelectedEntry
@@ -258,6 +250,7 @@ public class PopupViewModel : ViewModelBase
             }
 
             _view.SortDescriptions.Add(new SortDescription(nameof(EntryViewModel.IsPinned), ListSortDirection.Descending));
+            _view.SortDescriptions.Add(new SortDescription(nameof(EntryViewModel.PinSortKey), ListSortDirection.Descending));
 
             switch (_sortMode)
             {
@@ -281,6 +274,7 @@ public class PopupViewModel : ViewModelBase
             {
                 liveView.IsLiveSorting = true;
                 liveView.LiveSortingProperties.Add(nameof(EntryViewModel.IsPinned));
+                liveView.LiveSortingProperties.Add(nameof(EntryViewModel.PinSortKey));
                 if (_sortMode is "Häufig" or "Selten")
                 {
                     liveView.LiveSortingProperties.Add(nameof(EntryViewModel.UseCount));
@@ -321,6 +315,14 @@ public class PopupViewModel : ViewModelBase
             }
             kept.SetTimestamp(entry.Timestamp);
             _db.UpdateTimestamp(kept.Id, entry.Timestamp);
+            // The same text copied again from a web page brings fresh formatting and source.
+            if (entry.HtmlContent != null || entry.SourceUrl != null)
+            {
+                kept.Entry.HtmlContent = entry.HtmlContent;
+                kept.Entry.HasHtml = entry.HtmlContent != null;
+                kept.Entry.SourceUrl = entry.SourceUrl ?? kept.Entry.SourceUrl;
+                _db.UpdateHtml(kept.Id, kept.Entry.HtmlContent, kept.Entry.SourceUrl);
+            }
 
             foreach (var duplicate in duplicates.Skip(1))
             {
@@ -405,6 +407,33 @@ public class PopupViewModel : ViewModelBase
         ReseatEntry(vm);
     }
 
+    /// <summary>
+    /// Moves a pinned entry before or after another pinned entry and renumbers all pinned entries,
+    /// including ones hidden by a pinboard search, so PinOrder values stay unique.
+    /// </summary>
+    public bool MovePinned(long draggedId, long targetId, bool insertAfter)
+    {
+        if (draggedId == targetId) return false;
+
+        var pinned = Entries.Where(e => e.IsPinned).OrderByDescending(e => e.PinSortKey).ToList();
+        var dragged = pinned.FirstOrDefault(e => e.Id == draggedId);
+        var target = pinned.FirstOrDefault(e => e.Id == targetId);
+        if (dragged == null || target == null) return false;
+
+        pinned.Remove(dragged);
+        pinned.Insert(pinned.IndexOf(target) + (insertAfter ? 1 : 0), dragged);
+
+        // Gaps of 1000 leave room for NextPinOrder (max + 1) without renumbering on every pin.
+        for (int i = 0; i < pinned.Count; i++)
+        {
+            var newOrder = (long)(pinned.Count - i) * 1000;
+            if (pinned[i].PinOrder == newOrder) continue;
+            pinned[i].PinOrder = newOrder;
+            _db.UpdatePinOrder(pinned[i].Id, newOrder);
+        }
+        return true;
+    }
+
     private void ReseatEntry(EntryViewModel vm)
     {
         var oldIndex = Entries.IndexOf(vm);
@@ -421,6 +450,8 @@ public class PopupViewModel : ViewModelBase
     {
         var pinned = b.IsPinned.CompareTo(a.IsPinned);
         if (pinned != 0) return pinned;
+        var pinOrder = b.PinSortKey.CompareTo(a.PinSortKey);
+        if (pinOrder != 0) return pinOrder;
         return _sortMode switch
         {
             "Häufig"  => b.UseCount.CompareTo(a.UseCount),
@@ -440,23 +471,6 @@ public class PopupViewModel : ViewModelBase
     {
         Entries.Remove(vm);
         _ = System.Threading.Tasks.Task.Run(() => _db.SecureDelete(vm.Id));
-    }
-
-    public void AddQuickNote(string text)
-    {
-        var entry = new ClipboardEntry
-        {
-            Type = EntryType.Text,
-            Content = text,
-            IsPinned = true,
-            Timestamp = DateTime.Now,
-            ContentKind = "NOTE",
-            DetectionReason = "Schnellnotiz",
-        };
-        var id = _db.Insert(entry);
-        entry.Id = id;
-        Entries.Insert(0, new EntryViewModel(entry));
-        _view.Refresh();
     }
 
     public EntryViewModel? LatestEntry()
@@ -497,23 +511,16 @@ public class PopupViewModel : ViewModelBase
         vm.RefreshPreview();
     }
 
-    public void ClearFilters()
-    {
-        _typeFilter = null;
-        _showPinnedOnly = false;
-        _searchText = "";
-        _isRegexSearch = false;
-        OnPropertyChanged(nameof(TypeFilter));
-        OnPropertyChanged(nameof(ShowPinnedOnly));
-        OnPropertyChanged(nameof(SearchText));
-        OnPropertyChanged(nameof(IsRegexSearch));
-        _view.Refresh();
-    }
+    private DateTime _groupingDate = DateTime.Today;
 
     public void RefreshTimestamps(IEnumerable<EntryViewModel>? entries = null)
     {
         foreach (var vm in (entries ?? Entries).ToList())
             vm.RefreshTimestamp();
+
+        // Regrouping rebuilds the whole list; date groups only change when the day changes.
+        if (DateTime.Today == _groupingDate) return;
+        _groupingDate = DateTime.Today;
         _view.Refresh();
     }
 

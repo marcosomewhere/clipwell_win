@@ -1,9 +1,7 @@
 using System.Globalization;
-using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using ClipwellWin.Models;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
@@ -14,13 +12,8 @@ namespace ClipwellWin.Converters;
 [ValueConversion(typeof(bool), typeof(Visibility))]
 public class BoolToVisibilityConverter : IValueConverter
 {
-    public bool Invert { get; set; }
     public object Convert(object v, Type t, object p, CultureInfo c)
-    {
-        bool b = v is bool b2 && b2;
-        if (Invert) b = !b;
-        return b ? Visibility.Visible : Visibility.Collapsed;
-    }
+        => v is true ? Visibility.Visible : Visibility.Collapsed;
     public object ConvertBack(object v, Type t, object p, CultureInfo c)
         => v is Visibility vis && vis == Visibility.Visible;
 }
@@ -28,34 +21,8 @@ public class BoolToVisibilityConverter : IValueConverter
 [ValueConversion(typeof(object), typeof(Visibility))]
 public class NullToVisibilityConverter : IValueConverter
 {
-    public bool Invert { get; set; }
     public object Convert(object v, Type t, object p, CultureInfo c)
-    {
-        bool hasValue = v != null && (v is not string s || !string.IsNullOrEmpty(s));
-        if (Invert) hasValue = !hasValue;
-        return hasValue ? Visibility.Visible : Visibility.Collapsed;
-    }
-    public object ConvertBack(object v, Type t, object p, CultureInfo c) => throw new NotSupportedException();
-}
-
-[ValueConversion(typeof(byte[]), typeof(BitmapImage))]
-public class BytesToImageConverter : IValueConverter
-{
-    public object? Convert(object v, Type t, object p, CultureInfo c)
-    {
-        if (v is not byte[] bytes || bytes.Length == 0) return null;
-        try
-        {
-            var img = new BitmapImage();
-            img.BeginInit();
-            img.StreamSource = new MemoryStream(bytes);
-            img.CacheOption = BitmapCacheOption.OnLoad;
-            img.EndInit();
-            img.Freeze();
-            return img;
-        }
-        catch { return null; }
-    }
+        => v != null && (v is not string s || s.Length > 0) ? Visibility.Visible : Visibility.Collapsed;
     public object ConvertBack(object v, Type t, object p, CultureInfo c) => throw new NotSupportedException();
 }
 

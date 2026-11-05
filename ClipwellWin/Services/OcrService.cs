@@ -1,10 +1,8 @@
 using System.IO;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
-using WpfBitmapDecoder = System.Windows.Media.Imaging.BitmapDecoder;
 using WpfBitmapFrame = System.Windows.Media.Imaging.BitmapFrame;
 using WinBitmapDecoder = Windows.Graphics.Imaging.BitmapDecoder;
 

@@ -2,7 +2,6 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -44,12 +43,14 @@ public partial class PinboardWindow : Window
         };
     }
 
+    private double? _pendingScrollOffset;
+
     internal void Refresh()
     {
         var search = PinSearchBox?.Text?.Trim() ?? "";
         var allPinned = _vm.Entries
             .Where(e => e.IsPinned)
-            .OrderByDescending(e => e.PinOrder > 0 ? e.PinOrder : e.Timestamp.Ticks)
+            .OrderByDescending(e => e.PinSortKey)
             .ToList();
 
         var shown = string.IsNullOrEmpty(search)
@@ -59,12 +60,36 @@ public partial class PinboardWindow : Window
                 (e.Entry.OcrText?.Contains(search, StringComparison.OrdinalIgnoreCase) == true) ||
                 (e.Entry.UrlTitle?.Contains(search, StringComparison.OrdinalIgnoreCase) == true)).ToList();
 
+        var scroller = FindScrollViewer(PinList);
+        // Several refreshes can run back to back before the restore happens; keep the first captured offset.
+        var offset = _pendingScrollOffset ?? scroller?.VerticalOffset ?? 0;
         PinList.ItemsSource = shown;
+        // A new ItemsSource resets the scroll position; restore it so unpinning does not jump the list.
+        if (scroller != null && offset > 0 && _pendingScrollOffset == null)
+        {
+            _pendingScrollOffset = offset;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+            {
+                scroller.ScrollToVerticalOffset(_pendingScrollOffset ?? 0);
+                _pendingScrollOffset = null;
+            }));
+        }
         CountLabel.Text = allPinned.Count == 0
             ? "Keine gepinnten Einträge"
             : string.IsNullOrEmpty(search)
                 ? $"{allPinned.Count} gepinnte{(allPinned.Count == 1 ? "r Eintrag" : " Einträge")}"
                 : $"{shown.Count} von {allPinned.Count} angezeigt";
+    }
+
+    private static System.Windows.Controls.ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is System.Windows.Controls.ScrollViewer sv) return sv;
+            if (FindScrollViewer(child) is { } found) return found;
+        }
+        return null;
     }
 
     private void PinSearch_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -108,16 +133,91 @@ public partial class PinboardWindow : Window
         if (!string.IsNullOrEmpty(text))
             dragData.SetText(text, TextDataFormat.UnicodeText);
 
-        DragDrop.DoDragDrop(PinList, dragData, DragDropEffects.Move | DragDropEffects.Copy);
+        _dragSourceItem = PinList.ItemContainerGenerator.ContainerFromItem(entry) as System.Windows.Controls.ListBoxItem;
+        using var ghost = _dragSourceItem != null ? DragGhost.Create(_dragSourceItem) : null;
+        SetItemBorder(_dragSourceItem, DragVisual.Source);
+        void OnFeedback(object s, System.Windows.GiveFeedbackEventArgs args) => ghost?.UpdatePosition();
+        PinList.GiveFeedback += OnFeedback;
+        try
+        {
+            ghost?.Show();
+            DragDrop.DoDragDrop(PinList, dragData, DragDropEffects.Move | DragDropEffects.Copy);
+        }
+        finally
+        {
+            PinList.GiveFeedback -= OnFeedback;
+            SetItemBorder(_dragSourceItem, DragVisual.None);
+            SetItemBorder(_dropTargetItem, DragVisual.None);
+            _dragSourceItem = null;
+            _dropTargetItem = null;
+        }
+    }
+
+    private System.Windows.Controls.ListBoxItem? _dragSourceItem;
+    private System.Windows.Controls.ListBoxItem? _dropTargetItem;
+    private bool _dropAfter;
+
+    private enum DragVisual { None, Source, InsertBefore, InsertAfter }
+
+    private void SetItemBorder(System.Windows.Controls.ListBoxItem? item, DragVisual visual)
+    {
+        if (item?.Template?.FindName("Bd", item) is not System.Windows.Controls.Border bd) return;
+
+        var accent = TryFindResource("AccentBrush") as System.Windows.Media.Brush ?? System.Windows.SystemColors.HighlightBrush;
+        // Thickness plus padding always add up to the template default (top 8, sides 8, bottom 6) so rows never shift.
+        (bd.BorderThickness, bd.Padding, bd.BorderBrush, item.Opacity) = visual switch
+        {
+            DragVisual.Source       => (new Thickness(2), new Thickness(6, 6, 6, 4), accent, 0.6),
+            DragVisual.InsertBefore => (new Thickness(0, 2, 0, 0), new Thickness(8, 6, 8, 6), accent, 1.0),
+            DragVisual.InsertAfter  => (new Thickness(0, 0, 0, 2), new Thickness(8, 8, 8, 4), accent, 1.0),
+            _                       => (new Thickness(0, 2, 0, 0), new Thickness(8, 6, 8, 6), (System.Windows.Media.Brush)System.Windows.Media.Brushes.Transparent, 1.0),
+        };
+    }
+
+    private static System.Windows.Controls.ListBoxItem? FindListBoxItem(DependencyObject? source)
+    {
+        while (source != null && source is not System.Windows.Controls.ListBoxItem)
+            source = source is Visual or System.Windows.Media.Media3D.Visual3D
+                ? System.Windows.Media.VisualTreeHelper.GetParent(source)
+                : LogicalTreeHelper.GetParent(source);
+        return source as System.Windows.Controls.ListBoxItem;
     }
 
     private void PinList_DragOver(object sender, DragEventArgs e)
     {
         if (e.Data.GetDataPresent("ClipwellPinboardEntry"))
+        {
             e.Effects = DragDropEffects.Move;
+            UpdateDropIndicator(e);
+        }
         else
             UpdateDropEffects(e);
         e.Handled = true;
+    }
+
+    private void UpdateDropIndicator(DragEventArgs e)
+    {
+        var item = FindListBoxItem(e.OriginalSource as DependencyObject);
+        var after = item != null && e.GetPosition(item).Y > item.ActualHeight / 2;
+
+        if (item == _dropTargetItem && after == _dropAfter) return;
+        if (_dropTargetItem != _dragSourceItem)
+            SetItemBorder(_dropTargetItem, DragVisual.None);
+
+        _dropTargetItem = item;
+        _dropAfter = after;
+        if (item != null && item != _dragSourceItem)
+            SetItemBorder(item, after ? DragVisual.InsertAfter : DragVisual.InsertBefore);
+    }
+
+    private void PinList_DragLeave(object sender, DragEventArgs e)
+    {
+        // DragLeave also fires when crossing between child elements; only clear when the pointer really left the list.
+        var pos = e.GetPosition(PinList);
+        if (pos.X >= 0 && pos.Y >= 0 && pos.X < PinList.ActualWidth && pos.Y < PinList.ActualHeight) return;
+        if (_dropTargetItem != _dragSourceItem)
+            SetItemBorder(_dropTargetItem, DragVisual.None);
+        _dropTargetItem = null;
     }
 
     private void PinList_Drop(object sender, DragEventArgs e)
@@ -127,8 +227,10 @@ public partial class PinboardWindow : Window
             var idStr = e.Data.GetData("ClipwellPinboardEntry") as string;
             if (long.TryParse(idStr, out var draggedId))
             {
-                var dropTarget = FindDataContext<EntryViewModel>(e.OriginalSource as DependencyObject);
-                ReorderPinnedEntry(draggedId, dropTarget?.Id);
+                var dropItem = FindListBoxItem(e.OriginalSource as DependencyObject);
+                var dropTarget = dropItem?.DataContext as EntryViewModel;
+                var after = dropItem != null && e.GetPosition(dropItem).Y > dropItem.ActualHeight / 2;
+                ReorderPinnedEntry(draggedId, dropTarget?.Id, after);
             }
             e.Handled = true;
             return;
@@ -137,32 +239,23 @@ public partial class PinboardWindow : Window
         Pinboard_Drop(sender, e);
     }
 
-    private void ReorderPinnedEntry(long draggedId, long? targetId)
+    private void ReorderPinnedEntry(long draggedId, long? targetId, bool insertAfter)
     {
-        if (!targetId.HasValue || draggedId == targetId.Value) return;
+        if (draggedId == targetId) return;
 
         var items = (PinList.ItemsSource as System.Collections.Generic.List<EntryViewModel>)?.ToList();
-        if (items == null) return;
+        if (items == null || items.Count == 0) return;
 
-        var dragged = items.FirstOrDefault(e => e.Id == draggedId);
-        var target  = items.FirstOrDefault(e => e.Id == targetId.Value);
-        if (dragged == null || target == null) return;
-
-        items.Remove(dragged);
-        var insertIdx = items.IndexOf(target);
-        items.Insert(insertIdx, dragged);
-
-        // Reassign PinOrder with gaps
-        for (int i = 0; i < items.Count; i++)
+        // Dropping on empty space below the list moves the entry to the end.
+        if (!targetId.HasValue)
         {
-            var newOrder = (long)(items.Count - i) * 1000;
-            if (items[i].PinOrder != newOrder)
-            {
-                items[i].PinOrder = newOrder;
-                _app.Database.UpdatePinOrder(items[i].Id, newOrder);
-            }
+            targetId = items[^1].Id;
+            insertAfter = true;
+            if (targetId == draggedId) return;
         }
 
+        // The visible list may be filtered by the search box; the view model reorders all pinned entries.
+        _vm.MovePinned(draggedId, targetId.Value, insertAfter);
         Refresh();
     }
 
@@ -391,24 +484,6 @@ public partial class PinboardWindow : Window
             || ext.Equals(".sql", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".csv", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".log", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static BitmapSource? LoadBitmapSource(byte[] bytes)
-    {
-        try
-        {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.StreamSource = new MemoryStream(bytes);
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.EndInit();
-            image.Freeze();
-            return image;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static bool IsInsideButton(DependencyObject? source)

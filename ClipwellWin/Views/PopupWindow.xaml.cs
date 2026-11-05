@@ -11,11 +11,9 @@ using System.Windows.Threading;
 using ClipwellWin.Models;
 using ClipwellWin.Services;
 using ClipwellWin.ViewModels;
-using Microsoft.Win32;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using RadioButton = System.Windows.Controls.RadioButton;
-using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;
 
@@ -64,9 +62,18 @@ public partial class PopupWindow : Window
             }
         };
 
+        if (_app != null)
+        {
+            _app.RecordingStateChanged += (_, _) => UpdateRecordButton();
+            UpdateRecordButton();
+        }
+
         var s = _app?.CurrentSettings;
         Width  = Math.Max(MinimumPopupWidth, s?.PopupWidth  > 0 ? s.PopupWidth  : DefaultPopupWidth);
         Height = Math.Max(MinimumPopupHeight, s?.PopupHeight > 0 ? s.PopupHeight : DefaultPopupHeight);
+
+        // Start invisible: the open animation runs after the first render, which would otherwise flash at full opacity.
+        Opacity = 0;
     }
 
     private const int WM_NCHITTEST = 0x0084;
@@ -80,8 +87,13 @@ public partial class PopupWindow : Window
         ApplyWindowTheme();
         ClampSizeToCurrentMonitor();
         HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProcHook);
-        PositionAtCursor();
     }
+
+    private bool _closed;
+
+    internal bool IsInitializedHandle => !_closed && new WindowInteropHelper(this).Handle != IntPtr.Zero;
+
+    internal void EnsureHandle() => new WindowInteropHelper(this).EnsureHandle();
 
     internal void ApplyWindowTheme()
     {
@@ -89,7 +101,7 @@ public partial class PopupWindow : Window
         if (hwnd == IntPtr.Zero) return;
         var tint = _app?.IsEffectiveDarkTheme == false
             ? Color.FromArgb(240, 250, 250, 248)
-            : Color.FromArgb(238, 23, 26, 30);
+            : Color.FromArgb(242, 10, 10, 10);
         if (!NativeMethods.EnableAcrylic(hwnd, tint))
             Background = new SolidColorBrush(tint);
         NativeMethods.SetImmersiveDarkMode(hwnd, _app?.IsEffectiveDarkTheme == true);
@@ -141,6 +153,7 @@ public partial class PopupWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
         _timestampTimer.Stop();
         base.OnClosed(e);
     }
@@ -374,6 +387,27 @@ public partial class PopupWindow : Window
     private void BulkCancel_Click(object sender, RoutedEventArgs e)
         => _vm.IsBulkMode = false;
 
+    private void Record_Click(object sender, RoutedEventArgs e) => _app.ToggleRecording();
+
+    private void KnowledgeBase_Click(object sender, RoutedEventArgs e)
+    {
+        Hide();
+        _app.OpenKnowledgeBase();
+    }
+
+    private void UpdateRecordButton()
+    {
+        var recording = _app.Recorder.IsRecording;
+        RecordButton.Content = recording ? "" : "";
+        RecordButton.ToolTip = recording
+            ? "Desktop-Aufnahme beenden"
+            : "Desktop-Aufnahme starten (sichtbarer Text als Markdown)";
+        if (recording)
+            RecordButton.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0x3B, 0x3B));
+        else
+            RecordButton.ClearValue(ForegroundProperty);
+    }
+
     private void Eyedropper_Click(object sender, RoutedEventArgs e)
     {
         Hide();
@@ -438,10 +472,41 @@ public partial class PopupWindow : Window
     {
         var text = QuickNoteBox.Text.Trim();
         if (string.IsNullOrEmpty(text)) return;
-        _vm.AddQuickNote(text);
+        try
+        {
+            NoteStore.Create(AppPaths.NotesDir, text, DateTime.Now);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            App.LogCrash(ex);
+            System.Windows.MessageBox.Show(this, $"Notiz konnte nicht gespeichert werden: {ex.Message}", "Clipwell",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        ClearQuickNote();
+    }
+
+    private void ClearQuickNote()
+    {
         QuickNotePanel.Visibility = Visibility.Collapsed;
         QuickNoteBox.Text = "";
         if (_app != null) { _app.CurrentSettings.QuickNoteDraft = ""; _app.SaveSettings(); }
+    }
+
+    private void QuickNoteDictate_Click(object sender, RoutedEventArgs e)
+        => HandOverQuickNote(NotesStartAction.NewDictatedNote);
+
+    private void QuickNoteOpenNotes_Click(object sender, RoutedEventArgs e)
+        => HandOverQuickNote(QuickNoteBox.Text.Trim().Length > 0 ? NotesStartAction.NewNote : NotesStartAction.None);
+
+    /// <summary>Moves the current quick-note text into the notes window, where it can be dictated into and edited.</summary>
+    private void HandOverQuickNote(NotesStartAction action)
+    {
+        if (_app == null) return;
+        var text = QuickNoteBox.Text.Trim();
+        ClearQuickNote();
+        Hide();
+        _app.OpenNotes(action, text.Length > 0 ? text + "\n" : null);
     }
 
     private Point? _dragStart;
@@ -461,10 +526,35 @@ public partial class PopupWindow : Window
         if (vm == null) return;
 
         var text = vm.Content ?? vm.Entry.OcrText ?? "";
-        if (!string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text)) return;
+
+        var container = EntryList.ItemContainerGenerator.ContainerFromItem(vm) as ListBoxItem;
+        var bd = container?.Template?.FindName("Bd", container) as Border;
+        // Snapshot before the drag styling is applied so the ghost shows the entry as it normally looks.
+        using var ghost = container != null ? DragGhost.Create(container) : null;
+        if (bd != null && container != null)
+        {
+            bd.BorderThickness = new Thickness(2);
+            bd.SetResourceReference(Border.BorderBrushProperty, "AccentBrush");
+            container.Opacity = 0.6;
+        }
+        void OnFeedback(object s, System.Windows.GiveFeedbackEventArgs args) => ghost?.UpdatePosition();
+        EntryList.GiveFeedback += OnFeedback;
+        try
+        {
+            ghost?.Show();
             DragDrop.DoDragDrop(EntryList,
                 new System.Windows.DataObject(System.Windows.DataFormats.UnicodeText, text),
                 System.Windows.DragDropEffects.Copy);
+        }
+        finally
+        {
+            EntryList.GiveFeedback -= OnFeedback;
+            // Clearing the local values hands control back to the template triggers (selection ring).
+            bd?.ClearValue(Border.BorderThicknessProperty);
+            bd?.ClearValue(Border.BorderBrushProperty);
+            container?.ClearValue(OpacityProperty);
+        }
     }
 
     private void EntryList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -551,6 +641,10 @@ public partial class PopupWindow : Window
 
     private void TogglePinAndRefreshList(EntryViewModel vm)
     {
+        _entryScrollViewer ??= FindVisualChild<ScrollViewer>(EntryList);
+        var offset = _entryScrollViewer?.VerticalOffset ?? 0;
+        var oldIndex = EntryList.Items.IndexOf(vm);
+
         _vm.TogglePin(vm);
         var pinned = vm.IsPinned;
 
@@ -559,11 +653,17 @@ public partial class PopupWindow : Window
             EntryList.SelectedItem = null;
             _vm.SelectedEntry = null;
         }
+        else if (oldIndex >= 0 && EntryList.Items.Count > 0)
+        {
+            // Unpinned entries move back into their date group; keep the list where it was instead of following them.
+            EntryList.SelectedIndex = Math.Min(oldIndex, EntryList.Items.Count - 1);
+        }
 
         Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
         {
             _entryScrollViewer = FindVisualChild<ScrollViewer>(EntryList);
-            if (pinned && _entryScrollViewer != null)
+            if (_entryScrollViewer == null) return;
+            if (pinned)
             {
                 _entryScrollViewer.ScrollToTop();
                 EntryList.SelectedItem = null;
@@ -571,7 +671,7 @@ public partial class PopupWindow : Window
             }
             else
             {
-                EntryList.ScrollIntoView(vm);
+                _entryScrollViewer.ScrollToVerticalOffset(offset);
             }
         }));
     }

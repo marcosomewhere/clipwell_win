@@ -10,25 +10,25 @@
         Background="{DynamicResource OnboardingBackgroundBrush}"
         Foreground="{DynamicResource OnboardingTextPrimaryBrush}">
     <Window.Resources>
-        <SolidColorBrush x:Key="EditorChromeBrush" Color="#101418" />
-        <SolidColorBrush x:Key="EditorPanelBrush" Color="#171D22" />
-        <SolidColorBrush x:Key="EditorPanelAltBrush" Color="#1F262D" />
-        <SolidColorBrush x:Key="EditorCanvasBackBrush" Color="#232A31" />
-        <SolidColorBrush x:Key="EditorBorderBrush" Color="#303943" />
-        <SolidColorBrush x:Key="EditorMutedBrush" Color="#9AA6B2" />
-        <SolidColorBrush x:Key="EditorHoverBrush" Color="#28313A" />
-        <SolidColorBrush x:Key="EditorPressedBrush" Color="#323C45" />
-        <SolidColorBrush x:Key="EditorTextPanelBrush" Color="#101820" />
-        <SolidColorBrush x:Key="EditorTextHeaderBrush" Color="#141C24" />
-        <SolidColorBrush x:Key="EditorTextBodyBrush" Color="#0B1117" />
-        <SolidColorBrush x:Key="EditorTextLineBrush" Color="#0E151C" />
-        <SolidColorBrush x:Key="EditorTextBrush" Color="#F4F6F8" />
-        <SolidColorBrush x:Key="EditorTextMutedBrush" Color="#87919C" />
-        <SolidColorBrush x:Key="EditorSelectionTextBrush" Color="#111418" />
+        <SolidColorBrush x:Key="EditorChromeBrush" Color="#0A0A0A" />
+        <SolidColorBrush x:Key="EditorPanelBrush" Color="#121212" />
+        <SolidColorBrush x:Key="EditorPanelAltBrush" Color="#191919" />
+        <SolidColorBrush x:Key="EditorCanvasBackBrush" Color="#141414" />
+        <SolidColorBrush x:Key="EditorBorderBrush" Color="#262626" />
+        <SolidColorBrush x:Key="EditorMutedBrush" Color="#9A9A9A" />
+        <SolidColorBrush x:Key="EditorHoverBrush" Color="#202020" />
+        <SolidColorBrush x:Key="EditorPressedBrush" Color="#2A2A2A" />
+        <SolidColorBrush x:Key="EditorTextPanelBrush" Color="#0E0E0E" />
+        <SolidColorBrush x:Key="EditorTextHeaderBrush" Color="#121212" />
+        <SolidColorBrush x:Key="EditorTextBodyBrush" Color="#0A0A0A" />
+        <SolidColorBrush x:Key="EditorTextLineBrush" Color="#0E0E0E" />
+        <SolidColorBrush x:Key="EditorTextBrush" Color="#EDEDED" />
+        <SolidColorBrush x:Key="EditorTextMutedBrush" Color="#8A8A8A" />
+        <SolidColorBrush x:Key="EditorSelectionTextBrush" Color="#0A0A0A" />
 
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
-        </Style>
+        <!-- Empty on purpose: overrides the WPF-UI TextBlock style without setting Foreground, so text
+             inherits from its button (dark on accent) and otherwise from the window Foreground. -->
+        <Style TargetType="TextBlock" />
 
         <Style x:Key="EditorTextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource EditorTextBodyBrush}" />
@@ -210,6 +210,9 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <Border Grid.Row="0" Height="2" VerticalAlignment="Top" Panel.ZIndex="1"
+                Background="{DynamicResource AccentStripeBrush}" IsHitTestVisible="False" />
+
         <Border Grid.Row="0"
                 Background="{DynamicResource EditorChromeBrush}"
                 BorderBrush="{DynamicResource EditorBorderBrush}"
@@ -219,10 +222,10 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,16,0">
                     <TextBlock Text="&#xE91B;" FontFamily="Segoe Fluent Icons" FontSize="14"
                                Foreground="{DynamicResource OnboardingAccentBrush}"
                                VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -235,12 +238,20 @@
                     </StackPanel>
                     <TextBlock x:Name="ReasonLabel" Foreground="{DynamicResource EditorMutedBrush}" FontSize="12"
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SourceLinkLabel" Visibility="Collapsed" VerticalAlignment="Center"
+                               FontSize="12" MaxWidth="460" TextTrimming="CharacterEllipsis">
+                        <Hyperlink x:Name="SourceHyperlink" Click="SourceLink_Click"
+                                   Foreground="{DynamicResource AccentBrush}" TextDecorations="{x:Null}">
+                            <Run x:Name="SourceLinkRun" />
+                        </Hyperlink>
+                    </TextBlock>
                 </StackPanel>
 
                 <StackPanel x:Name="ZoomControlsPanel"
                             Grid.Column="1"
                             Orientation="Horizontal"
                             VerticalAlignment="Center"
+                            Margin="0,0,24,0"
                             Visibility="Collapsed">
                     <Button Content="-" Width="34" Padding="0" Style="{DynamicResource EditorButtonStyle}"
                             Click="EditorZoomOut_Click" />
@@ -635,6 +646,13 @@
                                       Visibility="Collapsed"
                                       SelectionChanged="EditorLanguageBox_SelectionChanged"
                                       Margin="0,0,8,0" />
+                            <ToggleButton x:Name="WebContentToggle"
+                                          Content="Webinhalt"
+                                          Visibility="Collapsed"
+                                          Click="WebContentToggle_Click"
+                                          ToolTip="Von der Webseite übernommenen Inhalt aufbereitet als Markdown anzeigen"
+                                          Style="{DynamicResource EditorToggleStyle}"
+                                          Margin="0,0,8,0" />
                             <ToggleButton x:Name="MarkdownPreviewToggle"
                                           Content="Vorschau"
                                           Visibility="Collapsed"

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using WpfColor = System.Windows.Media.Color;
 using WpfPoint = System.Windows.Point;
@@ -10,6 +11,14 @@ namespace ClipwellWin.Views;
 
 public partial class EyedropperWindow : Window
 {
+    private const int SM_XVIRTUALSCREEN = 76;
+    private const int SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const int WM_DPICHANGED = 0x02E0;
+
     public string? PickedHex { get; private set; }
 
     public EyedropperWindow()
@@ -20,20 +29,39 @@ public partial class EyedropperWindow : Window
         {
             RootCanvas.Focus();
             Keyboard.Focus(RootCanvas);
+            UpdateFromCursor();
         };
     }
 
-    private void Canvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    private void Window_SourceInitialized(object sender, EventArgs e)
     {
-        var pos = e.GetPosition(this);
-        UpdatePreview((int)pos.X, (int)pos.Y);
-        PositionPreview(pos);
+        var hwnd = new WindowInteropHelper(this).Handle;
+        HwndSource.FromHwnd(hwnd)?.AddHook(WndProcHook);
+
+        // A maximized window only covers one monitor; size the overlay to the whole virtual screen
+        // in physical pixels so every monitor can be picked from.
+        SetWindowPos(hwnd, IntPtr.Zero,
+            GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+            GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN),
+            SWP_NOZORDER | SWP_NOACTIVATE);
     }
+
+    private static IntPtr WndProcHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        // A window spanning monitors with different scaling would otherwise be resized to the
+        // suggested rectangle of one monitor and stop covering the others.
+        if (msg == WM_DPICHANGED)
+            handled = true;
+        return IntPtr.Zero;
+    }
+
+    private void Canvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        => UpdateFromCursor();
 
     private void Canvas_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        var pos   = e.GetPosition(this);
-        var color = GetScreenPixel((int)pos.X, (int)pos.Y);
+        if (!GetCursorPos(out var cursor)) return;
+        var color = GetScreenPixel(cursor.X, cursor.Y);
         PickedHex    = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
         DialogResult = true;
         Close();
@@ -46,6 +74,16 @@ public partial class EyedropperWindow : Window
             DialogResult = false;
             Close();
         }
+    }
+
+    // Physical cursor coordinates stay correct across monitors with different scaling,
+    // unlike WPF mouse positions inside a window that spans them.
+    private void UpdateFromCursor()
+    {
+        if (!GetCursorPos(out var cursor)) return;
+        UpdatePreview(cursor.X, cursor.Y);
+        if (PresentationSource.FromVisual(this) == null) return;
+        PositionPreview(PointFromScreen(new WpfPoint(cursor.X, cursor.Y)));
     }
 
     private void UpdatePreview(int x, int y)
@@ -61,15 +99,26 @@ public partial class EyedropperWindow : Window
     {
         double px = cursor.X + 20;
         double py = cursor.Y + 20;
-        if (px + PreviewBorder.Width + 10 > ActualWidth)
-            px = cursor.X - PreviewBorder.Width - 10;
-        if (py + PreviewBorder.Height + 10 > ActualHeight)
-            py = cursor.Y - PreviewBorder.Height - 10;
+        if (px + PreviewBorder.ActualWidth + 10 > ActualWidth)
+            px = cursor.X - PreviewBorder.ActualWidth - 10;
+        if (py + PreviewBorder.ActualHeight + 10 > ActualHeight)
+            py = cursor.Y - PreviewBorder.ActualHeight - 10;
 
         Canvas.SetLeft(PreviewBorder, px);
         Canvas.SetTop(PreviewBorder, py);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")]

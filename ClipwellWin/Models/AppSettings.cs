@@ -72,6 +72,9 @@ public class AppSettings
 
     public string QuickNoteDraft { get; set; } = "";
 
+    public string DictationModel { get; set; } = "base";
+    public string DictationLanguage { get; set; } = "de";
+
     public int UrlCacheTtlDays { get; set; } = 7;
 
     public double DetailWindowWidth { get; set; } = 0;

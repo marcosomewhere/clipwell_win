@@ -6,6 +6,23 @@ namespace ClipwellWin.Services;
 
 public static class ImageUtils
 {
+    // OnLoad plus Freeze releases the stream and makes the bitmap usable across threads.
+    public static BitmapImage? LoadBitmap(byte[] data, int decodePixelWidth = 0)
+    {
+        try
+        {
+            var img = new BitmapImage();
+            img.BeginInit();
+            img.StreamSource = new MemoryStream(data);
+            if (decodePixelWidth > 0) img.DecodePixelWidth = decodePixelWidth;
+            img.CacheOption = BitmapCacheOption.OnLoad;
+            img.EndInit();
+            img.Freeze();
+            return img;
+        }
+        catch { return null; }
+    }
+
     // Composites transparent pixels onto a white background at pixel level.
     // CF_DIB (used by Clipboard.SetImage) carries no alpha channel — without this
     // pre-compositing, transparent areas appear black in email clients and documents.

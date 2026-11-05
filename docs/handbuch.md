@@ -11,15 +11,16 @@
 7. [Einträge einfügen und kopieren](#7-einträge-einfügen-und-kopieren)
 8. [Einträge pinnen, löschen, organisieren](#8-einträge-pinnen-löschen-organisieren)
 9. [Bulk-Aktionen](#9-bulk-aktionen)
-10. [Schnellnotiz](#10-schnellnotiz)
+10. [Notizen und Diktat](#10-notizen-und-diktat)
 11. [Pinboard](#11-pinboard)
 12. [Eyedropper — Farben vom Bildschirm](#12-eyedropper--farben-vom-bildschirm)
-13. [Detailfenster](#13-detailfenster)
-14. [Einstellungen](#14-einstellungen)
-15. [Export, Import und Backup](#15-export-import-und-backup)
-16. [Datenschutz und Privatsphäre](#16-datenschutz-und-privatsphäre)
-17. [Datenpfade](#17-datenpfade)
-18. [Fehlerbehebung](#18-fehlerbehebung)
+13. [Desktop-Aufnahme und KB](#13-desktop-aufnahme-und-kb)
+14. [Detailfenster](#14-detailfenster)
+15. [Einstellungen](#15-einstellungen)
+16. [Export, Import und Backup](#16-export-import-und-backup)
+17. [Datenschutz und Privatsphäre](#17-datenschutz-und-privatsphäre)
+18. [Datenpfade](#18-datenpfade)
+19. [Fehlerbehebung](#19-fehlerbehebung)
 
 ---
 
@@ -44,7 +45,7 @@ Alle Daten verbleiben lokal auf deinem Gerät in einer SQLite-Datenbank.
 ## 2. Systemvoraussetzungen und Installation
 
 **Voraussetzungen:**
-- Windows 10 Version 1903 oder neuer
+- Windows 10 Version 2004 (Build 19041) oder neuer
 - .NET 10 Windows Desktop Runtime
 
 **Starten:**
@@ -131,7 +132,7 @@ Die Chips unterhalb des Suchfelds filtern nach Eintragstyp:
 |------|-------|
 | Alle | Gesamte History |
 | Text | Nur Texteinträge |
-| Code | Code und Konfigurationsdateien |
+| Code | Code und Konfigurationsdateien (z. B. JSON, YAML; YAML wird beim Kopieren auf Gültigkeit geprüft) |
 | URL | Webadressen |
 | Bild | Kopierte Bilder |
 | Farbe | Erkannte Hex-Farbcodes |
@@ -139,7 +140,19 @@ Die Chips unterhalb des Suchfelds filtern nach Eintragstyp:
 
 ### Volltextsuche
 
-Tippen im Suchfeld durchsucht Inhalt, OCR-Text (bei Bildern), URL-Titel und erkannte Sprache gleichzeitig.
+Tippen im Suchfeld durchsucht Inhalt, OCR-Text (bei Bildern), URL-Titel und erkannte Sprache gleichzeitig. Groß-/Kleinschreibung spielt keine Rolle. Bei sehr großer History (mehr als 1000 Einträge) nutzt Clipwell einen Suchindex, damit die Suche schnell bleibt.
+
+### Regex-Suche
+
+Der Button `.*` rechts im Suchfeld schaltet auf reguläre Ausdrücke um, z. B. `^https?://` oder `\d{4}-\d{2}`. Ungültige Ausdrücke liefern keine Treffer.
+
+### Suchhistorie
+
+Clipwell merkt sich die letzten 5 Suchen. Sie erscheinen als Liste, wenn das Suchfeld leer ist und den Fokus hat.
+
+### Sortierung
+
+Über den Sortier-Button in der Chip-Leiste lässt sich die Reihenfolge wählen: Neueste zuerst, Älteste zuerst, Häufig verwendet oder Selten verwendet. Gepinnte Einträge bleiben immer oben.
 
 ### Suchpräfixe
 
@@ -177,7 +190,7 @@ Beim Eingeben erscheinen Vorschläge für Präfixe und vorhandene Werte.
 3. Das vorher aktive Fenster wird in den Vordergrund gebracht.
 4. Clipwell sendet automatisch Ctrl+V.
 
-**Ctrl+Enter** fügt als reinen Text ein — HTML-Formatierung und Rich-Text-Informationen werden entfernt.
+**Ctrl+Enter** fügt als reinen Text ein. Mit **Enter** bleibt bei Inhalten aus dem Browser die Formatierung erhalten (Tabellen, Listen, Überschriften, Links), sofern das Zielprogramm HTML annimmt, etwa Word, Outlook oder Confluence. Rich-Text aus Word (RTF) wird weiterhin als reiner Text gespeichert.
 
 **Drag & Drop:** Ein Eintrag kann aus der Liste direkt in ein anderes Fenster gezogen werden.
 
@@ -234,6 +247,7 @@ Im Bulk-Modus erscheinen Checkboxen links neben jedem Eintrag. Folgende Aktionen
 | Alle auswählen | Alle sichtbaren (gefilterten) Einträge auswählen/abwählen |
 | Pinnen | Alle ausgewählten Einträge pinnen |
 | Lösen | Alle ausgewählten Einträge lösen |
+| Kopieren | Texte der ausgewählten Einträge verbunden (getrennt durch `---`) in die Zwischenablage kopieren |
 | Exportieren | Ausgewählte Einträge als JSON exportieren |
 | Löschen | Ausgewählte Einträge löschen (mit Bestätigungsdialog) |
 | Abbrechen | Bulk-Modus beenden |
@@ -242,16 +256,48 @@ Ohne Auswahl beim Export: Clipwell fragt, ob die gesamte History exportiert werd
 
 ---
 
-## 10. Schnellnotiz
+## 10. Notizen und Diktat
 
-Über das Notizblock-Symbol in der Toolbar öffnet sich ein kleines Eingabefeld am oberen Rand des Popups. Damit kann schnell eine eigene Notiz erstellt werden, ohne die Zwischenablage zu verwenden.
+Notizen sind eine eigene Funktion neben der Zwischenablage-History. Jede Notiz ist eine Markdown-Datei in `%APPDATA%\Clipwell\notes\`.
 
-- **Enter** speichert die Notiz.
+### Schnellnotiz im Popup
+
+Über das Notizblock-Symbol in der Toolbar öffnet sich ein kleines Eingabefeld am unteren Rand des Popups.
+
+- **Enter** speichert die Notiz in die Notizen.
 - **Shift+Enter** fügt einen Zeilenumbruch ein.
 - **Esc** schließt das Eingabefeld ohne zu speichern.
+- **Mikrofon-Symbol:** übergibt den bisherigen Text ans Notizfenster und startet dort sofort das Diktat.
+- **Fenster-Symbol:** öffnet das Notizfenster (mit dem bisherigen Text als neue Notiz, falls etwas eingegeben ist).
 - **Tastenkürzel:** Standard Ctrl+N (konfigurierbar)
 
-Schnellnotizen werden als angepinnte Texteinträge mit dem Badge "NOTE" gespeichert.
+Ältere Schnellnotizen, die noch als gepinnte Einträge mit dem Badge "NOTE" in der History stehen, bleiben dort unverändert.
+
+### Notizfenster
+
+**Öffnen:** Tray-Menü → "Notizen" → "Notizen öffnen", "Neue Notiz" oder "Neue Sprachnotiz (diktieren)".
+
+Links stehen alle Notizen (neueste zuerst) mit Suchfeld, rechts der Editor. Änderungen werden nach kurzer Pause automatisch gespeichert; eine leer gewordene Notiz wird beim Wechseln entfernt. Der Titel einer Notiz ist ihre erste Zeile.
+
+| Button | Kürzel | Funktion |
+| --- | --- | --- |
+| Neu | Strg+N | Neue, leere Notiz |
+| Diktieren | Strg+D | Aufnahme starten; erneut klicken beendet sie und fügt den erkannten Text an der Cursorposition ein |
+| In KB exportieren | Strg+E | Übernimmt die Notiz in die KB |
+| Kopieren | | Notiztext in die Zwischenablage (ohne History-Eintrag) |
+| Ordner öffnen, Löschen | | Notizordner im Explorer, Notiz löschen |
+
+### Diktat
+
+Das Diktat läuft komplett lokal mit Whisper; Audio verlässt den Rechner nicht und wird nicht gespeichert. Das Sprachmodell "Base" ist bereits enthalten (Ordner `models` neben `Clipwell.exe`), Diktieren funktioniert also sofort und offline. Die größeren Modelle "Small" und "Medium" lädt Clipwell erst nach Rückfrage einmalig nach `%APPDATA%\Clipwell\models\`. Modellgröße und Sprache (Deutsch, Englisch, Automatisch) stehen unter Einstellungen → Allgemein → "Diktat (Whisper, lokal)"; größere Modelle erkennen genauer, brauchen aber länger.
+
+Während der Aufnahme ist der Button rot, unten rechts laufen Pegel und Dauer mit. Nach dem Beenden steht "Transkribiere ..." in der Statusleiste, bis der Text eingefügt ist. Man kann jederzeit zwischendurch diktieren und dazwischen tippen. Es läuft immer nur ein Diktat gleichzeitig.
+
+Voraussetzung: ein Mikrofon, und unter Windows-Einstellungen → Datenschutz → Mikrofon muss der Zugriff für Desktop-Apps erlaubt sein.
+
+### Export in die KB
+
+"In KB exportieren" legt eine Kopie der Notiz in `%APPDATA%\Clipwell\kb\notes\` ab. Die Kopie bleibt so, wie sie beim Export war: Wird die Notiz später geändert, zeigt die Liste "KB veraltet" und der Button heißt "KB aktualisieren". Wird die Notiz gelöscht, bleibt die KB-Fassung erhalten.
 
 ---
 
@@ -260,6 +306,8 @@ Schnellnotizen werden als angepinnte Texteinträge mit dem Badge "NOTE" gespeich
 Das Pinboard ist ein separates, immer-im-Vordergrund-Fenster, das alle angepinnten Einträge anzeigt.
 
 **Öffnen:** Tray-Menü → Pinboard oder Tastenkürzel Ctrl+B (konfigurierbar) im Popup.
+
+Die Reihenfolge lässt sich per Drag & Drop ändern: Der gezogene Eintrag wird farbig umrandet, eine Linie oben oder unten am Zieleintrag zeigt, wo er landet. Ein Ablegen im leeren Bereich unter der Liste verschiebt ihn ans Ende. Dieselbe Reihenfolge gilt für die Gruppe "Gepinnt" im Popup; neu gepinnte Einträge stehen dort oben.
 
 Im Pinboard können Einträge ebenfalls per Klick oder Tastatur eingefügt werden. Das Pinboard bleibt offen, während das Popup geöffnet und geschlossen wird.
 
@@ -275,7 +323,64 @@ Das Popup schließt sich, und ein transparentes Vollbild-Overlay erscheint. Mit 
 
 ---
 
-## 13. Detailfenster
+## 13. Desktop-Aufnahme und KB
+
+### Aufnahme
+
+Die Desktop-Aufnahme protokolliert, was im jeweils aktiven Fenster zu sehen ist, und speichert es fortlaufend als Markdown.
+
+**Starten und beenden:** Record-Symbol (Kreis) im Popup-Kopf, Button "Aufnahme starten" im KB-Fenster oder Tray-Menü → "Desktop aufzeichnen". Während der Aufnahme ist das Symbol rot (Stopp-Quadrat), das Tray-Icon zeigt "Aufnahme läuft". Derselbe Button beendet die Aufnahme.
+
+**Was erfasst wird:** Clipwell liest den sichtbaren Text des Vordergrundfensters über die Windows-Bedienungshilfen-Schnittstelle (UI Automation): Fenstertitel, Anwendung, sichtbarer Dokumenttext, Beschriftungen, Links, Listen, Eingabewerte und Alternativtexte von Bildern. Es werden keine Screenshots aufgenommen.
+
+**Wann ein Eintrag entsteht:** Clipwell prüft das aktive Fenster alle 0,5 Sekunden. Ein Fenster- oder Titelwechsel (z. B. neuer Browser-Tab) wird erfasst, sobald er 0,5 Sekunden stabil ist. Kurzes Durchklicken erzeugt dadurch keine Einträge. Bleibst du im selben Fenster, liest Clipwell alle 2,5 Sekunden neu und schreibt nur Zeilen, die für dieses Fenster noch nicht protokolliert wurden.
+
+**Aufbau eines Eintrags:**
+
+```markdown
+## 14:32:08 - Google Chrome: Kundenportal
+
+### Sichtbarer Inhalt
+
+- Kunde: Muster GmbH
+- Vertragsstatus: Aktiv
+
+### Änderung
+
+Fensterwechsel von "Explorer: Downloads".
+```
+
+Bleibt man im selben Fenster und ändert sich nur ein Teil (z. B. Scrollen), steht unter "Neu sichtbar" nur das Hinzugekommene, unter "Änderung" die Anzahl neuer Zeilen. Fenster-, Scroll- und Menüleisten werden ausgelassen.
+
+**Was nicht erfasst wird:**
+
+- Clipwell-eigene Fenster (Popup, KB-Fenster usw.).
+- Passwortfelder.
+- Alles, solange "Überwachung pausieren" aktiv ist.
+- Hängende Fenster ("Keine Rückmeldung").
+- Inhalte ohne Textinformation: Bilder, Videos, Diagramme in Canvas-Grafik, Spiele, manche Java-Anwendungen und Editoren ohne Bedienungshilfen-Text (z. B. der Textbereich von Notepad++).
+
+Jede Aufnahme landet als eigene Datei in `%APPDATA%\Clipwell\recordings\` (Name `JJJJ-MM-TT_hh-mm-ss.md`) und endet mit Ende-Zeit, Dauer und Anzahl der Einträge.
+
+### KB
+
+**Öffnen:** `KB`-Button im Popup-Kopf oder Tray-Menü → "KB".
+
+Links steht oben das **Dashboard**, darunter die **Gesamtübersicht**, dann die exportierten Notizen ("Notiz: ...") und alle Aufnahmen (neueste zuerst, mit Anzahl der Einträge und Dauer). Rechts erscheint das Markdown des gewählten Eintrags.
+
+Das Dashboard zeigt die KB als Instrumententafel: Sieben-Segment-Zähler für Artikel in der KB (exportierte Notizen plus Aufnahmen), Notizen, Aufnahmen und Zwischenablage-Einträge; vier Analog-Instrumente für die laufende bzw. letzte Aufnahme (erfasste Bildwechsel, Fenster, Anwendungen, Minuten) samt Statusanzeige "AUFNAHME LÄUFT" oder "INAKTIV"; Kacheln mit erfassten Inhalten je Anwendung und kopierten Inhalten je Webseite; darunter alle gespeicherten Artikel, ein Klick öffnet den Artikel. Kopieren und Exportieren liefern auf dem Dashboard das Markdown der Gesamtübersicht.
+
+Die Gesamtübersicht fasst alles zusammen:
+
+- **Zwischenablage:** Anzahl Einträge und gepinnte, Zeitraum, Verteilung nach Typ, Einträge der letzten 7 Tage, häufigste Domains, Inhaltsarten, meistgenutzte, gepinnte und zuletzt kopierte Einträge.
+- **Notizen:** Anzahl und Liste der in die KB exportierten Notizen.
+- **Desktop-Aufnahmen:** Anzahl, erfasste Bildwechsel, Gesamtdauer, häufigste Anwendungen und je Aufnahme die besuchten Fenster.
+
+Buttons: Aufnahme starten/beenden, Aktualisieren, Kopieren (landet nicht in der History), Exportieren als `.md`, Ordner öffnen (Clipwell-Datenordner) und Löschen des gewählten Eintrags: bei einer Aufnahme die Datei (nicht während sie läuft), bei einer Notiz nur die KB-Fassung. Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das KB-Fenster automatisch.
+
+---
+
+## 14. Detailfenster
 
 Das Detailfenster öffnet sich per Doppelklick auf einen Eintrag, über den Hover-Button oder per Tastenkürzel (Standard F2).
 
@@ -291,6 +396,8 @@ Für Text- und Code-Einträge zeigt das Detailfenster einen vollständigen Edito
 - **Undo/Redo:** Standard Ctrl+Z / Ctrl+Y.
 - **Sprache:** Dropdown zur manuellen Auswahl der Code-Sprache (C#, JavaScript, Python, SQL usw.) mit Syntax-Highlight-Overlay.
 - **OCR-Ansicht:** Bei Bildern mit erkanntem Text kann zwischen Bild und OCR-Text umgeschaltet werden.
+- **Quelle:** Wurde der Inhalt aus dem Browser kopiert, steht die Adresse der Webseite als Link neben dem Titel. Der Button "Browser" öffnet sie.
+- **Webinhalt:** Bei Inhalten aus dem Browser schaltet der Umschalter "Webinhalt" auf eine aufbereitete Fassung als Markdown um: Überschriften, Listen, Tabellen und Links bleiben erhalten, Navigation, Werbung, Skripte und Formulare werden entfernt. "Vorschau" zeigt sie gerendert, "Kopieren" übernimmt das Markdown. Die Ansicht ist schreibgeschützt; der ursprüngliche Text bleibt unverändert.
 
 ### Bild-Editor
 
@@ -340,7 +447,7 @@ Jeder Wert kann einzeln in die Zwischenablage kopiert werden.
 
 ---
 
-## 14. Einstellungen
+## 15. Einstellungen
 
 Öffnen über Tray-Menü → Einstellungen.
 
@@ -396,11 +503,11 @@ Jeder Shortcut kann mit beliebiger Kombination aus Ctrl, Alt, Shift, Win und ein
 
 ### Über
 
-Zeigt Version, Build-Datum und Lizenzen der verwendeten Bibliotheken.
+Zeigt Version und Build sowie einen Link zum Quellcode auf GitHub.
 
 ---
 
-## 15. Export, Import und Backup
+## 16. Export, Import und Backup
 
 ### JSON-Export
 
@@ -426,16 +533,18 @@ Einstellungen → Daten → "History löschen". Optional können gepinnte Eintr�
 
 ---
 
-## 16. Datenschutz und Privatsphäre
+## 17. Datenschutz und Privatsphäre
 
 - **Lokal only:** Alle Daten bleiben auf deinem Gerät. Clipwell sendet keine Daten ins Internet, außer für URL-Vorschauen.
 - **URL-Vorschauen:** Nur aktiv, wenn in den Einstellungen aktiviert. Clipwell ruft Titel und Favicon der kopierten URL ab. Private, Loopback- und Link-Local-Adressen (127.x, 10.x, 192.168.x, 172.16–31.x, 169.254.x, fc00::/7) werden nie abgerufen.
 - **Überwachung pausieren:** Über Tray-Menü jederzeit möglich. Clipwell zeichnet dann nichts auf.
 - **URL-Cache:** Abgerufene Titel und Favicons werden 7 Tage in der Datenbank gecacht. Der Cache kann in den Einstellungen geleert werden.
+- **Desktop-Aufnahme:** Läuft nur nach ausdrücklichem Start und bleibt lokal. Sie speichert sichtbaren Text als unverschlüsseltes Markdown, auch vertrauliche Inhalte wie Chats oder Kundendaten. Vertrauliches nur bei pausierter Überwachung öffnen oder die Aufnahme danach im KB-Fenster löschen.
+- **Diktat:** Spracherkennung läuft lokal (Whisper). Audio wird nur im Arbeitsspeicher gehalten und nach der Transkription verworfen. Das Base-Modell wird mitgeliefert; Netzwerkzugriff gibt es nur, wenn ein größeres Modell gewählt und dessen Download bestätigt wird.
 
 ---
 
-## 17. Datenpfade
+## 18. Datenpfade
 
 | Was | Pfad |
 |-----|------|
@@ -443,13 +552,19 @@ Einstellungen → Daten → "History löschen". Optional können gepinnte Eintr�
 | History-Datenbank | `%APPDATA%\Clipwell\history.db` |
 | Fehlerprotokoll | `%APPDATA%\Clipwell\clipwell.log` |
 | Onboarding-Marker | `%APPDATA%\Clipwell\onboarding.seen` |
+| Bildeditor-Stilspeicher | `%APPDATA%\Clipwell\editor-styles.json` |
+| Notizen | `%APPDATA%\Clipwell\notes\*.md` |
+| In die KB exportierte Notizen | `%APPDATA%\Clipwell\kb\notes\*.md` |
+| Whisper-Sprachmodell Base (mitgeliefert) | `models\ggml-base.bin` neben `Clipwell.exe` |
+| Whisper-Sprachmodelle Small/Medium | `%APPDATA%\Clipwell\models\` |
+| Desktop-Aufnahmen | `%APPDATA%\Clipwell\recordings\*.md` |
 | WAL-Datei (SQLite) | `%APPDATA%\Clipwell\history.db-wal` |
 | Wiederherstellungs-Backup | `%APPDATA%\Clipwell\history.db.broken-YYYYMMDD-HHMMSS` |
 | Auto-Backups | Konfigurierbarer Ordner, `clipwell-autobackup-YYYYMMDD-HHmmss.json` |
 
 ---
 
-## 18. Fehlerbehebung
+## 19. Fehlerbehebung
 
 ### Popup öffnet sich nicht
 
@@ -481,5 +596,6 @@ Prüfe, ob Clipwell Schreibzugriff auf den Registry-Schlüssel hat:
 
 ### Bekannte Einschränkungen
 
+- Die Desktop-Aufnahme sieht nur Text, den Anwendungen über UI Automation bereitstellen; Bilder und Videos werden nicht beschrieben. Fenster mit ständig wechselndem Text (Uhren, Logs) erzeugen viele kleine Einträge.
 - Der "Weichzeichnen"-Effekt im Bild-Editor zeigt eine graue Überlagerung, keinen echten Gauß-Blur.
 - Hotkey-Einschränkung: Nur Buchstaben A–Z und Ziffern 0–9 werden als Tastenanteil unterstützt. Funktionstasten können im Hotkey-Recorder nicht aufgenommen werden, sind aber als Popup-Shortcuts möglich.

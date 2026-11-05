@@ -19,10 +19,7 @@
 
     <Window.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
-        <conv:BoolToVisibilityConverter x:Key="BoolToVisInv" Invert="True" />
         <conv:NullToVisibilityConverter x:Key="NullToVis" />
-        <conv:NullToVisibilityConverter x:Key="NullToVisInv" Invert="True" />
-        <conv:BytesToImageConverter x:Key="BytesToImg" />
         <conv:EntryTypeToIconConverter x:Key="TypeToIcon" />
         <conv:EntryTypeToColorConverter x:Key="TypeToColor" />
         <conv:HexToBrushConverter x:Key="HexToBrush" />
@@ -147,7 +144,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="0">
+                                CornerRadius="8" Padding="0"
+                                BorderThickness="1" BorderBrush="Transparent">
                             <ContentPresenter />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -156,6 +154,7 @@
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -242,7 +241,7 @@
                                 <Setter Property="Foreground" Value="{DynamicResource PopupTextFaintBrush}" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                        <Setter Property="Foreground" Value="#FFE0A030" />
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -437,8 +436,12 @@
                 <RowDefinition Height="*" />       <!-- Row 1: Eintrags-Liste -->
                 <RowDefinition Height="Auto" />   <!-- Row 2: Schnellnotiz-Panel -->
                 <RowDefinition Height="Auto" />   <!-- Row 3: Bulk-Aktionsleiste -->
-                <RowDefinition Height="Auto" />   <!-- Row 4: Footer-Hinweisleiste -->
             </Grid.RowDefinitions>
+
+            <!-- Inset by the corner radius so the line sits on the straight top edge. -->
+            <Border Grid.Row="0" Height="2" VerticalAlignment="Top" Margin="12,0,12,0"
+                    CornerRadius="0,0,1,1" Background="{DynamicResource AccentStripeBrush}"
+                    IsHitTestVisible="False" Panel.ZIndex="1" />
 
             <!-- ── Header ─────────────────────────────────────────────────── -->
             <Border Grid.Row="0" Padding="12,14,12,0"
@@ -569,8 +572,47 @@
                             </ToggleButton.Style>
                         </ToggleButton>
 
-                        <!-- Header-Aktionsbuttons (Eyedropper + Schnellnotiz + Mehrfachauswahl) -->
+                        <!-- Header-Aktionsbuttons (Record + KB + Eyedropper + Schnellnotiz + Mehrfachauswahl) -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <StackPanel.Resources>
+                                <Style x:Key="HeaderIconButton" TargetType="Button">
+                                    <Setter Property="Width" Value="32" />
+                                    <Setter Property="Height" Value="32" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="BorderThickness" Value="0" />
+                                    <Setter Property="Foreground" Value="{DynamicResource PopupTextSubtleBrush}" />
+                                    <Setter Property="Cursor" Value="Hand" />
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                                                        Width="32" Height="32">
+                                                    <TextBlock Text="{TemplateBinding Content}"
+                                                               FontFamily="{TemplateBinding FontFamily}"
+                                                               FontSize="{TemplateBinding FontSize}"
+                                                               FontWeight="{TemplateBinding FontWeight}"
+                                                               Foreground="{TemplateBinding Foreground}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </StackPanel.Resources>
+                            <Button x:Name="RecordButton" Style="{StaticResource HeaderIconButton}"
+                                    Content="&#xE7C8;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                                    ToolTip="Desktop-Aufnahme starten (sichtbarer Text als Markdown)"
+                                    Click="Record_Click" />
+                            <Button Style="{StaticResource HeaderIconButton}"
+                                    Content="KB" FontFamily="Segoe UI" FontSize="11" FontWeight="Bold"
+                                    ToolTip="KB: Dashboard, Gesamtübersicht und Aufnahmen"
+                                    Click="KnowledgeBase_Click" />
                             <Button Content="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="14"
                                     Width="32" Height="32"
                                     Background="Transparent" BorderThickness="0"
@@ -857,7 +899,7 @@
 
             <!-- ── Schnellnotiz-Panel ────────────────────────────────────────── -->
             <Border Grid.Row="2" x:Name="QuickNotePanel"
-                    Padding="12,8" Background="{DynamicResource PopupPanelBrush}"
+                    Padding="12,8" Background="{DynamicResource PopupPanelBrush}" CornerRadius="0,0,12,12"
                     BorderBrush="{DynamicResource PopupPanelBorderBrush}" BorderThickness="0,1,0,0"
                     Visibility="Collapsed">
                 <Grid>
@@ -875,6 +917,41 @@
                                PreviewKeyDown="QuickNoteBox_KeyDown" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0"
                                 VerticalAlignment="Top">
+                        <StackPanel.Resources>
+                            <Style x:Key="QuickNoteIconButton" TargetType="Button">
+                                <Setter Property="Width" Value="28" />
+                                <Setter Property="Height" Value="28" />
+                                <Setter Property="Margin" Value="0,0,4,0" />
+                                <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+                                <Setter Property="FontSize" Value="13" />
+                                <Setter Property="Foreground" Value="{DynamicResource PopupTextSubtleBrush}" />
+                                <Setter Property="Cursor" Value="Hand" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Bd" CornerRadius="6" Background="Transparent" Width="28" Height="28">
+                                                <TextBlock Text="{TemplateBinding Content}"
+                                                           FontFamily="{TemplateBinding FontFamily}"
+                                                           FontSize="{TemplateBinding FontSize}"
+                                                           Foreground="{TemplateBinding Foreground}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupHoverBrush}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </StackPanel.Resources>
+                        <Button Content="&#xE720;" Style="{StaticResource QuickNoteIconButton}"
+                                ToolTip="Weiter diktieren im Notizfenster"
+                                Click="QuickNoteDictate_Click" />
+                        <Button Content="&#xE8A7;" Style="{StaticResource QuickNoteIconButton}"
+                                ToolTip="Im Notizfenster öffnen (alle Notizen)"
+                                Click="QuickNoteOpenNotes_Click" />
                         <Button Content="Speichern" Style="{StaticResource BulkBtnStyle}"
                                 Click="QuickNoteSave_Click" />
                         <Button Content="✕" Width="28" Height="28" Padding="0"
@@ -902,7 +979,7 @@
             </Border>
 
             <!-- ── Bulk-Aktionsleiste ──────────────────────────────────────── -->
-            <Border Grid.Row="3" Padding="12,6"
+            <Border Grid.Row="3" Padding="12,6" CornerRadius="0,0,12,12"
                     Background="{DynamicResource PopupPanelBrush}"
                     BorderBrush="{DynamicResource PopupPanelBorderBrush}"
                     BorderThickness="0,1,0,0"
@@ -960,28 +1037,6 @@
                 </Grid>
             </Border>
 
-            <!-- ── Footer-Hinweisleiste ───────────────────────────────────── -->
-            <Border Grid.Row="4" Padding="14,8" Background="{DynamicResource PopupPanelBrush}"
-                    CornerRadius="0,0,12,12"
-                    BorderBrush="{DynamicResource PopupPanelBorderBrush}" BorderThickness="0,1,0,0">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
-                        <Run Text="↵" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Einfügen" />
-                    </TextBlock>
-                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
-                        <Run Text="Strg+↵" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Plain" />
-                    </TextBlock>
-                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
-                        <Run Text="Strg+P" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Pinnen" />
-                    </TextBlock>
-                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11" Margin="0,0,16,0">
-                        <Run Text="Entf" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Löschen" />
-                    </TextBlock>
-                    <TextBlock Foreground="{DynamicResource PopupTextFaintBrush}" FontSize="11">
-                        <Run Text="Esc" FontWeight="Bold" Foreground="{DynamicResource PopupTextMutedBrush}" /> <Run Text="Schließen" />
-                    </TextBlock>
-                </StackPanel>
-            </Border>
         </Grid>
     </Border>
 </Window>

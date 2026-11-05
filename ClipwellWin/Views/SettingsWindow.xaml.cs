@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using ClipwellWin.Models;
+using ClipwellWin.Services;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using Wpf.Ui.Controls;
@@ -68,16 +69,10 @@ public partial class SettingsWindow : FluentWindow
             AppThemeMode.Light   => 2,
             _                 => 0,
         };
-        if (s.Theme == AppThemeMode.Compact)
-        {
-            s.Theme = AppThemeMode.Light;
-            ThemeBox.SelectedIndex = 2;
-            _app.ApplyTheme(s.Theme);
-            _app.SaveSettings();
-        }
-
         UrlPreviewSwitch.IsChecked      = s.UrlPreviewEnabled;
         UrlCacheTtlBox.Text = ClampInt(s.UrlCacheTtlDays, 1, 365, 7).ToString();
+        SelectByTag(DictationModelBox, DictationService.NormalizeModel(s.DictationModel));
+        SelectByTag(DictationLanguageBox, DictationService.NormalizeLanguage(s.DictationLanguage));
 
         MaxAgeBox.Text  = ClampInt(s.MaxAgeInDays, 0, 3650, 0).ToString();
         MaxSizeBox.Text = ClampInt(s.MaxSizeInMb, 0, 10240, 0).ToString();
@@ -261,6 +256,23 @@ public partial class SettingsWindow : FluentWindow
         };
         _app.CurrentSettings.Theme = mode;
         _app.ApplyTheme(mode);
+        _app.SaveSettings();
+    }
+
+    private static void SelectByTag(System.Windows.Controls.ComboBox box, string tag)
+    {
+        box.SelectedItem = box.Items.OfType<System.Windows.Controls.ComboBoxItem>()
+            .FirstOrDefault(i => string.Equals(i.Tag as string, tag, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void Dictation_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (DictationModelBox.SelectedItem is not System.Windows.Controls.ComboBoxItem { Tag: string model }
+            || DictationLanguageBox.SelectedItem is not System.Windows.Controls.ComboBoxItem { Tag: string language })
+            return;
+        if (model == _app.CurrentSettings.DictationModel && language == _app.CurrentSettings.DictationLanguage) return;
+        _app.CurrentSettings.DictationModel = model;
+        _app.CurrentSettings.DictationLanguage = language;
         _app.SaveSettings();
     }
 

@@ -1,9 +1,7 @@
-using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ClipwellWin.Models;
 using ClipwellWin.Services;
-using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 
@@ -27,14 +25,17 @@ public class EntryViewModel : ViewModelBase
     public bool IsPinned
     {
         get => Entry.IsPinned;
-        set { Entry.IsPinned = value; OnPropertyChanged(); OnPropertyChanged(nameof(GroupLabel)); }
+        set { Entry.IsPinned = value; OnPropertyChanged(); OnPropertyChanged(nameof(GroupLabel)); OnPropertyChanged(nameof(PinSortKey)); }
     }
 
     public long PinOrder
     {
         get => Entry.PinOrder;
-        set { Entry.PinOrder = value; OnPropertyChanged(); }
+        set { Entry.PinOrder = value; OnPropertyChanged(); OnPropertyChanged(nameof(PinSortKey)); }
     }
+
+    // Shared by popup and pinboard: most recently pinned (or dragged to top) first; legacy pins without PinOrder fall back to their timestamp.
+    public long PinSortKey => !Entry.IsPinned ? 0 : Entry.PinOrder > 0 ? Entry.PinOrder : Entry.Timestamp.Ticks;
 
     public int UseCount => Entry.UseCount;
     public DateTime? LastUsedAt => Entry.LastUsedAt;
@@ -133,25 +134,9 @@ public class EntryViewModel : ViewModelBase
             if (_thumbnail != null) return _thumbnail;
             var data = Entry.ThumbnailData ?? Entry.ImageData;
             if (data == null) return null;
-            _thumbnail = LoadBitmapImage(data, 80);
+            _thumbnail = ImageUtils.LoadBitmap(data, 80);
             return _thumbnail;
         }
-    }
-
-    private static BitmapImage? LoadBitmapImage(byte[] data, int decodeWidth)
-    {
-        try
-        {
-            var img = new BitmapImage();
-            img.BeginInit();
-            img.StreamSource = new MemoryStream(data);
-            img.DecodePixelWidth = decodeWidth;
-            img.CacheOption = BitmapCacheOption.OnLoad;
-            img.EndInit();
-            img.Freeze();
-            return img;
-        }
-        catch { return null; }
     }
 
     private BitmapImage? _favicon;
@@ -162,7 +147,7 @@ public class EntryViewModel : ViewModelBase
         {
             if (Entry.UrlFavicon == _lastFavicon) return _favicon;
             _lastFavicon = Entry.UrlFavicon;
-            _favicon = Entry.UrlFavicon == null ? null : LoadBitmapImage(Entry.UrlFavicon, 16);
+            _favicon = Entry.UrlFavicon == null ? null : ImageUtils.LoadBitmap(Entry.UrlFavicon, 16);
             return _favicon;
         }
     }
@@ -194,17 +179,8 @@ public class EntryViewModel : ViewModelBase
         {
             if (_imagePixels.HasValue) return _imagePixels.Value;
             if (Entry.ImageData == null) return (0, 0);
-            try
-            {
-                var img = new BitmapImage();
-                img.BeginInit();
-                img.StreamSource = new MemoryStream(Entry.ImageData);
-                img.CacheOption = BitmapCacheOption.OnLoad;
-                img.EndInit();
-                img.Freeze();
-                _imagePixels = (img.PixelWidth, img.PixelHeight);
-            }
-            catch { _imagePixels = (0, 0); }
+            var img = ImageUtils.LoadBitmap(Entry.ImageData);
+            _imagePixels = img == null ? (0, 0) : (img.PixelWidth, img.PixelHeight);
             return _imagePixels.Value;
         }
     }
@@ -219,27 +195,6 @@ public class EntryViewModel : ViewModelBase
             if (bytes < 1024) return $"{bytes} B";
             if (bytes < 1024 * 1024) return $"{bytes / 1024} KB";
             return $"{bytes / (1024 * 1024.0):F1} MB";
-        }
-    }
-
-
-    private Brush? _hexBrush;
-    private bool _hexBrushLoaded;
-    public Brush? HexBrush
-    {
-        get
-        {
-            if (_hexBrushLoaded) return _hexBrush;
-            _hexBrushLoaded = true;
-            if (string.IsNullOrEmpty(HexColor)) return null;
-            try
-            {
-                var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(HexColor));
-                b.Freeze();
-                _hexBrush = b;
-            }
-            catch { }
-            return _hexBrush;
         }
     }
 

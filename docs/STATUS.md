@@ -1,20 +1,20 @@
 # Clipwell Windows - Status und Review
 
-Stand: 2026-06-27
+Stand: 2026-11-05
 
 ## Aktueller Zustand
 
 - Zielplattform: .NET 10 WPF, `net10.0-windows10.0.19041.0`
 - UI: WPF-UI 4.3.0 plus WinForms `NotifyIcon`
 - Speicher: SQLite WAL in `%APPDATA%\Clipwell\history.db`
-- Tests: 92 xUnit-Tests
+- Tests: 148 xUnit-Tests
 - Solution: `ClipwellWin.slnx`
 - Architekturstatus: Code-behind in den bestehenden WPF-Fenstern bleibt bewusst bestehen; keine MVVM- oder Architektur-Umbauten geplant.
 
 ## Implementiert
 
 - Tray-App mit Single-Instance-Schutz und globalem Hotkey inklusive Fallbacks.
-- Clipboard-History fuer Text, Schnellnotizen, URLs, Code, Farben und Bilder.
+- Clipboard-History fuer Text, URLs, Code, Farben und Bilder; Notizen separat als Markdown mit lokalem Whisper-Diktat und KB-Export.
 - Popup mit Suche, Typ-Filtern, Gruppen, Hover-Aktionen, Kontextmenue, Bulk-Aktionen, Pinboard und Eyedropper.
 - URL-Eintraege mit Titel/Favicon-Cache, privatem Fetch-Schutz und Schnelllink zum Standardbrowser.
 - Detailfenster mit editierbarem Text-/Code-Editor, Live-Syntax-Highlighting, Bildeditor, OCR-Ansicht und Farbwerten.
@@ -25,10 +25,37 @@ Stand: 2026-06-27
 
 ## Letzte Aenderungen
 
+- Version 1.1.0.
+- Aufraeumen: tote Member entfernt (ungenutzte HTML-Regexe in `ContentKindService`, `BytesToImageConverter`, invertierte Converter-Varianten, `EntryViewModel.HexBrush`, `App.PreviousForeground`, nie gelesener Bildeditor-Pinsel, ungenutzter `selfClosing`-Parameter), sechs gleiche Bitmap-Loader zu `ImageUtils.LoadBitmap` zusammengefasst, ueberfluessige `using`-Direktiven entfernt. NuGet-Pakete sind aktuell (`dotnet list package --outdated` ohne Treffer).
+- Notizen als eigenstaendige Funktion: `NotesWindow` (Tray-Untermenue "Notizen" mit "Notizen oeffnen", "Neue Notiz", "Neue Sprachnotiz (diktieren)"; Pfeil-Button im Schnellnotiz-Panel des Popups) mit Liste, Suche und Editor. Speicherung als Markdown in `%APPDATA%\Clipwell\notes\yyyy-MM-dd_HH-mm-ss.md` (`NoteStore`), Autosave nach 800 ms, leer gewordene Notizen werden beim Wechseln entfernt. Schnellnotizen aus dem Popup landen dort statt als gepinnter `NOTE`-Eintrag in der History (bestehende `NOTE`-Eintraege bleiben unveraendert).
+- Diktat: Button "Diktieren" (Strg+D) im Notizfenster, Mikrofon-Button im Schnellnotiz-Panel (uebergibt den Text ans Notizfenster und startet dort das Diktat). `MicrophoneRecorder` nimmt per waveIn 16 kHz mono auf (Event-Callback plus Capture-Thread, max. 30 min), `DictationService` transkribiert lokal mit Whisper.net 1.9.1 und fuegt den Text an der Cursorposition ein; Whisper-Annotationen wie `[Musik]` werden verworfen. Das Base-Modell (~141 MB, MIT-Lizenz von OpenAI/whisper.cpp) wird mitgeliefert: Quelle `Tools\whisper\ggml-base.bin` (gitignored; der Build laedt es bei Fehlen von Hugging Face und prueft SHA256), Ausgabe `models\ggml-base.bin` neben der EXE plus `THIRD-PARTY-NOTICES.txt`. `DictationService` nimmt zuerst das mitgelieferte Modell; Small/Medium (Einstellungen > Allgemein > Diktat, dort auch Sprache Deutsch/Englisch/Automatisch) werden nach Rueckfrage nach `%APPDATA%\Clipwell\models` geladen. Pegelanzeige und Aufnahmedauer in der Statusleiste.
+- "In KB exportieren" (Strg+E) schreibt einen Schnappschuss nach `%APPDATA%\Clipwell\kb\notes\<id>.md` (Kopf mit Titel, Erstellt, Exportiert). Die Notizliste zeigt "in KB" bzw. "KB veraltet", der Button wechselt zu "KB aktualisieren". Das KB-Fenster listet exportierte Notizen zwischen Gesamtuebersicht und Aufnahmen; Loeschen dort entfernt nur die KB-Fassung. Die Gesamtuebersicht hat einen Abschnitt "Notizen".
+- Portable Publish: Target `RemoveForeignWhisperRuntimes` laesst bei RID-Builds nur `runtimes\win-x64\*whisper*.dll` neben der EXE (die Whisper-Natives werden nicht in die Single-File eingebettet), dazu `models\ggml-base.bin` und `THIRD-PARTY-NOTICES.txt`.
+- Popup: Tastenhinweis-Leiste am unteren Rand entfernt; Schnellnotiz-Panel und Bulk-Leiste haben jetzt die abgerundeten unteren Ecken.
+- Desktop-Aufnahme: Record-Button im Popup-Kopf, im KB-Fenster und im Tray-Menue startet/stoppt `DesktopRecorderService`. Ein MTA-Hintergrundthread prueft alle 500 ms Vordergrundfenster und Titel. Ist ein neues Fenster bzw. ein neuer Titel 500 ms stabil, wird sein sichtbarer Text per UI Automation gelesen (TextPattern-Sichtbereich fuer Dokumente/Editoren, sonst Namen von Text, Links, Buttons, Listen, Tabs, Bild-Alt-Texten; Kinder per `FindAll` mit Cache, max. 1500 Knoten, 1,5 s Budget) und sofort geschrieben; liefert der erste Durchgang unter 5 Zeilen (Chromium/Electron bauen den Baum erst auf Anfrage), wird bis zu zweimal nachgelesen. Im selben Fenster wird alle 2,5 s neu gelesen und nur geschrieben, was fuer dieses Fenster noch nie protokolliert wurde. Rauschfilter: Titel-/Scroll-/Menueleisten, Fensterknoepfe (auch `"App" minimieren` von Store-Apps), Objekt-Platzhalter U+FFFC und Zeilen ohne Buchstaben/Ziffern. Uebersprungen werden Clipwell-eigene Fenster, haengende Fenster (`IsHungAppWindow`) samt dwm-Geisterfenster und Passwortfelder; Store-Apps im Application Frame Host werden nach Fenstertitel benannt. Keine Pixelaufnahme, also kein Screen-Capture-Alarm und keine OCR. Monitoring-Pause pausiert auch die Aufnahme, Tray-Hinweis beim Start. Der erste Entwurf verlangte zwei identische Lesedurchgaenge und schrieb deshalb bei grossen oder sich staendig aendernden Fenstern (Teams, VS Code) keine Eintraege; das ist behoben, ebenso Domains unter "Inhaltsarten" der KB-Uebersicht (URL-Eintraege sind dort ausgenommen).
+- Markdown pro Aufnahme in `%APPDATA%\Clipwell\recordings\yyyy-MM-dd_HH-mm-ss.md` (`RecordingMarkdown`): Kopf mit Start, je Wechsel `## HH:mm:ss - App: Fenstertitel` mit "Sichtbarer Inhalt" (erstes Mal oder weitgehend neuer Inhalt) bzw. "Neu sichtbar" (nur hinzugekommene Zeilen) und "Aenderung" (Fensterwechsel, Anzahl neuer Zeilen), Fusszeile mit Ende, Dauer und Anzahl.
+- KB-Fenster (`KnowledgeBaseWindow`, `KB`-Button im Popup, Tray "KB", Fenstertitel nur "KB"): links Dashboard, Gesamtuebersicht und alle Artikel, rechts Dashboard bzw. Markdown. Das Dashboard (`KnowledgeDashboard` fuer die Zahlen, `Views\KbInstruments.cs` mit `SevenSegmentDisplay` und `AnalogGauge` mit animierter Nadel und automatischer Skala 5/10/25/50/...) zeigt Artikel-, Notiz-, Aufnahme- und Zwischenablagezaehler, Instrumente zur laufenden bzw. letzten Aufnahme, Kacheln nach Anwendung und Webseite sowie die Artikelliste; Aufnahme starten/stoppen, Aktualisieren, Kopieren (ohne History-Eintrag), Exportieren, Ordner oeffnen, Loeschen. Die Gesamtuebersicht (`KnowledgeSummaryBuilder`) fasst Clipboard-History (Anzahl, Zeitraum, Typen, letzte 7 Tage, Domains, Inhaltsarten, Meistgenutzt, Gepinnt, Zuletzt kopiert) und Aufnahmen (Anzahl, Bildwechsel, Gesamtdauer, haeufigste Anwendungen, Fenster je Aufnahme) zusammen. Laufende Aufnahmen aktualisieren die Ansicht im Sekundentakt.
+- Webinhalte: Beim Kopieren aus dem Browser speichert Clipwell das CF_HTML-Fragment (`HtmlContent`, bis 1 Mio. Zeichen, nur mit Struktur wie Tabellen, Listen, Ueberschriften, Links) und die Quell-URL (`SourceUrl`, nur http/https). Einfuegen per Enter schreibt Text plus HTML, Ctrl+Enter weiterhin nur Text. Erneutes Kopieren desselben Textes aktualisiert HTML und Quelle.
+- `HtmlMarkdownConverter` normalisiert das HTML ohne externe Abhaengigkeit zu Markdown (Ueberschriften, Absaetze, verschachtelte Listen, Tabellen, Links, Fett/Kursiv, Code, Zitate, Bilder mit Alt-Text) und entfernt Skripte, Styles, Navigation, Seitenleisten, Fusszeilen und Formulare.
+- Detailfenster: Quell-URL als Link neben dem Titel, Browser-Button oeffnet sie; Umschalter "Webinhalt" zeigt das aufbereitete Markdown (schreibgeschuetzt, kopierbar) mit gerenderter Vorschau. Markdown-Vorschau stellt jetzt Pipe-Tabellen dar und kursiviert keine Unterstriche in Bezeichnern mehr.
+- Testprojekt auf `xunit.v3` 4.0.2 und `xunit.runner.visualstudio` 4.0.1 umgestellt (Microsoft Testing Platform, `OutputType` Exe, Parallelisierung per `[assembly: Parallelization(Mode = None)]` aus).
+- Pinboard-Umsortieren bei aktiver Suche nummeriert alle gepinnten Eintraege neu (`PopupViewModel.MovePinned`), nicht nur die sichtbaren; Test `MovePinned_RenumbersHiddenPinsToo`.
+- Ziehen aus dem Popup in andere Programme zeigt einen Akzentrahmen am gezogenen Eintrag und eine halbtransparente Vorschau, die dem Cursor auch außerhalb von Clipwell folgt (`Views/DragGhost.cs`, klick-durchlässiges Fenster); dieselbe Vorschau beim Umsortieren im Pinboard.
+- Eyedropper deckt den gesamten virtuellen Bildschirm ab (alle Monitore) statt nur den maximierten Primaermonitor; Farbwerte und Lupenposition nutzen physische Cursor-Koordinaten, damit gemischte Skalierung stimmt. Lupe mit Akzentrahmen, Umlaut-Kodierung im Hinweistext korrigiert.
+- Popup oeffnet ohne Zucken: Fenster wird im Leerlauf nach dem Start vorbereitet, nur einmal vor dem Anzeigen positioniert und blendet von Deckkraft 0 ein.
+- Zeitstempel-Aktualisierung baut die gruppierte Liste nur noch bei Tageswechsel neu auf statt bei jedem Oeffnen und jede Minute.
+- Pin loesen im Popup und im Pinboard behaelt die Scrollposition; der geloeste Eintrag zieht die Liste nicht mehr in seine Datumsgruppe.
+- Design "Blacked Out": dunkles Theme in Schwarztönen (`#0A0A0A`/`#121212`/`#262626`), Akzent `#E88832` zentral in `App.AccentHex` mit `AccentBrush`, `AccentTextBrush` (dunkler Text auf Orange) und `AccentStripeBrush`; dünner Akzentstrich oben in Popup, Detailfenster und Pinboard; Pins, Auswahlrahmen, Primärbuttons und WPF-UI-Akzent nutzen das Orange. Das bisherige Limettengrün ist entfernt, das helle Theme nutzt denselben Akzent.
+- Gruppe "Gepinnt" im Popup sortiert nach Pin-Reihenfolge (zuletzt gepinnt oben, Pinboard-Reihenfolge gilt auch im Popup) statt nach Kopierzeitpunkt; Test `TogglePin_PutsLatestPinnedEntryFirstEvenWhenItIsOlder`.
+- Pinboard-Drag & Drop: gezogener Eintrag wird umrandet, Einfuegelinie oben/unten am Ziel, Ablegen nach dem Ziel und am Listenende moeglich.
+- Detailfenster-Kopfzeile: Aktionsbuttons bekommen ihre volle Breite, die Infozeile links wird bei Platzmangel abgeschnitten.
+- Abhaengigkeiten aktualisiert: Microsoft.Data.Sqlite 10.0.14, SQLitePCLRaw.bundle_e_sqlite3 3.0.5, YamlDotNet 18.1.0, Microsoft.NET.Test.Sdk 18.11.0.
+- `global.json` fixiert das SDK auf 10.0.4xx; `dist/` und `Tools/` sind in `.gitignore`.
+- Ungenutzte ViewModel-Methoden entfernt; Migration des Alt-Themes `Compact` erfolgt jetzt beim Laden der Settings.
 - Bild-Clipboard fuer Paint/Office kompatibel gemacht: Clipwell repariert voll transparente Bilddaten mit versteckten RGB-Farben, schreibt Bilder als voll opakes GDI+-Bitmap und rendert den Bildeditor-Export ueber eine explizite Export-Canvas statt ueber den UI-Viewport.
 - SQLite FTS5-Volltext-Index (`HistoryFts`) mit Triggern; Suche per Praefix-MATCH ab 1000 Eintraegen automatisch aktiv.
 - FTS-Initialisierung erhaelt den Index ueber App-Starts hinweg; Rebuild nur bei fehlender/inkonsistenter Backfill.
-- YAML-Erkennung in ContentKindService (LooksLikeYaml, ContentKind=`YAML`); YAML-Validierung mit YamlDotNet 18.0.0 im Detailfenster.
+- YAML-Erkennung in ContentKindService (LooksLikeYaml, ContentKind=`YAML`); YAML-Validierung mit YamlDotNet im Detailfenster.
 - Bestehende Text-Eintraege mit ContentKind `YAML` werden beim Schema-Start auf Typ `Code` migriert.
 - Shape-Memory im Bildeditor: letzte 3 Farb-/Dicke-Kombinationen werden in `editor-styles.json` persistiert und als Schnellzugriffs-Buttons angezeigt.
 - Helles Layout im Detail-, Text- und Bildeditor korrigiert.
@@ -48,25 +75,30 @@ Stand: 2026-06-27
 
 ## Verifikation
 
-Zuletzt ausgefuehrt am 2026-06-27:
+Zuletzt ausgefuehrt am 2026-11-05:
 
 ```powershell
 taskkill /IM Clipwell.exe /F
 dotnet build ClipwellWin\ClipwellWin.csproj -c Release --nologo -v q
-dotnet test ClipwellWin.Tests\ClipwellWin.Tests.csproj --nologo -v q
+dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
 Ergebnis:
 
-- Tests: 92/92 bestanden.
+- Tests: 148/148 bestanden.
 - Release-Build: erfolgreich, 0 Warnungen.
-- Dependency-Warnung bereinigt: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wird durch `Microsoft.Data.Sqlite` 10.0.9 plus direktem `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3 Override nicht mehr aufgeloest.
+- Dependency-Warnung bereinigt: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wird durch `Microsoft.Data.Sqlite` 10.0.14 plus direktem `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 Override nicht mehr aufgeloest. `dotnet list package --vulnerable --include-transitive`: keine Treffer.
+- Testprojekt laeuft auf `xunit.v3` 4.0.2 mit `xunit.runner.visualstudio` 4.0.1 auf der Microsoft Testing Platform (`global.json` `test.runner`); `dotnet test` braucht deshalb `--project`.
 
 ## Bekannte Grenzen
 
 - Bildeditor-Mausgenauigkeit ist automatisiert nur ueber Smoke-Tests abgedeckt; DPI-/Zoom-/Multi-Monitor-Verhalten sollte manuell geprueft werden.
 - Browser-Oeffnen aus dem laufenden Tray-Popup ist implementiert, aber nicht automatisiert getestet.
 - Es gibt noch keine Installer-/Signatur-/Release-Pipeline.
+- Desktop-Aufnahme erfasst nur, was Anwendungen per UI Automation bereitstellen: Bilder, Videos, Canvas-/Spiele-Oberflaechen und manche Electron-/Java-Apps liefern wenig oder keinen Text. Fenster mit laufend wechselndem Text (Uhren, Logs) erzeugen viele kleine Eintraege. Der UIA-Lesepfad ist nur ueber Format-/Parser-Tests abgedeckt, nicht automatisiert gegen echte Fenster.
+- Diktat: Mikrofonaufnahme und Whisper-Transkription sind nur ueber Hilfsfunktionen getestet (Rauschfilter, Modellnamen); der Ende-zu-Ende-Pfad wurde ausserhalb der App gegen das Base-Modell geprueft. Transkription laeuft nach dem Stoppen in einem Stueck (kein Live-Text); bei langen Diktaten auf schwacher CPU dauert das spuerbar. Mikrofonzugriff muss in den Windows-Datenschutzeinstellungen fuer Desktop-Apps erlaubt sein.
+- Auto-Backup und JSON-Export sichern Metadaten, Bilder und Thumbnails; SQLite-Export bleibt die vollstaendige 1:1-Sicherung.
+- Der Weichzeichnen-Effekt im Bildeditor ist eine visuelle Ueberlagerung, kein echter Gaussian Blur.
 - Offene Produkt- und Technikpunkte werden in `docs/ROADMAP.md` gepflegt.
 
 ## Review
@@ -77,9 +109,9 @@ Keine kritischen Race Conditions bekannt:
 - Datenbankzugriff wird ueber `_gate` serialisiert.
 - OCR- und URL-Preview-Tasks aktualisieren UI-State ueber den Dispatcher.
 - Settings-Saves sind gelockt.
+- Desktop-Recorder schreibt unter `_writeLock`; `Stop` wartet hoechstens 3 s auf den Lesethread (haengende Ziel-App) und schreibt danach die Fusszeile, spaete Schreibversuche des Threads werden verworfen. Zustandswechsel gehen per Dispatcher an UI-Thread.
 
 Technische Schulden:
 
 - `App.OnClipboardChanged` und `App.ReloadUrlPreview` enthalten aehnliche async URL-Preview-Koordination. Nicht extrahiert, weil State- und UI-Koordination dort sensibel ist.
-- `UrlPreviewService` begrenzt Favicons per `FetchLimitedBytesAsync` auf `MaxFaviconBytes` und per Timeout.
 - Einige UI-Smoke-Tests decken Renderbarkeit ab, aber keine echten Interaktionspfade per Maus/Tastatur.

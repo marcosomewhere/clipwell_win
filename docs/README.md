@@ -4,9 +4,9 @@ Clipwell is a local-first Windows clipboard manager built with WPF, .NET 10 and 
 
 ## Features
 
-- Clipboard history for text, notes, URLs, code/config snippets, colors and images.
+- Clipboard history for text, notes, URLs, code/config snippets (including YAML detection and validation), colors and images.
 - Global hotkey with automatic fallback combinations when the requested shortcut is blocked.
-- Keyboard-first popup with type chips, pinned filter, grouped entries and search prefixes.
+- Keyboard-first popup with type chips, pinned filter, grouped entries, search prefixes, regex search, search history and sorting (newest, oldest, most/least used).
 - Bulk actions for pin, unpin, export and delete.
 - Detail window with editable text/code minieditor, image editor, OCR view and color values.
 - Image support with thumbnail, zoom/pan, precise annotations, crop/resize/expand and duplicate-image suppression.
@@ -14,6 +14,9 @@ Clipwell is a local-first Windows clipboard manager built with WPF, .NET 10 and 
 - URL quick links open entries in the default browser from popup or details.
 - Pinboard window for always-on-top pinned entries.
 - Eyedropper overlay for picking screen colors into history and clipboard.
+- Desktop recording: after pressing Record, the visible text of the foreground window is read through UI Automation (no screenshots) and every stable change is appended as Markdown.
+- Notes as a separate feature: notes window with search and autosave, local Whisper dictation into the note, export to the internal KB; tray submenu "Notizen".
+- KB window: overall Markdown summary of clipboard history, exported notes and all recordings, per-item view, copy and export.
 - Export/import as JSON, SQLite backup export, auto-backup rotation and secure delete via VACUUM.
 - Privacy controls: monitoring pause via tray menu.
 - SQLite recovery prompt when `quick_check` fails.
@@ -47,13 +50,17 @@ Supported prefixes:
 - Settings: `%APPDATA%\Clipwell\settings.json`
 - History database: `%APPDATA%\Clipwell\history.db`
 - Log: `%APPDATA%\Clipwell\clipwell.log`
+- Image editor style memory: `%APPDATA%\Clipwell\editor-styles.json`
+- Desktop recordings: `%APPDATA%\Clipwell\recordings\*.md`
+- Notes: `%APPDATA%\Clipwell\notes\*.md`; notes exported to the KB: `%APPDATA%\Clipwell\kb\notes\*.md`
+- Whisper base model: bundled as `models\ggml-base.bin` next to `Clipwell.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`); the build fetches it into `Tools\whisper` if missing. Larger models (small/medium) download on demand to `%APPDATA%\Clipwell\models`.
 - Recovery backups: next to `history.db` with `.broken-YYYYMMDD-HHMMSS` suffix
 
 ## Build
 
 Requirements:
 
-- Windows 10 or newer
+- Windows 10 version 2004 (build 19041) or newer
 - .NET 10 Windows Desktop SDK
 
 Build Release:
@@ -72,19 +79,25 @@ Start-Process ClipwellWin\bin\Release\net10.0-windows10.0.19041.0\Clipwell.exe
 Test:
 
 ```powershell
-dotnet test ClipwellWin.Tests\ClipwellWin.Tests.csproj --nologo -v q
+dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Current suite: 92 xUnit tests.
+Current suite: 148 xUnit v3 tests.
 
-Dependency status: the previous `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 `NU1903` warning is resolved through `Microsoft.Data.Sqlite` 10.0.9 plus a direct `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3 override.
+Portable single-file build:
+
+```powershell
+dotnet publish ClipwellWin\ClipwellWin.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist\Clipwell-win-x64
+```
+
+Dependency status: the previous `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 `NU1903` warning is resolved through `Microsoft.Data.Sqlite` 10.0.14 plus a direct `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 override.
 
 ## Project Structure
 
 - `ClipwellWin\Models`: persisted settings and clipboard entries
-- `ClipwellWin\Services`: clipboard processing, database, settings, content detection, OCR and URL preview
+- `ClipwellWin\Services`: clipboard processing, database, settings, content detection, OCR, URL preview, HTML-to-Markdown, desktop recording, notes, dictation and KB summary
 - `ClipwellWin\ViewModels`: popup and entry presentation state
-- `ClipwellWin\Views`: popup, details, settings, onboarding, pinboard and eyedropper windows
+- `ClipwellWin\Views`: popup, details, settings, onboarding, pinboard, eyedropper, KB and notes windows
 - `ClipwellWin.Tests`: service, view-model and smoke tests
 
 ## Documentation

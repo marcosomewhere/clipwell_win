@@ -56,7 +56,6 @@ public partial class DetailWindow : Window
     private Shape? _draftShape;
     private Rect? _pendingCropRect;
     private readonly List<UIElement> _cropOverlayElements = [];
-    private Brush _editorBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E53935"));
     private string _currentColor = "#E53935";
     private int _nextMarkerNumber = 1;
     private Border? _inlineTextEditor;
@@ -251,9 +250,9 @@ public partial class DetailWindow : Window
             NativeMethods.SetImmersiveDarkMode(hwnd, app.IsEffectiveDarkTheme);
             NativeMethods.SetWindowFrameColors(
                 hwnd,
-                app.IsEffectiveDarkTheme ? 0x00181410 : 0x00F9F7F4,
-                app.IsEffectiveDarkTheme ? 0x00F7F5F3 : 0x00221F1B,
-                app.IsEffectiveDarkTheme ? 0x00433930 : 0x00D0C8BD);
+                app.IsEffectiveDarkTheme ? 0x000A0A0A : 0x00F9F7F4,
+                app.IsEffectiveDarkTheme ? 0x00EDEDED : 0x00221F1B,
+                app.IsEffectiveDarkTheme ? 0x00262626 : 0x00D0C8BD);
         }
     }
 
@@ -281,21 +280,21 @@ public partial class DetailWindow : Window
         }
         else
         {
-            SetBrushResource("EditorChromeBrush", Color.FromRgb(16, 20, 24));
-            SetBrushResource("EditorPanelBrush", Color.FromRgb(23, 29, 34));
-            SetBrushResource("EditorPanelAltBrush", Color.FromRgb(31, 38, 45));
-            SetBrushResource("EditorCanvasBackBrush", Color.FromRgb(35, 42, 49));
-            SetBrushResource("EditorBorderBrush", Color.FromRgb(48, 57, 67));
-            SetBrushResource("EditorMutedBrush", Color.FromRgb(154, 166, 178));
-            SetBrushResource("EditorHoverBrush", Color.FromRgb(40, 49, 58));
-            SetBrushResource("EditorPressedBrush", Color.FromRgb(50, 60, 69));
-            SetBrushResource("EditorTextPanelBrush", Color.FromRgb(16, 24, 32));
-            SetBrushResource("EditorTextHeaderBrush", Color.FromRgb(20, 28, 36));
-            SetBrushResource("EditorTextBodyBrush", Color.FromRgb(11, 17, 23));
-            SetBrushResource("EditorTextLineBrush", Color.FromRgb(14, 21, 28));
-            SetBrushResource("EditorTextBrush", Color.FromRgb(244, 246, 248));
-            SetBrushResource("EditorTextMutedBrush", Color.FromRgb(135, 145, 156));
-            SetBrushResource("EditorSelectionTextBrush", Color.FromRgb(17, 20, 24));
+            SetBrushResource("EditorChromeBrush", Color.FromRgb(10, 10, 10));
+            SetBrushResource("EditorPanelBrush", Color.FromRgb(18, 18, 18));
+            SetBrushResource("EditorPanelAltBrush", Color.FromRgb(25, 25, 25));
+            SetBrushResource("EditorCanvasBackBrush", Color.FromRgb(20, 20, 20));
+            SetBrushResource("EditorBorderBrush", Color.FromRgb(38, 38, 38));
+            SetBrushResource("EditorMutedBrush", Color.FromRgb(154, 154, 154));
+            SetBrushResource("EditorHoverBrush", Color.FromRgb(32, 32, 32));
+            SetBrushResource("EditorPressedBrush", Color.FromRgb(42, 42, 42));
+            SetBrushResource("EditorTextPanelBrush", Color.FromRgb(14, 14, 14));
+            SetBrushResource("EditorTextHeaderBrush", Color.FromRgb(18, 18, 18));
+            SetBrushResource("EditorTextBodyBrush", Color.FromRgb(10, 10, 10));
+            SetBrushResource("EditorTextLineBrush", Color.FromRgb(14, 14, 14));
+            SetBrushResource("EditorTextBrush", Color.FromRgb(237, 237, 237));
+            SetBrushResource("EditorTextMutedBrush", Color.FromRgb(138, 138, 138));
+            SetBrushResource("EditorSelectionTextBrush", Color.FromRgb(10, 10, 10));
             EditorCanvas.Background = new SolidColorBrush(Color.FromRgb(239, 239, 239));
         }
     }
@@ -318,9 +317,18 @@ public partial class DetailWindow : Window
         ReasonLabel.Text = "";
         ReasonLabel.Visibility = Visibility.Collapsed;
         TitleSeparator.Visibility = Visibility.Collapsed;
-        OpenUrlBtn.Visibility = vm.Type == EntryType.Url && UrlPreviewService.IsUrl(vm.Content)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        OpenUrlBtn.Visibility = BrowserTargetUrl() != null ? Visibility.Visible : Visibility.Collapsed;
+
+        var sourceUrl = vm.Entry.SourceUrl;
+        var showSource = sourceUrl != null
+            && !(vm.Type == EntryType.Url && string.Equals(sourceUrl, vm.Content, StringComparison.OrdinalIgnoreCase));
+        SourceLinkLabel.Visibility = showSource ? Visibility.Visible : Visibility.Collapsed;
+        if (showSource)
+        {
+            TitleSeparator.Visibility = Visibility.Visible;
+            SourceLinkRun.Text = DisplaySourceUrl(sourceUrl!);
+            SourceLinkLabel.ToolTip = sourceUrl;
+        }
 
         if (vm.Type == EntryType.Image && vm.Entry.ImageData != null)
         {
@@ -389,6 +397,11 @@ public partial class DetailWindow : Window
         var isMarkdown = string.Equals(vm.ContentKind, "MARKDOWN", StringComparison.OrdinalIgnoreCase);
         if (MarkdownPreviewToggle != null)
             MarkdownPreviewToggle.Visibility = isMarkdown ? Visibility.Visible : Visibility.Collapsed;
+        if (WebContentToggle != null)
+        {
+            WebContentToggle.Visibility = vm.Entry.HasHtml ? Visibility.Visible : Visibility.Collapsed;
+            WebContentToggle.IsChecked = false;
+        }
 
         ValidateStructuredContent(text, _editorLanguage, vm.ContentKind);
     }
@@ -489,7 +502,7 @@ public partial class DetailWindow : Window
 
     private void ShowImage(EntryViewModel vm)
     {
-        var bmp = LoadImage(vm.Entry.ImageData!);
+        var bmp = ImageUtils.LoadBitmap(vm.Entry.ImageData!);
         if (bmp != null)
         {
             _baseImage = bmp;
@@ -610,7 +623,6 @@ public partial class DetailWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is not string color) return;
         _currentColor = color;
-        _editorBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
         if (_selectedAnnotation == null) return;
         PushUndo();
         _selectedAnnotation.Color = color;
@@ -2389,7 +2401,87 @@ public partial class DetailWindow : Window
     }
 
     private void OpenUrl_Click(object sender, RoutedEventArgs e)
-        => OpenUrl(_vm.Content);
+        => OpenUrl(BrowserTargetUrl());
+
+    private void SourceLink_Click(object sender, RoutedEventArgs e)
+        => OpenUrl(_vm.Entry.SourceUrl);
+
+    private string? BrowserTargetUrl()
+    {
+        if (_vm.Type == EntryType.Url && UrlPreviewService.IsUrl(_vm.Content)) return _vm.Content;
+        return UrlPreviewService.IsUrl(_vm.Entry.SourceUrl) ? _vm.Entry.SourceUrl : null;
+    }
+
+    private static string DisplaySourceUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return url;
+        var path = uri.AbsolutePath == "/" ? "" : uri.AbsolutePath;
+        return uri.Host + path;
+    }
+
+    // ── Web content (HTML from the clipboard, normalized to Markdown) ──────
+
+    private string? _webMarkdown;
+
+    private void WebContentToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (WebContentToggle.IsChecked == true)
+        {
+            if (_textPreviewEditable && SaveTextBtn.IsEnabled)
+            {
+                // Switching views would discard unsaved edits of the plain text.
+                WebContentToggle.IsChecked = false;
+                TextStatusLabel.Text = "Erst speichern oder rückgängig machen";
+                return;
+            }
+            ShowWebContent();
+        }
+        else
+        {
+            HideWebContent();
+        }
+    }
+
+    private void ShowWebContent()
+    {
+        if (System.Windows.Application.Current is App app)
+            _vm.Entry.HtmlContent ??= app.Database.LoadHtml(_vm.Id);
+        _webMarkdown ??= HtmlMarkdownConverter.Convert(_vm.Entry.HtmlContent);
+
+        if (_isMarkdownPreviewActive)
+        {
+            _isMarkdownPreviewActive = false;
+            MarkdownPreviewToggle.IsChecked = false;
+            HideMarkdownPreview();
+        }
+
+        _loadingTextEditor = true;
+        TextPreview.IsUndoEnabled = false;
+        TextPreview.Text = _webMarkdown.Length > 0 ? _webMarkdown : "Kein verwertbarer Webinhalt.";
+        TextPreview.IsUndoEnabled = true;
+        _loadingTextEditor = false;
+        TextPreview.IsReadOnly = true;
+        CodeHighlightOverlay.Visibility = Visibility.Collapsed;
+        TextPreview.Foreground = (Brush)Resources["EditorTextBrush"];
+        TextEditorTitleLabel.Text = "Webinhalt (aufbereitet)";
+        TextModeLabel.Text = "Markdown";
+        EditorLanguageBox.Visibility = Visibility.Collapsed;
+        SaveTextBtn.Visibility = Visibility.Collapsed;
+        UndoTextBtn.Visibility = Visibility.Collapsed;
+        MarkdownPreviewToggle.Visibility = Visibility.Visible;
+        UpdateTextEditorStats();
+    }
+
+    private void HideWebContent()
+    {
+        if (_isMarkdownPreviewActive)
+        {
+            _isMarkdownPreviewActive = false;
+            MarkdownPreviewToggle.IsChecked = false;
+            HideMarkdownPreview();
+        }
+        ConfigureTextEditor(_vm, _vm.Content ?? _vm.Entry.OcrText ?? "");
+    }
 
     private static void OpenUrl(string? url)
     {
@@ -2675,21 +2767,6 @@ public partial class DetailWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private static BitmapImage? LoadImage(byte[] data)
-    {
-        try
-        {
-            var img = new BitmapImage();
-            img.BeginInit();
-            img.StreamSource = new MemoryStream(data);
-            img.CacheOption = BitmapCacheOption.OnLoad;
-            img.EndInit();
-            img.Freeze();
-            return img;
-        }
-        catch { return null; }
-    }
-
     // ── Structured-content validation ───────────────────────────────────────
 
     private void ValidateStructuredContent(string text, string? language, string? kind)
@@ -2824,7 +2901,6 @@ public partial class DetailWindow : Window
     {
         if ((sender as WpfButton)?.Tag is not StyleMemory style) return;
         _currentColor = style.Color;
-        _editorBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(style.Color));
         StrokeSlider.Value = style.Thickness;
         foreach (var rb in EditorColorSwatches.Children.OfType<System.Windows.Controls.RadioButton>())
         {
@@ -2936,6 +3012,25 @@ public partial class DetailWindow : Window
             m => $"<pre><code>{m.Groups[2].Value}</code></pre>",
             RegexOptions.Multiline);
 
+        // pipe tables: header row, separator row, body rows
+        md = Regex.Replace(md, @"((?:^\|.*\|[ \t]*\r?\n?){2,})", m =>
+        {
+            var rows = m.Value.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (rows.Count < 2 || !Regex.IsMatch(rows[1], @"^\|(\s*:?-{3,}:?\s*\|)+\s*$")) return m.Value;
+            static IEnumerable<string> Cells(string row)
+                => Regex.Split(row.Trim().Trim('|'), @"(?<!\\)\|").Select(c => c.Trim().Replace("\\|", "|"));
+            var sb = new System.Text.StringBuilder("<table><thead><tr>");
+            foreach (var c in Cells(rows[0])) sb.Append("<th>").Append(c).Append("</th>");
+            sb.Append("</tr></thead><tbody>");
+            foreach (var row in rows.Skip(2))
+            {
+                sb.Append("<tr>");
+                foreach (var c in Cells(row)) sb.Append("<td>").Append(c).Append("</td>");
+                sb.Append("</tr>");
+            }
+            return sb.Append("</tbody></table>\n").ToString();
+        }, RegexOptions.Multiline);
+
         // inline code
         md = Regex.Replace(md, @"`([^`]+)`",
             m => $"<code>{m.Groups[1].Value}</code>");
@@ -2954,9 +3049,11 @@ public partial class DetailWindow : Window
         // bold + italic
         md = Regex.Replace(md, @"\*\*\*(.+?)\*\*\*", "<strong><em>$1</em></strong>");
         md = Regex.Replace(md, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
-        md = Regex.Replace(md, @"__(.+?)__", "<strong>$1</strong>");
-        md = Regex.Replace(md, @"\*(.+?)\*", "<em>$1</em>");
-        md = Regex.Replace(md, @"_(.+?)_", "<em>$1</em>");
+        // Underscore emphasis only at word boundaries, so identifiers like demo_dock01 stay intact.
+        md = Regex.Replace(md, @"(?<![\w\\])__(.+?)__(?!\w)", "<strong>$1</strong>");
+        md = Regex.Replace(md, @"(?<!\\)\*(.+?)(?<!\\)\*", "<em>$1</em>");
+        md = Regex.Replace(md, @"(?<![\w\\])_(.+?)_(?!\w)", "<em>$1</em>");
+        md = md.Replace("\\*", "*").Replace("\\`", "`");
 
         // images
         md = Regex.Replace(md, @"!\[(.+?)\]\((.+?)\)",

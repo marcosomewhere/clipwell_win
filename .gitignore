@@ -37,3 +37,8 @@ TestResults/
 ## OS files
 Thumbs.db
 Desktop.ini
+
+## Publish output
+dist/
+Tools/
+

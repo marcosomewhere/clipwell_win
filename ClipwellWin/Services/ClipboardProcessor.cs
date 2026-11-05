@@ -40,13 +40,21 @@ public static class ClipboardProcessor
                 };
             }
 
+            string? rawHtml = null;
+            try
+            {
+                if (data.GetDataPresent(System.Windows.DataFormats.Html))
+                    rawHtml = data.GetData(System.Windows.DataFormats.Html) as string;
+            }
+            catch { rawHtml = null; }
+
             string? text = null;
             if (data.GetDataPresent(System.Windows.DataFormats.UnicodeText))
                 text = data.GetData(System.Windows.DataFormats.UnicodeText) as string;
             else if (data.GetDataPresent(System.Windows.DataFormats.Text))
                 text = data.GetData(System.Windows.DataFormats.Text) as string;
-            else if (data.GetDataPresent(System.Windows.DataFormats.Html))
-                text = StripHtml(data.GetData(System.Windows.DataFormats.Html) as string);
+            else if (rawHtml != null)
+                text = StripHtml(rawHtml);
             else if (data.GetDataPresent(System.Windows.DataFormats.Rtf))
                 text = StripRtf(data.GetData(System.Windows.DataFormats.Rtf) as string);
 
@@ -93,6 +101,7 @@ public static class ClipboardProcessor
                 _ => "Als Text behandelt: keine URL-, Farb- oder Code-Regel passte.",
             };
 
+            var (htmlFragment, sourceUrl) = ParseClipboardHtml(rawHtml);
             return new ClipboardEntry
             {
                 Type = type,
@@ -102,9 +111,59 @@ public static class ClipboardProcessor
                 ContentKind = contentKind,
                 DetectionReason = reason,
                 Timestamp = DateTime.Now,
+                HtmlContent = htmlFragment,
+                SourceUrl = sourceUrl,
             };
         }
         catch { return null; }
+    }
+
+    // Large pages copied with Ctrl+A can carry megabytes of markup; beyond this only plain text is kept.
+    internal const int MaxStoredHtmlChars = 1_000_000;
+
+    private static readonly Regex StructuralTagRx = new(
+        @"<(table|ul|ol|li|h[1-6]|p|br|a\s|strong|b|em|i|pre|code|blockquote|img)\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Extracts the fragment and the SourceURL header from a CF_HTML clipboard string.
+    /// Returns no fragment when it carries no structure worth keeping or exceeds the size limit.
+    /// </summary>
+    public static (string? Fragment, string? SourceUrl) ParseClipboardHtml(string? rawHtml)
+    {
+        if (string.IsNullOrWhiteSpace(rawHtml)) return (null, null);
+
+        string? sourceUrl = null;
+        var sourceMatch = Regex.Match(rawHtml, @"^SourceURL:(\S+)\s*$", RegexOptions.Multiline);
+        if (sourceMatch.Success && Uri.TryCreate(sourceMatch.Groups[1].Value, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            sourceUrl = uri.ToString();
+
+        var fragment = ExtractWindowsHtmlFragment(rawHtml).Trim();
+        if (fragment.Length == 0 || fragment.Length > MaxStoredHtmlChars || !StructuralTagRx.IsMatch(fragment))
+            return (null, sourceUrl);
+        return (fragment, sourceUrl);
+    }
+
+    /// <summary>Builds a CF_HTML clipboard string (UTF-8 byte offsets) around an HTML fragment.</summary>
+    public static string BuildClipboardHtml(string fragment, string? sourceUrl)
+    {
+        const string startMarker = "<!--StartFragment-->";
+        const string endMarker = "<!--EndFragment-->";
+        var headerTemplate =
+            "Version:0.9\r\nStartHTML:{0:D10}\r\nEndHTML:{1:D10}\r\nStartFragment:{2:D10}\r\nEndFragment:{3:D10}\r\n" +
+            (sourceUrl != null ? $"SourceURL:{sourceUrl}\r\n" : "");
+        var htmlStart = "<html><body>" + startMarker;
+        var htmlEnd = endMarker + "</body></html>";
+
+        var headerLength = Encoding.UTF8.GetByteCount(string.Format(headerTemplate, 0, 0, 0, 0));
+        var startHtml = headerLength;
+        var startFragment = startHtml + Encoding.UTF8.GetByteCount(htmlStart);
+        var endFragment = startFragment + Encoding.UTF8.GetByteCount(fragment);
+        var endHtml = endFragment + Encoding.UTF8.GetByteCount(htmlEnd);
+
+        return string.Format(headerTemplate, startHtml, endHtml, startFragment, endFragment)
+            + htmlStart + fragment + htmlEnd;
     }
 
     public static string GetPlainText(ClipboardEntry entry)

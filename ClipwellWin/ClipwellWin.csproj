@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Clipwell</AssemblyName>
     <RootNamespace>ClipwellWin</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Copyright>(c) 2026 Marco Seefeldt</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
@@ -17,10 +17,47 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
-    <PackageReference Include="YamlDotNet" Version="18.0.0" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
+
+  <!-- The Whisper base model (MIT) ships next to the EXE under models\. It is too large for git, so a fresh
+       checkout downloads it once into Tools\whisper (gitignored) and verifies its SHA256. -->
+  <PropertyGroup>
+    <WhisperModelDir>$(MSBuildThisFileDirectory)..\Tools\whisper\</WhisperModelDir>
+    <WhisperBaseModel>$(WhisperModelDir)ggml-base.bin</WhisperBaseModel>
+    <WhisperBaseModelUrl>https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin</WhisperBaseModelUrl>
+    <WhisperBaseModelSha256>60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe</WhisperBaseModelSha256>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(WhisperBaseModel)" Link="models\ggml-base.bin" Visible="false"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <Target Name="FetchWhisperBaseModel" BeforeTargets="AssignTargetPaths" Condition="!Exists('$(WhisperBaseModel)')">
+    <DownloadFile SourceUrl="$(WhisperBaseModelUrl)" DestinationFolder="$(WhisperModelDir)" DestinationFileName="ggml-base.bin.part" />
+    <GetFileHash Files="$(WhisperModelDir)ggml-base.bin.part" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_WhisperModelHash" />
+    </GetFileHash>
+    <Delete Files="$(WhisperModelDir)ggml-base.bin.part" Condition="'$(_WhisperModelHash.ToLowerInvariant())' != '$(WhisperBaseModelSha256)'" />
+    <Error Condition="'$(_WhisperModelHash.ToLowerInvariant())' != '$(WhisperBaseModelSha256)'"
+           Text="Whisper-Modell: SHA256 $(_WhisperModelHash) passt nicht zu $(WhisperBaseModelSha256)." />
+    <Move SourceFiles="$(WhisperModelDir)ggml-base.bin.part" DestinationFiles="$(WhisperBaseModel)" />
+  </Target>
+
+  <!-- Whisper.net.Runtime copies every Windows architecture as content; RID-specific publishes keep only their own. -->
+  <Target Name="RemoveForeignWhisperRuntimes" BeforeTargets="AssignTargetPaths" Condition="'$(RuntimeIdentifier)' != ''">
+    <ItemGroup>
+      <None Remove="@(None)"
+            Condition="$([System.String]::Copy('%(None.TargetPath)').StartsWith('runtimes/win-')) and !$([System.String]::Copy('%(None.TargetPath)').StartsWith('runtimes/$(RuntimeIdentifier)/'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -29,6 +29,19 @@ public class ClipboardEntry
     public bool IsPinned { get; set; }
     public long PinOrder { get; set; }
 
+    /// <summary>HTML fragment from the CF_HTML clipboard format; loaded on demand for lite entries.</summary>
+    public string? HtmlContent { get; set; }
+    /// <summary>Page URL from the CF_HTML header (SourceURL), when the copy came from a browser.</summary>
+    public string? SourceUrl { get; set; }
+
+    private bool _hasHtml;
+    /// <summary>True when HTML exists in the database even if <see cref="HtmlContent"/> is not loaded yet.</summary>
+    public bool HasHtml
+    {
+        get => _hasHtml || HtmlContent != null;
+        set => _hasHtml = value;
+    }
+
     public string PreviewText => Type switch
     {
         EntryType.Image => OcrText?.Length > 0 ? OcrText : "(Bild)",

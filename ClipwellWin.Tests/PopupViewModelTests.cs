@@ -144,6 +144,87 @@ public class PopupViewModelTests
     }
 
     [Fact]
+    public void TogglePin_PutsLatestPinnedEntryFirstEvenWhenItIsOlder()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var db = new DatabaseService(dbPath);
+            var vm = new PopupViewModel(db);
+
+            foreach (var (content, minute) in new[] { ("oldest", 0), ("middle", 1), ("newest", 2) })
+                vm.AddEntry(new ClipboardEntry
+                {
+                    Type = EntryType.Text,
+                    Content = content,
+                    Timestamp = new DateTime(2026, 6, 6, 10, minute, 0),
+                });
+
+            vm.TogglePin(vm.Entries.Single(e => e.Content == "newest"));
+            vm.TogglePin(vm.Entries.Single(e => e.Content == "oldest"));
+
+            var pinned = vm.FilteredEntries.Cast<EntryViewModel>().Where(e => e.IsPinned).Select(e => e.Content).ToList();
+            Assert.Equal(["oldest", "newest"], pinned);
+            Assert.Equal("oldest", vm.Entries[0].Content);
+        }
+        finally
+        {
+            DeleteIfExists(dbPath);
+            DeleteIfExists($"{dbPath}-wal");
+            DeleteIfExists($"{dbPath}-shm");
+        }
+    }
+
+    [Theory]
+    [InlineData(false, new[] { "B", "D", "C", "A" })]
+    [InlineData(true, new[] { "D", "B", "C", "A" })]
+    public void MovePinned_RenumbersHiddenPinsToo(bool insertAfter, string[] expected)
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using (var db = new DatabaseService(dbPath))
+            {
+                var vm = new PopupViewModel(db);
+                var minute = 0;
+                foreach (var name in new[] { "A", "B", "C", "D" })
+                    vm.AddEntry(new ClipboardEntry
+                    {
+                        Type = EntryType.Text,
+                        Content = name,
+                        Timestamp = new DateTime(2026, 6, 6, 10, minute++, 0),
+                    });
+                foreach (var name in new[] { "A", "B", "C", "D" })
+                    vm.TogglePin(vm.Entries.Single(e => e.Content == name));
+
+                // Pinboard search shows only B and D; B is dropped onto D.
+                var b = vm.Entries.Single(e => e.Content == "B");
+                var d = vm.Entries.Single(e => e.Content == "D");
+                Assert.True(vm.MovePinned(b.Id, d.Id, insertAfter));
+
+                var order = vm.Entries.Where(e => e.IsPinned).OrderByDescending(e => e.PinSortKey).ToList();
+                Assert.Equal(expected, order.Select(e => e.Content).ToArray());
+                Assert.Equal(order.Count, order.Select(e => e.PinOrder).Distinct().Count());
+            }
+
+            using (var reopened = new DatabaseService(dbPath))
+            {
+                var vm = new PopupViewModel(reopened);
+                vm.LoadFromDb();
+                var persisted = vm.Entries.Where(e => e.IsPinned).OrderByDescending(e => e.PinSortKey)
+                    .Select(e => e.Content).ToArray();
+                Assert.Equal(expected, persisted);
+            }
+        }
+        finally
+        {
+            DeleteIfExists(dbPath);
+            DeleteIfExists($"{dbPath}-wal");
+            DeleteIfExists($"{dbPath}-shm");
+        }
+    }
+
+    [Fact]
     public void AddEntry_SkipsDuplicateLatestImage()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"clipwell-test-{Guid.NewGuid():N}.db");

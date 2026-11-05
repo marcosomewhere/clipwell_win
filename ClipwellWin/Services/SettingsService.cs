@@ -27,6 +27,12 @@ public class SettingsService
             Settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOpts) ?? new();
         }
         catch { Settings = new(); }
+
+        if (Settings.Theme == ClipwellWin.Models.ThemeMode.Compact)
+        {
+            Settings.Theme = ClipwellWin.Models.ThemeMode.Light;
+            Save();
+        }
     }
 
     public void Save()

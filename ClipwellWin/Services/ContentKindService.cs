@@ -10,9 +10,6 @@ public static class ContentKindService
     private static readonly Regex XmlDeclRx        = new(@"^\s*<\?xml\b",                                                                      RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex XmlOpenTagRx     = new(@"^\s*<[A-Za-z][\w:.-]*(\s|>|/>)",                                                   RegexOptions.Multiline | RegexOptions.Compiled);
     private static readonly Regex XmlCloseTagRx    = new(@"</[A-Za-z][\w:.-]*>\s*$",                                                          RegexOptions.Multiline | RegexOptions.Compiled);
-    private static readonly Regex HtmlDoctypeRx    = new(@"^\s*<!doctype\s+html\b",                                                            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex HtmlRootRx       = new(@"^\s*<html\b",                                                                       RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
-    private static readonly Regex HtmlTagRx        = new(@"</?(head|body|main|section|article|header|footer|div|span|button|input|script|style|link|meta|title)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex IniSectionRx     = new(@"^\s*\[[^\]]+\]\s*$",                                                               RegexOptions.Multiline | RegexOptions.Compiled);
     private static readonly Regex IniKeyValueRx    = new(@"^\s*[\w.-]+\s*=\s*[^=]+$",                                                        RegexOptions.Multiline | RegexOptions.Compiled);
     private static readonly Regex EnvLineRx        = new(@"^\s*[A-Z_][A-Z0-9_]*=.+$",                                                        RegexOptions.Multiline | RegexOptions.Compiled);

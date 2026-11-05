@@ -64,6 +64,8 @@ public class DatabaseService : IDisposable
         EnsureColumn("History", "ThumbnailData", "BLOB");
         EnsureColumn("History", "UseCount", "INTEGER NOT NULL DEFAULT 0");
         EnsureColumn("History", "LastUsedAt", "TEXT");
+        EnsureColumn("History", "HtmlContent", "TEXT");
+        EnsureColumn("History", "SourceUrl", "TEXT");
         MigrateYamlTextEntries();
         InitFts();
     }
@@ -220,9 +222,11 @@ public class DatabaseService : IDisposable
 
             using var cmd = _conn.CreateCommand();
             cmd.CommandText = @"INSERT INTO History
-                (Type, Content, ImageData, ThumbnailData, OcrText, Language, UrlTitle, UrlFavicon, HexColor, ContentKind, DetectionReason, IsPinned, PinOrder, UseCount, LastUsedAt, Timestamp)
-                VALUES ($type,$content,$img,$thumb,$ocr,$lang,$urlTitle,$urlFavicon,$hex,$kind,$reason,$pin,$pinOrder,$useCount,$lastUsedAt,$ts);
+                (Type, Content, ImageData, ThumbnailData, OcrText, Language, UrlTitle, UrlFavicon, HexColor, ContentKind, DetectionReason, IsPinned, PinOrder, UseCount, LastUsedAt, Timestamp, HtmlContent, SourceUrl)
+                VALUES ($type,$content,$img,$thumb,$ocr,$lang,$urlTitle,$urlFavicon,$hex,$kind,$reason,$pin,$pinOrder,$useCount,$lastUsedAt,$ts,$html,$sourceUrl);
                 SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$html", (object?)e.HtmlContent ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$sourceUrl", (object?)e.SourceUrl ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$type", (int)e.Type);
             cmd.Parameters.AddWithValue("$content", (object?)e.Content ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$img", (object?)e.ImageData ?? DBNull.Value);
@@ -255,6 +259,31 @@ public class DatabaseService : IDisposable
             cmd.Parameters.AddWithValue("$ocr", ocrText);
             cmd.Parameters.AddWithValue("$id", id);
             cmd.ExecuteNonQuery();
+        }
+    }
+
+    public void UpdateHtml(long id, string? html, string? sourceUrl)
+    {
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "UPDATE History SET HtmlContent=$html, SourceUrl=$src WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$html", (object?)html ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$src", (object?)sourceUrl ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public string? LoadHtml(long id)
+    {
+        lock (_gate)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = "SELECT HtmlContent FROM History WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$id", id);
+            using var r = cmd.ExecuteReader();
+            return r.Read() && !r.IsDBNull(0) ? r.GetString(0) : null;
         }
     }
 
@@ -405,6 +434,9 @@ public class DatabaseService : IDisposable
         public required int PinOrder { get; init; }
         public required int UseCount { get; init; }
         public required int LastUsedAt { get; init; }
+        public required int HtmlContent { get; init; }
+        public required int HasHtml { get; init; }
+        public required int SourceUrl { get; init; }
 
         public static HistoryColumns From(SqliteDataReader r, bool includeImageData)
             => new()
@@ -426,7 +458,18 @@ public class DatabaseService : IDisposable
                 PinOrder = r.GetOrdinal("PinOrder"),
                 UseCount = r.GetOrdinal("UseCount"),
                 LastUsedAt = r.GetOrdinal("LastUsedAt"),
+                HtmlContent = OptionalOrdinal(r, "HtmlContent"),
+                HasHtml = OptionalOrdinal(r, "HasHtml"),
+                SourceUrl = OptionalOrdinal(r, "SourceUrl"),
             };
+
+        private static int OptionalOrdinal(SqliteDataReader r, string name)
+        {
+            for (var i = 0; i < r.FieldCount; i++)
+                if (string.Equals(r.GetName(i), name, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            return -1;
+        }
     }
 
     private static ClipboardEntry ReadEntry(SqliteDataReader r, HistoryColumns col)
@@ -450,6 +493,9 @@ public class DatabaseService : IDisposable
             UseCount        = r.IsDBNull(col.UseCount) ? 0 : r.GetInt32(col.UseCount),
             LastUsedAt      = r.IsDBNull(col.LastUsedAt) ? null : ParseDbTimestamp(r.GetString(col.LastUsedAt)),
             Timestamp       = ParseDbTimestamp(r.GetString(col.Timestamp)),
+            HtmlContent     = col.HtmlContent < 0 || r.IsDBNull(col.HtmlContent) ? null : r.GetString(col.HtmlContent),
+            HasHtml         = col.HasHtml >= 0 && !r.IsDBNull(col.HasHtml) && r.GetInt32(col.HasHtml) == 1,
+            SourceUrl       = col.SourceUrl < 0 || r.IsDBNull(col.SourceUrl) ? null : r.GetString(col.SourceUrl),
         };
     }
 
@@ -461,7 +507,8 @@ public class DatabaseService : IDisposable
             using var cmd = _conn.CreateCommand();
             cmd.CommandText = @"SELECT Id, Type, Content, ThumbnailData, OcrText, Language,
                                        UrlTitle, UrlFavicon, HexColor, ContentKind, DetectionReason,
-                                       IsPinned, PinOrder, Timestamp, UseCount, LastUsedAt
+                                       IsPinned, PinOrder, Timestamp, UseCount, LastUsedAt, SourceUrl,
+                                       CASE WHEN HtmlContent IS NULL THEN 0 ELSE 1 END AS HasHtml
                                 FROM History ORDER BY IsPinned DESC, Timestamp DESC";
             using var reader = cmd.ExecuteReader();
             var columns = HistoryColumns.From(reader, includeImageData: false);
@@ -624,6 +671,8 @@ public class DatabaseService : IDisposable
             ImageDataBase64 = e.ImageData != null ? Convert.ToBase64String(e.ImageData) : null,
             ThumbnailDataBase64 = e.ThumbnailData != null ? Convert.ToBase64String(e.ThumbnailData) : null,
             FaviconBase64 = e.UrlFavicon != null ? Convert.ToBase64String(e.UrlFavicon) : null,
+            e.HtmlContent,
+            e.SourceUrl,
         }).ToList();
 
         var options = new JsonSerializerOptions { WriteIndented = true };
@@ -776,6 +825,8 @@ public class DatabaseService : IDisposable
                     ImageData       = TryGetBytes(item, "ImageDataBase64"),
                     ThumbnailData   = TryGetBytes(item, "ThumbnailDataBase64"),
                     UrlFavicon      = TryGetBytes(item, "FaviconBase64"),
+                    HtmlContent     = TryGetStr(item, "HtmlContent"),
+                    SourceUrl       = TryGetStr(item, "SourceUrl"),
                 };
                 Insert(entry);
                 count++;
@@ -906,6 +957,8 @@ public class DatabaseService : IDisposable
         WriteNullableBase64(writer, "ImageDataBase64", r, "ImageData");
         WriteNullableBase64(writer, "ThumbnailDataBase64", r, "ThumbnailData");
         WriteNullableBase64(writer, "FaviconBase64", r, "UrlFavicon");
+        WriteNullableString(writer, "HtmlContent", r, "HtmlContent");
+        WriteNullableString(writer, "SourceUrl", r, "SourceUrl");
         writer.WriteEndObject();
     }
 

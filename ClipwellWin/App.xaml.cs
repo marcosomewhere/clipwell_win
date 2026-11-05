@@ -1,10 +1,7 @@
-using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Windows;
-using System.Windows.Forms;
 using System.Windows.Media;
 using ClipwellWin.Models;
 using ClipwellWin.Services;
@@ -36,6 +33,11 @@ public partial class App : System.Windows.Application
 
     private NotifyIcon? _trayIcon;
     private ToolStripMenuItem? _pinboardMenuItem;
+    private ToolStripMenuItem? _recordMenuItem;
+    private DesktopRecorderService? _recorder;
+    private KnowledgeBaseWindow? _knowledgeBase;
+    private NotesWindow? _notes;
+    private DictationService? _dictation;
     private MessageWindowService? _msgWin;
     private DatabaseService? _db;
     private SettingsService? _settings;
@@ -80,6 +82,12 @@ public partial class App : System.Windows.Application
             return;
         }
         _urlService = new UrlPreviewService();
+        _recorder = new DesktopRecorderService(
+            Path.Combine(AppPaths.DataDir, AppPaths.RecordingsFolderName),
+            () => _settings?.Settings.PauseMonitoring == true);
+        _recorder.StateChanged += (_, _) => Dispatcher.BeginInvoke(OnRecordingStateChanged);
+        _dictation = new DictationService(AppPaths.ModelsDir,
+            () => (_settings?.Settings.DictationModel ?? "base", _settings?.Settings.DictationLanguage ?? "de"));
 
         ApplyTheme(_settings.Settings.Theme);
         SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
@@ -101,6 +109,9 @@ public partial class App : System.Windows.Application
             ShowHotkeyRegistrationWarning();
 
         _ = Task.Run(() => RunAutoBackupIfNeeded());
+
+        // Pre-build the popup while idle so the first hotkey press does not pay for XAML parsing and HWND creation.
+        Dispatcher.InvokeAsync(EnsurePopupCreated, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         if (MarkOnboardingSeenIfNeeded())
         {
@@ -269,7 +280,13 @@ public partial class App : System.Windows.Application
         }
 
         _isEffectiveDarkTheme = dark;
-        ApplicationThemeManager.Apply(dark ? ApplicationTheme.Dark : ApplicationTheme.Light);
+        var uiTheme = dark ? ApplicationTheme.Dark : ApplicationTheme.Light;
+        ApplicationThemeManager.Apply(uiTheme);
+        // All four accent levels get the exact app accent; the single-color overload derives lighter
+        // tints for dark themes, which showed up as a second, paler orange in toggles, buttons and focus lines.
+        var accent = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(AccentHex);
+        ApplicationAccentColorManager.Apply(accent, accent, accent, accent);
+        ApplyAccentResources();
         ApplyPopupResources(dark);
         ApplyOnboardingResources(dark);
         ApplyDefaultSizeResources();
@@ -290,26 +307,37 @@ public partial class App : System.Windows.Application
             Dispatcher.InvokeAsync(() => ApplyTheme(AppThemeMode.System));
     }
 
+    internal const string AccentHex = "#FFE88832";
+
+    private static void ApplyAccentResources()
+    {
+        var res = Current.Resources;
+        res["AccentBrush"] = Brush(AccentHex);
+        // Dark text on the accent: white on this orange stays below 3:1 contrast.
+        res["AccentTextBrush"] = Brush("#FF0A0A0A");
+        res["AccentStripeBrush"] = Brush("#D9E88832");
+    }
+
     private static void ApplyPopupResources(bool dark)
     {
         var res = Current.Resources;
         if (dark)
         {
-            res["PopupBackgroundBrush"] = Brush("#FF171A1E");
-            res["PopupBorderBrush"] = Brush("#FF3A414A");
-            res["PopupPanelBrush"] = Brush("#FF23272D");
-            res["PopupPanelBorderBrush"] = Brush("#FF3A414A");
-            res["PopupTextPrimaryBrush"] = Brush("#FFF7F8FA");
-            res["PopupTextSecondaryBrush"] = Brush("#D8F7F8FA");
-            res["PopupTextMutedBrush"] = Brush("#A8F7F8FA");
-            res["PopupTextSubtleBrush"] = Brush("#8AF7F8FA");
-            res["PopupTextFaintBrush"] = Brush("#66F7F8FA");
-            res["PopupHoverBrush"] = Brush("#FF2A3037");
-            res["PopupSelectedBrush"] = Brush("#FF303740");
-            res["PopupChipBrush"] = Brush("#FF2B3037");
-            res["PopupChipCheckedBrush"] = Brush("#FF4A535E");
-            res["PopupBadgeBrush"] = Brush("#FF4A535E");
-            res["PopupBadgeSecondaryBrush"] = Brush("#FF343B43");
+            res["PopupBackgroundBrush"] = Brush("#FF0A0A0A");
+            res["PopupBorderBrush"] = Brush("#FF262626");
+            res["PopupPanelBrush"] = Brush("#FF121212");
+            res["PopupPanelBorderBrush"] = Brush("#FF262626");
+            res["PopupTextPrimaryBrush"] = Brush("#FFEDEDED");
+            res["PopupTextSecondaryBrush"] = Brush("#D8EDEDED");
+            res["PopupTextMutedBrush"] = Brush("#A8EDEDED");
+            res["PopupTextSubtleBrush"] = Brush("#8AEDEDED");
+            res["PopupTextFaintBrush"] = Brush("#66EDEDED");
+            res["PopupHoverBrush"] = Brush("#FF161616");
+            res["PopupSelectedBrush"] = Brush("#FF1E1E1E");
+            res["PopupChipBrush"] = Brush("#FF141414");
+            res["PopupChipCheckedBrush"] = Brush("#FF2A2A2A");
+            res["PopupBadgeBrush"] = Brush("#FF242424");
+            res["PopupBadgeSecondaryBrush"] = Brush("#FF1A1A1A");
             res["PopupShadowBrush"] = Brush("#FF000000");
         }
         else
@@ -338,19 +366,19 @@ public partial class App : System.Windows.Application
         var res = Current.Resources;
         if (dark)
         {
-            res["OnboardingBackgroundBrush"] = Brush("#FF171A1E");
-            res["OnboardingSurfaceBrush"] = Brush("#FF23272D");
-            res["OnboardingSurfaceAltBrush"] = Brush("#FF1D2126");
-            res["OnboardingBorderBrush"] = Brush("#FF3A414A");
-            res["OnboardingTextPrimaryBrush"] = Brush("#FFF7F8FA");
-            res["OnboardingTextSecondaryBrush"] = Brush("#D8F7F8FA");
-            res["OnboardingTextMutedBrush"] = Brush("#A8F7F8FA");
-            res["OnboardingInputBrush"] = Brush("#FF111418");
-            res["OnboardingInputFocusedBrush"] = Brush("#FF151A20");
+            res["OnboardingBackgroundBrush"] = Brush("#FF0A0A0A");
+            res["OnboardingSurfaceBrush"] = Brush("#FF121212");
+            res["OnboardingSurfaceAltBrush"] = Brush("#FF0E0E0E");
+            res["OnboardingBorderBrush"] = Brush("#FF262626");
+            res["OnboardingTextPrimaryBrush"] = Brush("#FFEDEDED");
+            res["OnboardingTextSecondaryBrush"] = Brush("#D8EDEDED");
+            res["OnboardingTextMutedBrush"] = Brush("#A8EDEDED");
+            res["OnboardingInputBrush"] = Brush("#FF0E0E0E");
+            res["OnboardingInputFocusedBrush"] = Brush("#FF141414");
             res["OnboardingButtonBrush"] = Brush("#FFEEF1F5");
             res["OnboardingButtonHoverBrush"] = Brush("#FFFFFFFF");
             res["OnboardingButtonTextBrush"] = Brush("#FF15171A");
-            res["OnboardingAccentBrush"] = Brush("#FF9BCB3F");
+            res["OnboardingAccentBrush"] = Brush(AccentHex);
         }
         else
         {
@@ -366,7 +394,7 @@ public partial class App : System.Windows.Application
             res["OnboardingButtonBrush"] = Brush("#FF24282D");
             res["OnboardingButtonHoverBrush"] = Brush("#FF343A40");
             res["OnboardingButtonTextBrush"] = Brush("#FFFFFFFF");
-            res["OnboardingAccentBrush"] = Brush("#FF7BA82A");
+            res["OnboardingAccentBrush"] = Brush(AccentHex);
         }
     }
 
@@ -404,6 +432,15 @@ public partial class App : System.Windows.Application
         _pinboardMenuItem = new ToolStripMenuItem("Pinboard");
         _pinboardMenuItem.Click += (_, _) => TogglePinboard();
         menu.Items.Add(_pinboardMenuItem);
+        _recordMenuItem = new ToolStripMenuItem("Desktop aufzeichnen");
+        _recordMenuItem.Click += (_, _) => ToggleRecording();
+        menu.Items.Add(_recordMenuItem);
+        var notesMenu = new ToolStripMenuItem("Notizen");
+        notesMenu.DropDownItems.Add("Notizen öffnen", null, (_, _) => OpenNotes());
+        notesMenu.DropDownItems.Add("Neue Notiz", null, (_, _) => OpenNotes(NotesStartAction.NewNote));
+        notesMenu.DropDownItems.Add("Neue Sprachnotiz (diktieren)", null, (_, _) => OpenNotes(NotesStartAction.NewDictatedNote));
+        menu.Items.Add(notesMenu);
+        menu.Items.Add("KB", null, (_, _) => OpenKnowledgeBase());
         menu.Items.Add("Einstellungen", null, (_, _) => OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Beenden", null, (_, _) => ExitApp());
@@ -608,9 +645,8 @@ public partial class App : System.Windows.Application
     {
         _previousForeground = NativeMethods.GetForegroundWindow();
 
-        if (_popup == null || !_popup.IsLoaded)
-            _popup = new PopupWindow(_popupVm!, this);
-        _popup.ApplyWindowTheme();
+        EnsurePopupCreated();
+        _popup!.ApplyWindowTheme();
 
         if (_popup.IsVisible)
         {
@@ -620,11 +656,18 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Position only after the HWND exists so DPI scaling is known; repositioning after Show() makes the window jump.
         PositionPopup(placement);
         _popup.Show();
-        PositionPopup(placement);
         _popup.FocusSearch();
         _popup.Activate();
+    }
+
+    private void EnsurePopupCreated()
+    {
+        if (_popup != null && _popup.IsInitializedHandle) return;
+        _popup = new PopupWindow(_popupVm!, this);
+        _popup.EnsureHandle();
     }
 
     private void TogglePopupFromTray()
@@ -651,8 +694,6 @@ public partial class App : System.Windows.Application
     }
 
     internal void HidePopup() => _popup?.Hide();
-
-    internal IntPtr PreviousForeground => _previousForeground;
 
     internal AppSettings CurrentSettings => _settings!.Settings;
 
@@ -923,7 +964,7 @@ public partial class App : System.Windows.Application
 
             if (vm.Entry.ImageData != null)
             {
-                var src = LoadBitmapSource(vm.Entry.ImageData);
+                var src = ImageUtils.LoadBitmap(vm.Entry.ImageData);
                 if (src == null) return false;
                 return TrySetClipboardImage(src);
             }
@@ -931,6 +972,23 @@ public partial class App : System.Windows.Application
         var text = plainText
             ? ClipboardProcessor.GetPlainText(vm.Entry)
             : (vm.Content ?? vm.Entry.OcrText ?? "");
+
+        if (!plainText && vm.Entry.HasHtml)
+        {
+            // LoadAllLite skips the HTML column as well; fetch it only when pasting with formatting.
+            vm.Entry.HtmlContent ??= _db?.LoadHtml(vm.Id);
+            if (vm.Entry.HtmlContent != null)
+            {
+                var html = ClipboardProcessor.BuildClipboardHtml(vm.Entry.HtmlContent, vm.Entry.SourceUrl);
+                return TryClipboardWrite(() =>
+                {
+                    var data = new System.Windows.DataObject();
+                    data.SetData(System.Windows.DataFormats.UnicodeText, text);
+                    data.SetData(System.Windows.DataFormats.Html, html);
+                    System.Windows.Clipboard.SetDataObject(data, copy: true);
+                });
+            }
+        }
         return TrySetClipboardText(text);
     }
 
@@ -960,6 +1018,15 @@ public partial class App : System.Windows.Application
         _ignoreNextClipboard = true;
         if (!TrySetClipboardText(hex))
             _ignoreNextClipboard = false;
+    }
+
+    /// <summary>Copies text without adding it to the history (used for KB summaries).</summary>
+    internal bool CopyTextWithoutHistory(string text)
+    {
+        _ignoreNextClipboard = true;
+        if (TrySetClipboardText(text)) return true;
+        _ignoreNextClipboard = false;
+        return false;
     }
 
     internal void CopyEntryToClipboard(EntryViewModel vm, bool plainText)
@@ -1041,21 +1108,6 @@ public partial class App : System.Windows.Application
         return false;
     }
 
-    private static System.Windows.Media.Imaging.BitmapSource? LoadBitmapSource(byte[] data)
-    {
-        try
-        {
-            var img = new System.Windows.Media.Imaging.BitmapImage();
-            img.BeginInit();
-            img.StreamSource = new System.IO.MemoryStream(data);
-            img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            img.EndInit();
-            img.Freeze();
-            return img;
-        }
-        catch { return null; }
-    }
-
     internal void OpenSettings()
     {
         var win = new SettingsWindow(this);
@@ -1087,9 +1139,142 @@ public partial class App : System.Windows.Application
         }
     }
 
+    internal DesktopRecorderService Recorder => _recorder!;
+
+    /// <summary>Raised on the UI thread whenever desktop recording starts or stops.</summary>
+    internal event EventHandler? RecordingStateChanged;
+
+    internal void ToggleRecording()
+    {
+        if (_recorder == null) return;
+        if (_recorder.IsRecording)
+        {
+            // Stop may wait briefly for a UI Automation call in flight; keep the UI thread responsive.
+            _ = Task.Run(_recorder.Stop);
+            return;
+        }
+
+        try
+        {
+            _recorder.Start();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogCrash(ex);
+            MessageBox.Show($"Die Aufnahme konnte nicht gestartet werden: {ex.Message}", "Clipwell",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void OnRecordingStateChanged()
+    {
+        var recording = _recorder?.IsRecording == true;
+        if (_recordMenuItem != null)
+        {
+            _recordMenuItem.Checked = recording;
+            _recordMenuItem.Text = recording ? "Aufnahme beenden" : "Desktop aufzeichnen";
+        }
+        if (_trayIcon != null)
+        {
+            _trayIcon.Text = recording ? "Clipwell - Aufnahme läuft" : "Clipwell";
+            if (recording)
+                _trayIcon.ShowBalloonTip(3000, "Desktop-Aufnahme läuft",
+                    "Sichtbarer Text des Vordergrundfensters wird als Markdown gespeichert. Beenden über Tray, Popup oder KB-Fenster.",
+                    ToolTipIcon.Info);
+        }
+        RecordingStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    internal IReadOnlyList<ClipboardEntry> SnapshotEntries()
+        => _popupVm?.Entries.Select(e => e.Entry).ToList() ?? [];
+
+    internal void OpenKnowledgeBase()
+    {
+        if (_knowledgeBase == null || !_knowledgeBase.IsLoaded)
+        {
+            _knowledgeBase = new KnowledgeBaseWindow(this);
+            _knowledgeBase.Closed += (_, _) => _knowledgeBase = null;
+        }
+        _knowledgeBase.Show();
+        if (_knowledgeBase.WindowState == WindowState.Minimized) _knowledgeBase.WindowState = WindowState.Normal;
+        _knowledgeBase.Activate();
+    }
+
+    internal DictationService Dictation => _dictation!;
+
+    /// <summary>Raised after a note was exported into the KB, so an open KB window can reload.</summary>
+    internal event EventHandler? KnowledgeBaseChanged;
+
+    internal void NotifyKnowledgeBaseChanged() => KnowledgeBaseChanged?.Invoke(this, EventArgs.Empty);
+
+    internal void OpenNotes(NotesStartAction action = NotesStartAction.None, string? initialText = null)
+    {
+        if (_notes == null || !_notes.IsLoaded)
+        {
+            _notes = new NotesWindow(this);
+            _notes.Closed += (_, _) => _notes = null;
+        }
+        _notes.Show();
+        if (_notes.WindowState == WindowState.Minimized) _notes.WindowState = WindowState.Normal;
+        _notes.Activate();
+        _notes.Run(action, initialText);
+    }
+
+    /// <summary>
+    /// Starts dictation for <paramref name="owner"/>, or stops it and returns the transcript.
+    /// Returns null when nothing was transcribed (started, cancelled, failed or busy elsewhere).
+    /// </summary>
+    internal async Task<string?> ToggleDictationAsync(object owner, Window ownerWindow)
+    {
+        var dictation = Dictation;
+        if (dictation.IsBusyFor(owner))
+        {
+            MessageBox.Show(ownerWindow, "Ein anderes Fenster diktiert gerade. Bitte dort zuerst beenden.", "Clipwell",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return null;
+        }
+
+        try
+        {
+            switch (dictation.State)
+            {
+                case DictationState.Recording:
+                    return await dictation.StopAndTranscribeAsync();
+                case DictationState.Downloading:
+                case DictationState.Transcribing:
+                    return null;
+            }
+
+            if (!dictation.IsModelAvailable)
+            {
+                var size = DictationService.ApproxModelSizeMb(dictation.ModelName);
+                var answer = MessageBox.Show(ownerWindow,
+                    $"Für das Diktat wird das Whisper-Sprachmodell '{dictation.ModelName}' (ca. {size} MB) einmalig heruntergeladen " +
+                    $"und unter {AppPaths.ModelsDir} gespeichert. Die Spracherkennung läuft danach komplett lokal.\n\nJetzt herunterladen?",
+                    "Clipwell - Diktat", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (answer != MessageBoxResult.Yes) return null;
+                await dictation.DownloadModelAsync(owner);
+            }
+
+            dictation.StartRecording(owner);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LogCrash(ex);
+            dictation.Cancel();
+            MessageBox.Show(ownerWindow, $"Diktat fehlgeschlagen: {ex.Message}", "Clipwell",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return null;
+        }
+    }
+
     private void ExitApp()
     {
         if (_trayIcon != null) _trayIcon.Visible = false;
+        _recorder?.Stop();
+        _knowledgeBase?.Close();
+        _notes?.Close();
         _pinboard?.Close();
         Shutdown();
     }
@@ -1104,6 +1289,8 @@ public partial class App : System.Windows.Application
         _singleInstanceMutex?.Dispose();
         _trayIcon?.Dispose();
         _msgWin?.Dispose();
+        _recorder?.Dispose();
+        _dictation?.Dispose();
         _db?.Dispose();
         _urlService?.Dispose();
         _urlFetchSemaphore.Dispose();

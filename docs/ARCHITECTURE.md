@@ -7,9 +7,11 @@
 | Framework | .NET 10, WPF, `net10.0-windows10.0.19041.0` |
 | UI library | WPF-UI 4.3.0 |
 | Tray | WinForms `NotifyIcon` |
-| Database | `Microsoft.Data.Sqlite 10.0.9`, SQLite WAL, `SQLitePCLRaw.bundle_e_sqlite3 3.0.3` override |
+| Database | `Microsoft.Data.Sqlite 10.0.14`, SQLite WAL with FTS5, `SQLitePCLRaw.bundle_e_sqlite3 3.0.5` override |
 | OCR | `Windows.Media.Ocr.OcrEngine` |
-| Tests | xUnit 2.9.3, 92 Tests |
+| YAML | `YamlDotNet 18.1.0` (detection and validation) |
+| Dictation | `Whisper.net 1.9.1` with bundled `ggml-base.bin` |
+| Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 148 tests |
 
 ## Project Layout
 
@@ -18,9 +20,10 @@ ClipwellWin/
   App.xaml.cs                 lifecycle, tray, hotkeys, clipboard chain
   NativeMethods.cs            Win32 interop
   Models/                     persisted settings and entries
-  Services/                   storage, processing, detection, image helpers, OCR, URL preview
+  Services/                   storage, processing, detection, image helpers, OCR, URL preview,
+                              recording, notes, dictation, KB summary
   ViewModels/                 popup and entry state
-  Views/                      WPF windows
+  Views/                      WPF windows plus DragGhost (drag preview) and KbInstruments (KB gauges)
 ClipwellWin.Tests/            unit, integration and smoke tests
 ```
 
@@ -34,6 +37,8 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `OnboardingWindow` | First-run flow with hotkey test |
 | `PinboardWindow` | Always-on-top list of pinned entries |
 | `EyedropperWindow` | Transparent full-screen color picker |
+| `KnowledgeBaseWindow` | KB page: dashboard with counters and gauges, overall Markdown summary of clipboard history, exported notes and recordings, per-note/per-recording view, record/stop, copy, export, delete |
+| `NotesWindow` | Standalone notes: list, search, autosaving editor, Whisper dictation at the caret, export to KB |
 
 ## Services
 
@@ -45,10 +50,46 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `ContentKindService` | User-facing badges and broad content-kind detection; code entries use the generic `CODE` badge while `Language` stores the detected/editor language |
 | `OcrService` | Async WinRT OCR for images |
 | `UrlPreviewService` | Title/favicon fetch with cache and private-target guard |
-| `ImageUtils` | Image alpha repair, opaque clipboard image conversion and DIB/PNG helpers |
+| `ImageUtils` | Shared frozen bitmap loading, image alpha repair, opaque clipboard image conversion and DIB/PNG helpers |
+| `HtmlMarkdownConverter` | Dependency-free CF_HTML fragment to Markdown conversion (headings, lists, tables, links, code), strips scripts, navigation and forms |
 | `SettingsService` | JSON settings load/save |
 | `MessageWindowService` | Hidden window for `WM_CLIPBOARDUPDATE` |
 | `AppPaths` | Data directory path resolution (`%APPDATA%\Clipwell`) |
+| `DesktopRecorderService` | Record mode: MTA background thread polls the foreground window via UI Automation (text only, no pixels), waits for a quiet period and appends Markdown snapshots |
+| `RecordingMarkdown` | Recording file format: header, snapshot sections with full content or newly visible lines, footer; parser and directory loader |
+| `KnowledgeSummaryBuilder` | Builds the KB overview Markdown from clipboard entries, exported notes and parsed recordings |
+| `KnowledgeDashboard` | Counters and per-application/per-site statistics for the KB dashboard |
+| `NoteStore` | Notes as Markdown files (`notes\yyyy-MM-dd_HH-mm-ss.md`), load/create/save/delete, KB export as snapshot copy (`kb\notes`) |
+| `MicrophoneRecorder` | waveIn capture of the default microphone as 16 kHz mono floats (event notification plus capture thread) |
+| `DictationService` | Whisper.net speech-to-text: on-demand ggml model download to `models`, single active dictation with owner, cached `WhisperFactory` |
+
+## Recording Flow
+
+```text
+Record button (popup, KB window, tray)
+  -> App.ToggleRecording -> DesktopRecorderService.Start (new recordings\yyyy-MM-dd_HH-mm-ss.md)
+  -> every 500 ms: GetForegroundWindow + title (skip own process, hung windows, dwm ghosts, paused monitoring)
+     -> new window/title stable >= 500 ms: UI Automation walk (TextPattern visible ranges, element names,
+        values; no password fields, no title/scroll/menu bars), retry up to 2x while < 5 lines (Chromium warm-up)
+        -> RecordingMarkdown.FormatSnapshot (full content, or only lines new for this window) -> append + flush
+     -> same window: re-read every 2.5 s, append only lines never logged for this window
+  -> SnapshotWritten -> KnowledgeBaseWindow refresh (debounced 1 s)
+Stop -> footer (end, duration, count) -> App.RecordingStateChanged (UI thread)
+```
+
+## Notes and Dictation Flow
+
+```text
+Tray "Notizen" submenu / popup quick-note panel
+  -> App.OpenNotes(action, initialText) -> NotesWindow.Run (new note, optionally start dictation)
+Editor change -> 800 ms debounce -> NoteStore.Create/Save (notes\<id>.md)
+Diktieren -> App.ToggleDictationAsync
+  -> model missing: confirm -> DictationService.DownloadModelAsync (models\ggml-<model>.bin)
+  -> DictationService.StartRecording -> MicrophoneRecorder.Start (waveIn, 16 kHz mono); WhisperFactory warmed in background
+  -> second click: MicrophoneRecorder.Stop -> Whisper ProcessAsync (language from settings) -> drop [..]/(..) segments
+  -> text inserted at the editor caret -> autosave
+In KB exportieren -> NoteStore.ExportToKb (kb\notes\<id>.md snapshot) -> App.KnowledgeBaseChanged -> KnowledgeBaseWindow reload
+```
 
 ## Clipboard Flow
 
@@ -56,7 +97,7 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 Windows clipboard change
   -> MessageWindowService.WM_CLIPBOARDUPDATE
   -> App.OnClipboardChanged
-     -> ClipboardProcessor.BuildEntry
+     -> ClipboardProcessor.BuildEntry (Text plus CF_HTML-Fragment und SourceURL)
      -> PopupViewModel.AddEntry
         -> duplicate latest image suppression
         -> purge by count, age and optional DB size
@@ -70,9 +111,10 @@ Filter order in `PopupViewModel.Filter`:
 
 1. `TypeFilter`
 2. `ShowPinnedOnly`
-3. Prefix parsing: `type:`, `kind:`, `domain:`, `pinned:`
-4. Regex mode when enabled
-5. FTS prefix search for large lists, with linear full-text fallback across content, OCR text, URL title and language
+3. Prefix parsing: `type:`, `kind:`, `domain:`, `pinned:true`/`pinned:false`
+4. FTS match set (`DatabaseService.SearchFts`) when the list has more than 1000 entries and neither regex nor a prefix is active
+5. Regex mode when enabled (50 ms timeout)
+6. Linear case-insensitive full-text match across content, OCR text, URL title and language
 
 List groups are calculated by `EntryViewModel.GroupLabel`: pinned, today, yesterday, this week and older.
 
@@ -96,6 +138,8 @@ CREATE TABLE History (
     ThumbnailData   BLOB,
     UseCount        INTEGER NOT NULL DEFAULT 0,
     LastUsedAt      TEXT,
+    HtmlContent     TEXT,
+    SourceUrl       TEXT,
     Timestamp       TEXT NOT NULL
 );
 
