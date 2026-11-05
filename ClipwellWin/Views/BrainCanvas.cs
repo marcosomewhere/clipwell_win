@@ -21,23 +21,25 @@ namespace ClipwellWin.Views;
 /// </summary>
 public sealed class BrainCanvas : FrameworkElement
 {
+    // The first (largest) topic uses the app accent; the others avoid hues too close to it.
     public static readonly Color[] Palette =
     [
-        Color.FromRgb(0x4F, 0xC3, 0xF7), Color.FromRgb(0xF0, 0x62, 0x92), Color.FromRgb(0xAE, 0xD5, 0x81),
-        Color.FromRgb(0xFF, 0xB7, 0x4D), Color.FromRgb(0xBA, 0x68, 0xC8), Color.FromRgb(0x4D, 0xB6, 0xAC),
-        Color.FromRgb(0xFF, 0x8A, 0x65), Color.FromRgb(0x95, 0x75, 0xCD), Color.FromRgb(0xDC, 0xE7, 0x75),
+        Color.FromRgb(0xE8, 0x88, 0x32), Color.FromRgb(0x4F, 0xC3, 0xF7), Color.FromRgb(0xF0, 0x62, 0x92),
+        Color.FromRgb(0xAE, 0xD5, 0x81), Color.FromRgb(0xBA, 0x68, 0xC8), Color.FromRgb(0x4D, 0xB6, 0xAC),
+        Color.FromRgb(0xFF, 0xD5, 0x4F), Color.FromRgb(0x95, 0x75, 0xCD), Color.FromRgb(0xDC, 0xE7, 0x75),
         Color.FromRgb(0x64, 0xB5, 0xF6), Color.FromRgb(0xE5, 0x73, 0x73), Color.FromRgb(0x81, 0xC7, 0x84),
     ];
 
     private static readonly Color Unclustered = Color.FromRgb(0x7A, 0x7A, 0x7A);
-    private static readonly Color Accent = Color.FromRgb(0xE8, 0x88, 0x32);
+    // Selection is white: the accent already marks the main topic.
+    private static readonly Color Accent = Colors.White;
     private static readonly Color Background = Color.FromRgb(0x0A, 0x0A, 0x0A);
     private static readonly Typeface LabelFace = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
     private static readonly Typeface NodeFace = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
 
     private readonly Dictionary<(Color, byte), SolidColorBrush> _brushes = [];
-    private static readonly Pen SelectedOutline = FrozenPen(Accent, 2);
-    private static readonly Pen HoverOutline = FrozenPen(Colors.White, 1.5);
+    private static readonly Pen SelectedOutline = FrozenPen(Accent, 2.5);
+    private static readonly Pen HoverOutline = FrozenPen(Color.FromRgb(0xD8, 0xD2, 0xCA), 1.5);
     private static readonly Pen NodeOutline = FrozenPen(Background, 1);
     private BrainGraph? _graph;
     private double[] _x = [];
