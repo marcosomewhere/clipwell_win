@@ -122,7 +122,7 @@ public partial class KnowledgeBaseWindow
         var index = _app.Semantic;
         try
         {
-            var chunks = await Task.Run(() => index.Collect(entries, AppPaths.KbNotesDir, recordingsDir), ct);
+            var chunks = await Task.Run(() => index.Collect(entries, AppPaths.KbNotesDir, recordingsDir, AppPaths.NotesDir), ct);
             await index.SyncAsync(chunks, ct);
         }
         catch (OperationCanceledException) { return; }
@@ -493,6 +493,13 @@ public partial class KnowledgeBaseWindow
     {
         var key =c.Source == SemanticSource.Clipboard ? ClipboardKey(c.EntryId) : c.FilePath;
         var item = AllItems().FirstOrDefault(i => string.Equals(i.FilePath, key, StringComparison.OrdinalIgnoreCase));
+        if (item == null && c.Source == SemanticSource.Note && c.FilePath is { } notePath && File.Exists(notePath)
+            && string.Equals(Path.GetDirectoryName(notePath), AppPaths.NotesDir, StringComparison.OrdinalIgnoreCase))
+        {
+            // Notes that were never exported live only in the Sprechwerk.
+            _app.OpenNote(Path.GetFileNameWithoutExtension(notePath));
+            return;
+        }
         if (item == null)
         {
             StatusLabel.Text = c.Source == SemanticSource.Clipboard

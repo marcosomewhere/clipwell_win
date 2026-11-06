@@ -12,9 +12,13 @@ using ClipwellWin.Models;
 using ClipwellWin.Services;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
+using DataFormats = System.Windows.DataFormats;
+using DragDropEffects = System.Windows.DragDropEffects;
+using DragEventArgs = System.Windows.DragEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using ListBox = System.Windows.Controls.ListBox;
 using MessageBox = System.Windows.MessageBox;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace ClipwellWin.Views;
@@ -202,11 +206,21 @@ public partial class KnowledgeBaseWindow : Window
         if (sender is ListBox list) SetArea(AreaOf(list));
     }
 
-    /// <summary>A plain click starts a new selection; Ctrl or Shift keeps what is selected in the other areas.</summary>
+    /// <summary>
+    /// A plain click starts a new selection; Ctrl or Shift keeps what is selected in the other areas.
+    /// A click on an item's checkbox toggles just that item, like Ctrl+click.
+    /// </summary>
     private void ArticleList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not ListBox list) return;
         SetArea(AreaOf(list));
+        if (CheckboxItemAt(e.OriginalSource as DependencyObject) is { } toggled)
+        {
+            toggled.IsSelected = !toggled.IsSelected;
+            toggled.Focus();
+            e.Handled = true;
+            return;
+        }
         if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0) return;
         var others = AllLists().Where(l => l != list && l.SelectedItems.Count > 0).ToList();
         if (others.Count == 0) return;
@@ -215,6 +229,18 @@ public partial class KnowledgeBaseWindow : Window
         _suppressSelection = false;
         // Clicking an item that is already selected raises no SelectionChanged, so refresh here.
         ArticleList_SelectionChanged(list, null!);
+    }
+
+    private static ListBoxItem? CheckboxItemAt(DependencyObject? source)
+    {
+        var onCheckbox = false;
+        for (var node = source; node != null; node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                 ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+        {
+            if (node is FrameworkElement { Name: "CheckHit" }) onCheckbox = true;
+            if (node is ListBoxItem item) return onCheckbox ? item : null;
+        }
+        return null;
     }
 
     private void ClipboardList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -381,22 +407,81 @@ public partial class KnowledgeBaseWindow : Window
         RecordingsEmpty.Visibility = recordings == 0 ? Visibility.Visible : Visibility.Collapsed;
         ClipboardEmpty.Visibility = clips == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Share the height by content, but keep each area usable.
-        NotesRow.Height = new GridLength(Math.Clamp(notes, 2, 8), GridUnitType.Star);
-        RecordingsRow.Height = new GridLength(Math.Clamp(recordings, 2, 8), GridUnitType.Star);
-        ClipboardRow.Height = new GridLength(Math.Clamp(clips, 2, 8), GridUnitType.Star);
+        LayoutAreas();
+        // Item containers only have their real height after the next layout pass.
+        Dispatcher.BeginInvoke(LayoutAreas, DispatcherPriority.Loaded);
 
         var selected = SelectedItems().ToList();
         SelectionLabel.Text = selected.Count == 0
             ? $"{notes + recordings + clips} Artikel"
-            : $"{selected.Count} ausgewählt ({SelectionBreakdown(selected)})";
+            : $"{selected.Count} ausgewählt";
+        SelectionLabel.ToolTip = selected.Count == 0 ? null : SelectionBreakdown(selected);
         DeleteButton.IsEnabled = selected.Any(CanDelete);
     }
 
     private static string SelectionBreakdown(IReadOnlyCollection<KbItem> items)
-        => $"{items.Count(i => i.ArticleKind == KbArticleKind.Note)} Sprachn., "
-           + $"{items.Count(i => i.ArticleKind == KbArticleKind.Recording)} Bildschirmaufn., "
-           + $"{items.Count(i => i.ArticleKind == KbArticleKind.Clipboard)} Zwischenabl.";
+        => $"{items.Count(i => i.ArticleKind == KbArticleKind.Note)} Sprachnotizen, "
+           + $"{items.Count(i => i.ArticleKind == KbArticleKind.Recording)} Bildschirmaufnahmen, "
+           + $"{items.Count(i => i.ArticleKind == KbArticleKind.Clipboard)} Zwischenablage-Einträge";
+
+    private const int SmallAreaItems = 3;
+    private const double FallbackItemHeight = 50;
+    private const double ListBottomPadding = 5;
+
+    private void SidePanel_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.HeightChanged) LayoutAreas();
+    }
+
+    /// <summary>
+    /// Sprachnotizen and Bildschirmaufnahmen get room for whole entries (up to three, more when the clipboard
+    /// needs less), the clipboard takes the rest, so no small list shows a half entry.
+    /// </summary>
+    private void LayoutAreas()
+    {
+        double fixedHeight = 0;
+        foreach (var row in SidePanel.RowDefinitions)
+            if (row != NotesRow && row != RecordingsRow && row != ClipboardRow) fixedHeight += row.ActualHeight;
+        var available = SidePanel.ActualHeight - fixedHeight;
+        if (available <= 0) return;
+
+        var notes = Visible(_notesView).Count();
+        var recordings = Visible(_recordingsView).Count();
+        var clips = Visible(_clipboardView).Count();
+        var itemHeight = MeasuredItemHeight();
+        double HeightOf(int shown) => shown * itemHeight + ListBottomPadding;
+
+        int shownNotes = Math.Min(notes, SmallAreaItems), shownRecordings = Math.Min(recordings, SmallAreaItems);
+        var clipboardNeed = clips == 0 ? itemHeight : HeightOf(Math.Min(clips, 2));
+        while (HeightOf(shownNotes) + HeightOf(shownRecordings) + clipboardNeed > available
+               && (shownNotes > 1 || shownRecordings > 1))
+        {
+            if (shownNotes >= shownRecordings && shownNotes > 1) shownNotes--;
+            else shownRecordings--;
+        }
+        // Space the clipboard does not need goes to the other areas, again in whole entries.
+        var spare = available - HeightOf(shownNotes) - HeightOf(shownRecordings) - (clips == 0 ? itemHeight : HeightOf(clips));
+        while (spare >= itemHeight && (shownNotes < notes || shownRecordings < recordings))
+        {
+            if (shownNotes < notes && (shownNotes <= shownRecordings || shownRecordings >= recordings)) shownNotes++;
+            else shownRecordings++;
+            spare -= itemHeight;
+        }
+
+        NotesRow.Height = notes == 0 ? GridLength.Auto : new GridLength(HeightOf(shownNotes));
+        RecordingsRow.Height = recordings == 0 ? GridLength.Auto : new GridLength(HeightOf(shownRecordings));
+        ClipboardRow.Height = new GridLength(1, GridUnitType.Star);
+    }
+
+    private double MeasuredItemHeight()
+    {
+        foreach (var list in AllLists())
+        {
+            if (list.Items.Count == 0 || list.ItemContainerGenerator.ContainerFromIndex(0) is not FrameworkElement item) continue;
+            if (item.ActualHeight > 0) return Math.Ceiling(item.ActualHeight + item.Margin.Top + item.Margin.Bottom);
+        }
+        return FallbackItemHeight;
+    }
 
     // ---- Selection and display ------------------------------------------------------------------------------
 
@@ -470,7 +555,7 @@ public partial class KnowledgeBaseWindow : Window
                 return;
             case KbView.Semantic:
                 MarkdownView.Text = "";
-                ContentTitle.Text = "Semantische Suche";
+                ContentTitle.Text = "Suche";
                 UpdateSemanticStatus();
                 return;
             case KbView.Brain:
@@ -756,6 +841,11 @@ public partial class KnowledgeBaseWindow : Window
             Export_Click(this, e);
             e.Handled = true;
         }
+        else if (ctrl && e.Key == Key.O)
+        {
+            Import_Click(this, e);
+            e.Handled = true;
+        }
         else if (e.Key == Key.F5)
         {
             Reload();
@@ -786,6 +876,72 @@ public partial class KnowledgeBaseWindow : Window
     {
         NoteInput.Focus();
         _ = _noteDictation.ToggleAsync();
+    }
+
+    // ---- Import --------------------------------------------------------------------------------------------
+
+    private void Import_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = $"Dateien ins {AppNames.KnowledgeBase} importieren",
+            Filter = "Markdown und Text (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt|Alle Dateien (*.*)|*.*",
+            Multiselect = true,
+        };
+        if (dialog.ShowDialog(this) == true) ImportFiles(dialog.FileNames);
+    }
+
+    private void Window_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop)
+            && e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Any(NoteStore.CanImport))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private void Window_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files || !files.Any(NoteStore.CanImport)) return;
+        e.Handled = true;
+        ImportFiles(files);
+    }
+
+    /// <summary>Each .md/.txt file becomes a Sprachnotiz that is exported to the KB right away.</summary>
+    private void ImportFiles(IReadOnlyList<string> paths)
+    {
+        var imported = 0;
+        var skipped = new List<string>();
+        string? last = null;
+        foreach (var path in paths)
+        {
+            var name = Path.GetFileName(path);
+            try
+            {
+                if (!NoteStore.CanImport(path)) { skipped.Add($"{name} (kein .md/.txt)"); continue; }
+                if (new FileInfo(path).Length > NoteStore.MaxImportBytes) { skipped.Add($"{name} (größer als 2 MB)"); continue; }
+                var text = NoteStore.ImportText(name, NoteStore.DecodeImport(File.ReadAllBytes(path)));
+                if (text.Length == 0) { skipped.Add($"{name} (leer)"); continue; }
+                last = _app.SaveQuickNote(text);
+                imported++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                App.LogCrash(ex);
+                skipped.Add($"{name} ({ex.Message})");
+            }
+        }
+
+        if (last != null)
+        {
+            _pendingSelectPath = last;
+            SetArea(KbArea.Notes);
+        }
+        StatusLabel.Text = imported == 1 ? "1 Datei als Sprachnotiz importiert." : $"{imported} Dateien als Sprachnotizen importiert.";
+        if (skipped.Count > 0)
+            MessageBox.Show(this, $"{imported} importiert, {skipped.Count} übersprungen:\n\n" + string.Join("\n", skipped.Take(15))
+                + (skipped.Count > 15 ? "\n..." : ""), AppNames.App, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void NoteSave_Click(object sender, RoutedEventArgs e) => _ = SaveNoteAsync();
@@ -821,7 +977,8 @@ public partial class KnowledgeBaseWindow : Window
         var recording = _noteDictation.IsRecording;
         NoteDictateIcon.Text = recording ? "" : "";
         NoteDictateIcon.Foreground = recording ? RecordingRed : (Brush)FindResource("OnboardingTextPrimaryBrush");
-        NoteDictateLabel.Text = recording ? "Beenden" : _noteDictation.IsWorking ? "Bitte warten" : "Diktieren";
+        NoteDictateLabel.Text = recording ? "Beenden" : _noteDictation.IsWorking ? "Bitte warten" : "";
+        NoteDictateLabel.Visibility = NoteDictateLabel.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         NoteDictateButton.IsEnabled = !_noteDictation.IsBlocked && !_noteDictation.IsWorking;
         NoteDictateButton.ToolTip = _noteDictation.IsBlocked
             ? "Ein anderes Fenster diktiert gerade"

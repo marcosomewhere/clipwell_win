@@ -326,6 +326,32 @@ public sealed class SemanticSearchTests : IDisposable
         Assert.Equal(2, index.Count);
     }
 
+    [Fact]
+    public void Collect_AddsNotesNotExportedToKb()
+    {
+        var notesDir = Path.Combine(_root, "notes");
+        var kbDir = Path.Combine(_root, "kb", "notes");
+        Directory.CreateDirectory(notesDir);
+        Directory.CreateDirectory(kbDir);
+        var exported = new Note
+        {
+            Id = "2026-11-05_09-00-00", Path = Path.Combine(notesDir, "2026-11-05_09-00-00.md"), Created = Day, Modified = Day,
+            Text = "VPN\nZertifikat jährlich erneuern",
+        };
+        File.WriteAllText(exported.Path, exported.Text + "\nspäter ergänzt");
+        File.WriteAllText(Path.Combine(kbDir, exported.Id + ".md"), NoteStore.BuildKbMarkdown(exported, Day));
+        File.WriteAllText(Path.Combine(notesDir, "2026-11-05_10-00-00.md"), "Einkauf\nDrucker-Toner bestellen");
+        File.WriteAllText(Path.Combine(notesDir, "readme.md"), "Kein Notizname, wird ignoriert");
+
+        using var index = new SemanticIndex(Path.Combine(_root, SemanticIndex.FileName), "test-model", () => new WordEmbedder());
+        var chunks = index.Collect([], kbDir, Path.Combine(_root, "recordings"), notesDir);
+
+        Assert.All(chunks, c => Assert.Equal(SemanticSource.Note, c.Source));
+        Assert.Equal(["n:2026-11-05_09-00-00.md", "n:2026-11-05_10-00-00.md"], chunks.Select(c => c.ItemKey).Order());
+        Assert.Equal("VPN\nZertifikat jährlich erneuern", chunks.Single(c => c.FilePath!.StartsWith(kbDir)).Text);
+        Assert.Equal("Einkauf", chunks.Single(c => c.FilePath!.StartsWith(notesDir)).Title);
+    }
+
     /// <summary>Network test, runs only when CLIPWELL_E5_DOWNLOAD=1.</summary>
     [Fact]
     public async Task Download_FetchesPinnedFilesAndVerifiesHashes()

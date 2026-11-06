@@ -32,6 +32,10 @@
   <ItemGroup>
     <Resource Include="Assets\kb-icon-16.png" />
     <Resource Include="Assets\kb-rec-logo.png" />
+    <Resource Include="Assets\mic-rec-logo.png" />
+    <Resource Include="Assets\cb-logo.png" />
+    <Resource Include="Assets\navigation-icons.png" />
+    <Resource Include="Assets\popup-toolbar-icons.png" />
   </ItemGroup>
 
   <!-- The Whisper base model (MIT) ships next to the EXE under models\. It is too large for git, so a fresh

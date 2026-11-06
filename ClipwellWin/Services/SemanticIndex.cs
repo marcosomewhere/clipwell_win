@@ -49,17 +49,31 @@ public sealed class SemanticIndex : IDisposable
 
     // ---- Sources ---------------------------------------------------------------------------------------------
 
-    /// <summary>Chunks from the clipboard history, the KB notes and the recordings. Files are cached by write time.</summary>
-    public List<SemanticChunk> Collect(IEnumerable<ClipboardEntry> entries, string kbNotesDir, string recordingsDir)
+    /// <summary>
+    /// Chunks from the clipboard history, the voice notes and the recordings. A note exported to the KB is read
+    /// from its KB copy, every other note from the notes folder. Files are cached by write time.
+    /// </summary>
+    public List<SemanticChunk> Collect(IEnumerable<ClipboardEntry> entries, string kbNotesDir, string recordingsDir,
+        string? notesDir = null)
     {
         var chunks = SemanticChunker.FromClipboard(entries).ToList();
         lock (_fileCache)
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var kbIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var note in SafeLoadNotes(kbNotesDir))
             {
                 seen.Add(note.Path);
+                kbIds.Add(note.Id);
                 chunks.AddRange(FromFile(note.Path, text => SemanticChunker.FromNote(note.Path, text, note.Title, note.Exported)));
+            }
+            foreach (var path in SafeEnumerate(notesDir))
+            {
+                var id = Path.GetFileNameWithoutExtension(path);
+                if (kbIds.Contains(id) || !NoteStore.TryParseId(id, out _)) continue;
+                seen.Add(path);
+                chunks.AddRange(FromFile(path, text =>
+                    SemanticChunker.FromNote(path, text, NoteStore.TitleOf(text), File.GetLastWriteTime(path))));
             }
             if (Directory.Exists(recordingsDir))
             {
@@ -72,6 +86,13 @@ public sealed class SemanticIndex : IDisposable
             foreach (var gone in _fileCache.Keys.Where(k => !seen.Contains(k)).ToList()) _fileCache.Remove(gone);
         }
         return chunks;
+    }
+
+    private static List<string> SafeEnumerate(string? dir)
+    {
+        if (dir == null || !Directory.Exists(dir)) return [];
+        try { return Directory.EnumerateFiles(dir, "*.md").ToList(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
     }
 
     private static List<KbNote> SafeLoadNotes(string dir)

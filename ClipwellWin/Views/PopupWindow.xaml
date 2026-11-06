@@ -422,9 +422,21 @@
         </DataTemplate>
 
         <!-- Header toolbar button: same size for all actions; Tag "active" (panel/mode open) or "recording". -->
+        <BitmapImage x:Key="ToolbarIcons" UriSource="/Clipwell;component/Assets/popup-toolbar-icons.png" />
+        <CroppedBitmap x:Key="ToolbarRecordIcon" Source="{StaticResource ToolbarIcons}" SourceRect="158,145,348,358" />
+        <CroppedBitmap x:Key="ToolbarNoteIcon" Source="{StaticResource ToolbarIcons}" SourceRect="746,135,361,362" />
+        <CroppedBitmap x:Key="ToolbarPaletteIcon" Source="{StaticResource ToolbarIcons}" SourceRect="127,739,398,354" />
+        <CroppedBitmap x:Key="ToolbarSelectionIcon" Source="{StaticResource ToolbarIcons}" SourceRect="722,732,390,335" />
+        <Style x:Key="HeaderToolImage" TargetType="Image">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality" />
+        </Style>
+
         <Style x:Key="HeaderToolButton" TargetType="Button">
-            <Setter Property="Width" Value="30" />
-            <Setter Property="Height" Value="30" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
             <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="Foreground" Value="{DynamicResource PopupTextSubtleBrush}" />
@@ -446,12 +458,10 @@
                             </Trigger>
                             <Trigger Property="Tag" Value="active">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                                 <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="Tag" Value="recording">
                                 <Setter TargetName="Bd" Property="Background" Value="#33E83B3B" />
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#99E83B3B" />
                                 <Setter Property="Foreground" Value="#FFE83B3B" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -459,6 +469,24 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="HeaderToolSeparator" TargetType="Rectangle">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Fill" Value="{DynamicResource PopupTextSubtleBrush}" />
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+        <LinearGradientBrush x:Key="HeaderSurfaceBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#32E88832" Offset="0" />
+            <GradientStop Color="#08E88832" Offset="1" />
+        </LinearGradientBrush>
+        <CroppedBitmap x:Key="HeaderKnowledgeLogo" SourceRect="65,9,1167,1226">
+            <CroppedBitmap.Source>
+                <BitmapImage UriSource="/Clipwell;component/Assets/kb-rec-logo.png" />
+            </CroppedBitmap.Source>
+        </CroppedBitmap>
     </Window.Resources>
 
     <!-- Root-Border mit abgerundeten Ecken und Hintergrund -->
@@ -483,34 +511,60 @@
                     IsHitTestVisible="False" Panel.ZIndex="1" />
 
             <!-- ── Header ─────────────────────────────────────────────────── -->
-            <Border Grid.Row="0" Padding="12,14,12,0"
+            <Border Grid.Row="0" Padding="12,8,12,0"
                     Background="Transparent"
                     MouseLeftButtonDown="Header_MouseLeftButtonDown">
                 <StackPanel>
-                    <!-- Suchleiste + Bulk-Toggle -->
-                    <Grid>
+                    <Grid x:Name="SearchToolbar" Height="30">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Column="0" Text="&#xE721;"
-                                   FontFamily="Segoe Fluent Icons" FontSize="16"
-                                   VerticalAlignment="Center" Foreground="{DynamicResource PopupTextMutedBrush}"
-                                   Margin="4,0,10,0" />
-
-                        <Grid Grid.Column="1">
-                            <ui:TextBox x:Name="SearchBox"
-                                        PlaceholderText="Durchsuchen…"
+                        <Border CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource AccentBrush}"
+                                Background="{StaticResource HeaderSurfaceBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="30" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="26" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons" FontSize="16"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource PopupTextPrimaryBrush}" />
+                            <TextBox x:Name="SearchBox" Grid.Column="1"
                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                        FontSize="14" Background="Transparent"
+                                        FontSize="13" Background="Transparent" Padding="0"
+                                        VerticalContentAlignment="Center" HorizontalScrollBarVisibility="Hidden"
                                         BorderThickness="0" Foreground="{DynamicResource PopupTextPrimaryBrush}"
                                         CaretBrush="{DynamicResource PopupTextPrimaryBrush}"
                                         KeyDown="SearchBox_KeyDown"
                                         TextChanged="SearchBox_TextChanged"
                                         GotFocus="SearchBox_GotFocus"
-                                        LostFocus="SearchBox_LostFocus" />
+                                        LostFocus="SearchBox_LostFocus">
+                                <TextBox.Template>
+                                    <ControlTemplate TargetType="TextBox">
+                                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" Focusable="False" />
+                                    </ControlTemplate>
+                                </TextBox.Template>
+                            </TextBox>
+                            <TextBlock Grid.Column="1" Text="Suchen" FontSize="13" VerticalAlignment="Center"
+                                       IsHitTestVisible="False" Foreground="{DynamicResource PopupTextPrimaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Button Grid.Column="2" Content="&#xE711;" Width="22" Height="24" FontSize="12"
+                                    Foreground="{DynamicResource PopupTextPrimaryBrush}"
+                                    Style="{StaticResource HeaderToolButton}" ToolTip="Suche leeren"
+                                    AutomationProperties.Name="Suche leeren" Click="ClearSearch_Click" />
                             <!-- Autocomplete/Verlauf-Popup -->
                             <Popup x:Name="SuggestionsPopup"
                                    PlacementTarget="{Binding ElementName=SearchBox}"
@@ -556,71 +610,43 @@
                                 </Border>
                             </Popup>
                         </Grid>
-
-                        <!-- Regex-Toggle (.* Button) -->
-                        <ToggleButton x:Name="RegexToggle"
-                                      Grid.Column="1"
-                                      HorizontalAlignment="Right"
-                                      VerticalAlignment="Center"
-                                      Margin="0,0,4,0"
-                                      Width="26" Height="20"
-                                      Padding="0"
-                                      FontFamily="Cascadia Code, Consolas"
-                                      FontSize="11"
-                                      Content=".*"
-                                      IsChecked="{Binding IsRegexSearch, Mode=TwoWay}"
-                                      ToolTip="Regex-Suche aktivieren"
-                                      Cursor="Hand"
-                                      Foreground="{DynamicResource PopupTextMutedBrush}"
-                                      Background="Transparent"
-                                      BorderThickness="1"
-                                      BorderBrush="{DynamicResource PopupBorderBrush}"
-                                      Click="RegexToggle_Click">
-                            <ToggleButton.Style>
-                                <Style TargetType="ToggleButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ToggleButton">
-                                                <Border x:Name="Bd" CornerRadius="4"
-                                                        Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        Padding="{TemplateBinding Padding}"
-                                                        Width="{TemplateBinding Width}"
-                                                        Height="{TemplateBinding Height}">
-                                                    <TextBlock Text="{TemplateBinding Content}"
-                                                               FontFamily="{TemplateBinding FontFamily}"
-                                                               FontSize="{TemplateBinding FontSize}"
-                                                               Foreground="{TemplateBinding Foreground}"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
-                                                        <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ToggleButton.Style>
-                        </ToggleButton>
+                        </Border>
 
                         <!-- Header toolbar: capture (record, quick note, eyedropper) | view (KB, multi-select) -->
-                        <Border Grid.Column="2" Margin="6,0,0,0" Padding="2" CornerRadius="8" VerticalAlignment="Center"
-                                Background="{DynamicResource PopupChipBrush}"
+                        <Border Grid.Column="1" Margin="6,0,0,0" Padding="1" CornerRadius="6" VerticalAlignment="Center"
+                                Background="{StaticResource HeaderSurfaceBrush}"
                                 BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="RecordButton" Style="{StaticResource HeaderToolButton}"
-                                        Content="&#xE7C8;"
                                         ToolTip="Desktop-Aufnahme starten (sichtbarer Text als Markdown)"
-                                        Click="Record_Click" />
-                                <Button x:Name="QuickNoteButton" Content="&#xE70F;" ToolTip="Schnellnotiz"
+                                        Click="Record_Click">
+                                    <Grid Width="18" Height="18">
+                                        <Image Source="{StaticResource ToolbarRecordIcon}">
+                                            <Image.Style>
+                                                <Style TargetType="Image" BasedOn="{StaticResource HeaderToolImage}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" Value="recording">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Image.Style>
+                                        </Image>
+                                        <Rectangle Width="12" Height="12" RadiusX="2" RadiusY="2" Fill="#FFE83B3B">
+                                            <Rectangle.Style>
+                                                <Style TargetType="Rectangle">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" Value="recording">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Rectangle.Style>
+                                        </Rectangle>
+                                    </Grid>
+                                </Button>
+                                <Button x:Name="QuickNoteButton" ToolTip="Schnellnotiz"
                                         ToolTipOpening="QuickNoteButton_ToolTipOpening" Click="ToggleQuickNote_Click">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource HeaderToolButton}">
@@ -631,20 +657,25 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>
+                                    <Image Source="{StaticResource ToolbarNoteIcon}" Style="{StaticResource HeaderToolImage}" />
                                 </Button>
-                                <Button Style="{StaticResource HeaderToolButton}" Content="&#xE790;"
-                                        ToolTip="Farbe vom Bildschirm wählen" Click="Eyedropper_Click" />
+                                <Button Style="{StaticResource HeaderToolButton}"
+                                        ToolTip="Farbe vom Bildschirm wählen" Click="Eyedropper_Click">
+                                    <Image Source="{StaticResource ToolbarPaletteIcon}" Style="{StaticResource HeaderToolImage}" />
+                                </Button>
 
-                                <Rectangle Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"
-                                           Fill="{DynamicResource PopupBorderBrush}" />
+                                <Rectangle Style="{StaticResource HeaderToolSeparator}" />
 
                                 <Button Style="{StaticResource HeaderToolButton}"
                                         ToolTip="Ideenkombinat: Dashboard, Suche, Brain, Sprechwerk, Aufnahmen und Zwischenablage"
                                         Click="KnowledgeBase_Click">
-                                    <Image Source="/Clipwell;component/Assets/kb-icon-16.png" Width="16" Height="16"
+                                    <Image Source="{StaticResource HeaderKnowledgeLogo}" Width="24" Height="24"
                                            RenderOptions.BitmapScalingMode="HighQuality" />
                                 </Button>
-                                <Button Content="&#xE762;" ToolTip="Mehrfachauswahl" Click="ToggleBulkMode_Click">
+
+                                <Rectangle Style="{StaticResource HeaderToolSeparator}" />
+
+                                <Button ToolTip="Mehrfachauswahl" Click="ToggleBulkMode_Click">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource HeaderToolButton}">
                                             <Style.Triggers>
@@ -654,6 +685,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>
+                                    <Image Source="{StaticResource ToolbarSelectionIcon}" Style="{StaticResource HeaderToolImage}" />
                                 </Button>
                             </StackPanel>
                         </Border>
@@ -708,7 +740,62 @@
                                              KeyDown="FilterChip_KeyDown" />
                             </StackPanel>
                         </ScrollViewer>
-                        <Button Grid.Column="1"
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+
+                        <!-- Regex-Toggle (.* Button) -->
+                        <ToggleButton x:Name="RegexToggle"
+
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center"
+                                      Margin="4,0,0,0"
+                                      Width="26" Height="20"
+                                      Padding="0"
+                                      FontFamily="Cascadia Code, Consolas"
+                                      FontSize="11"
+                                      Content=".*"
+                                      IsChecked="{Binding IsRegexSearch, Mode=TwoWay}"
+                                      ToolTip="Regex-Suche aktivieren"
+                                      Cursor="Hand"
+                                      Foreground="{DynamicResource PopupTextMutedBrush}"
+                                      Background="Transparent"
+                                      BorderThickness="1"
+                                      BorderBrush="{DynamicResource PopupBorderBrush}"
+                                      Click="RegexToggle_Click">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border x:Name="Bd" CornerRadius="4"
+                                                        Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        Padding="{TemplateBinding Padding}"
+                                                        Width="{TemplateBinding Width}"
+                                                        Height="{TemplateBinding Height}">
+                                                    <TextBlock Text="{TemplateBinding Content}"
+                                                               FontFamily="{TemplateBinding FontFamily}"
+                                                               FontSize="{TemplateBinding FontSize}"
+                                                               Foreground="{TemplateBinding Foreground}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupChipCheckedBrush}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource PopupTextPrimaryBrush}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PopupSelectedBrush}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ToggleButton.Style>
+                        </ToggleButton>
+<Button
                                 x:Name="SortMenuButton"
                                 Content="{Binding SortModeLabel}"
                                 Margin="4,0,0,0"
@@ -751,6 +838,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
+                        </StackPanel>
                     </Grid>
 
 

@@ -144,6 +144,34 @@ public static class NoteStore
         return (note, ExportToKb(note, kbNotesDir, exported));
     }
 
+    public const long MaxImportBytes = 2 * 1024 * 1024;
+    public static readonly string[] ImportExtensions = [".md", ".markdown", ".txt"];
+
+    public static bool CanImport(string path)
+        => ImportExtensions.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Text of an imported file: UTF-8 or UTF-16 by byte order mark, otherwise strict UTF-8, and files that are
+    /// not valid UTF-8 (older Windows text files) as Windows-1252-compatible Latin-1.
+    /// </summary>
+    public static string DecodeImport(byte[] bytes)
+    {
+        if (bytes.Length >= 2 && (bytes[0] == 0xFF && bytes[1] == 0xFE || bytes[0] == 0xFE && bytes[1] == 0xFF))
+            return new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true).ReadToEnd();
+        var skip = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+        try { return new UTF8Encoding(false, true).GetString(bytes, skip, bytes.Length - skip); }
+        catch (DecoderFallbackException) { return Encoding.Latin1.GetString(bytes); }
+    }
+
+    /// <summary>Note text for an imported file; the file name becomes the heading unless the text starts with one.</summary>
+    public static string ImportText(string fileName, string content)
+    {
+        var text = NormalizeNewlines(content).Trim();
+        if (text.Length == 0) return "";
+        if (text.StartsWith('#')) return text;
+        return $"# {System.IO.Path.GetFileNameWithoutExtension(fileName)}\n\n{text}";
+    }
+
     /// <summary>Text of a KB note without the header written by <see cref="BuildKbMarkdown"/>.</summary>
     public static string KbBody(string markdown)
     {

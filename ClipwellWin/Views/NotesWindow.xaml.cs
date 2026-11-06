@@ -79,6 +79,19 @@ public partial class NotesWindow : Window
         RefreshList(_current);
     }
 
+    /// <summary>Opens a note by id, e.g. from the semantic search or the Brain; reloads when the file is new.</summary>
+    internal void SelectNote(string id)
+    {
+        SaveIfDirty();
+        if (_notes.All(n => n.Id != id)) LoadNotes(id);
+        var note = _notes.FirstOrDefault(n => n.Id == id);
+        if (note == null || note == _current) return;
+        if (SearchBox.Text.Length > 0) SearchBox.Text = "";
+        DropIfEmpty();
+        ShowNote(note);
+        RefreshList(note);
+    }
+
     private void LoadNotes(string? selectId)
     {
         try

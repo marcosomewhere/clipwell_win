@@ -132,10 +132,10 @@ Das Popup öffnet sich am Mauszeiger. Per Linksklick auf das Tray-Icon öffnet e
 | Symbol | Aktion |
 |--------|--------|
 | Kreis | Desktop-Aufnahme starten/beenden; während der Aufnahme rot hinterlegt |
-| Stift | Schnellnotiz öffnen/schließen; geöffnet orange umrandet (Tooltip zeigt das Tastenkürzel) |
+| Stift | Schnellnotiz öffnen/schließen; geöffnet grau hinterlegt (Tooltip zeigt das Tastenkürzel) |
 | Pipette | Farbe vom Bildschirm wählen |
 | Ideenkombinat-Symbol | Ideenkombinat öffnen |
-| Liste | Mehrfachauswahl ein/aus; aktiv orange umrandet |
+| Liste | Mehrfachauswahl ein/aus; aktiv grau hinterlegt |
 
 ### Größe und Position
 
@@ -404,7 +404,7 @@ Das Fenster nutzt dieselbe Kopfleiste und dieselben Buttons wie das Detailfenste
 
 Ein Klick auf einen Bereichskopf oder einen Eintrag macht den Bereich aktiv (orange umrandet). Nur für den aktiven Bereich erscheint unten das passende Eingabefeld.
 
-**Auswahl:** Ein Klick wählt einen Artikel, Strg+Klick und Umschalt+Klick erweitern die Auswahl, auch über die Bereiche hinweg. "Alle auswählen" im Bereichskopf fügt alle Artikel des Bereichs hinzu, "Alle"/"Keine" unten gelten für alle Bereiche. Rechts erscheint das Markdown des gewählten Artikels, bei mehreren eine zusammengefasste Vorschau.
+**Auswahl:** Ein Klick wählt einen Artikel, Strg+Klick und Umschalt+Klick erweitern die Auswahl, auch über die Bereiche hinweg. Ein Klick auf das Kästchen links fügt den Artikel ohne Tastatur hinzu oder entfernt ihn wieder. "Alle auswählen" im Bereichskopf fügt alle Artikel des Bereichs hinzu, "Alle"/"Keine" unten gelten für alle Bereiche. Rechts erscheint das Markdown des gewählten Artikels, bei mehreren eine zusammengefasste Vorschau.
 
 **Neue Bildschirmaufnahme** (Bereich Bildschirmaufnahmen aktiv): Der Button mit dem "KB REC"-Logo beginnt die Aufnahme (während sie läuft, zeigt er ein rotes Stopp-Symbol) und wählt sie aus, sodass neue Einträge rechts live mitlaufen. Darunter stehen Startzeit, Laufzeit und Anzahl der Einträge; derselbe Button beendet die Aufnahme.
 
@@ -420,6 +420,8 @@ Die Gesamtübersicht fasst alles zusammen:
 
 Buttons oben: Kopieren (angezeigtes Markdown, landet nicht in der History), Exportieren (Strg+E), Löschen (Entf), Aktualisieren (F5), Datenordner öffnen und Schließen (Esc).
 
+**Importieren** (oben, Strg+O) übernimmt Markdown- und Textdateien (`.md`, `.txt`) als Sprachnotizen ins Ideenkombinat; sie erscheinen auch im Sprechwerk, in der semantischen Suche und im Brain. Mehrere Dateien auf einmal sind möglich, ebenso Dateien einfach ins Fenster ziehen. Hat eine Datei keine eigene Überschrift, wird der Dateiname zur Überschrift. Leere Dateien, andere Dateitypen und Dateien über 2 MB werden übersprungen und gemeldet.
+
 **Exportieren** gilt für die ausgewählten Artikel, ohne Auswahl für alle angezeigten. Der Dialog bietet:
 
 - **Zusammengefasstes Markdown:** eine `.md`-Datei mit Inhaltsverzeichnis und allen Artikeln hintereinander (Überschriften eine Ebene tiefer).
@@ -428,11 +430,11 @@ Buttons oben: Kopieren (angezeigtes Markdown, landet nicht in der History), Expo
 
 **Löschen** wirkt auf alle ausgewählten Artikel: Bildschirmaufnahmen werden als Datei gelöscht (nicht die laufende), Sprachnotizen nur in ihrer Fassung im Ideenkombinat, Zwischenablage-Einträge aus der Merkautomat-History (wie Löschen im Popup). Eine laufende Aufnahme und neue Notiz-Exporte aktualisieren das Ideenkombinat automatisch.
 
-### Semantische Suche
+### Suche
 
-**Öffnen:** "Semantische Suche" links im Ideenkombinat oder Strg+K.
+**Öffnen:** "Suche" links im Ideenkombinat oder Strg+K.
 
-Die semantische Suche findet Inhalte nach ihrer Bedeutung, nicht nur nach gleichen Wörtern. "Wie habe ich das VPN-Zertifikat erneuert" findet auch einen Eintrag, in dem "OpenVPN-Cert" und "Firmenportal" stehen, auch über Sprachen hinweg. Durchsucht werden Zwischenablage, Sprachnotizen und Bildschirmaufnahmen.
+Die semantische Suche findet Inhalte nach ihrer Bedeutung, nicht nur nach gleichen Wörtern. "Wie habe ich das VPN-Zertifikat erneuert" findet auch einen Eintrag, in dem "OpenVPN-Cert" und "Firmenportal" stehen, auch über Sprachen hinweg. Durchsucht werden Zwischenablage, alle Sprachnotizen aus dem Sprechwerk (auch nicht ins Ideenkombinat exportierte; "Öffnen" führt dann ins Sprechwerk) und Bildschirmaufnahmen. Bilder ohne erkannten Text und sehr kurze Einträge werden nicht aufgenommen.
 
 **Modell:** Das Sprachmodell multilingual-e5-small (MIT-Lizenz, ca. 123 MB) wird mit Merkautomat ausgeliefert (`models\e5-small\` neben `Clipwell.exe`). Die Suche läuft komplett lokal, es wird nichts gesendet. Nur wenn der Ordner fehlt oder beschädigt ist, erscheint ein Hinweis mit "Modell laden"; das holt das Modell von Hugging Face nach `%APPDATA%\Clipwell\models\e5-small\` und prüft die Prüfsumme.
 

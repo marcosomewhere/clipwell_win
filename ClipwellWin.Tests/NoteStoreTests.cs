@@ -141,4 +141,28 @@ public sealed class NoteStoreTests : IDisposable
     [InlineData("large", "base")]
     public void Dictation_NormalizesModelName(string? input, string expected)
         => Assert.Equal(expected, DictationService.NormalizeModel(input));
+
+    [Fact]
+    public void DecodeImport_HandlesBomUtf8AndLegacyAnsi()
+    {
+        Assert.Equal("Grüße", NoteStore.DecodeImport([0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("Grüße")]));
+        Assert.Equal("Grüße", NoteStore.DecodeImport(System.Text.Encoding.UTF8.GetBytes("Grüße")));
+        Assert.Equal("Grüße", NoteStore.DecodeImport(System.Text.Encoding.Unicode.GetPreamble().Concat(System.Text.Encoding.Unicode.GetBytes("Grüße")).ToArray()));
+        Assert.Equal("Grüße", NoteStore.DecodeImport([0x47, 0x72, 0xFC, 0xDF, 0x65]));
+    }
+
+    [Theory]
+    [InlineData("Projekt.txt", "Erste Zeile\r\nzweite", "# Projekt\n\nErste Zeile\nzweite")]
+    [InlineData("Projekt.md", "# Eigener Titel\n\nText", "# Eigener Titel\n\nText")]
+    [InlineData("leer.md", "  \r\n ", "")]
+    public void ImportText_UsesFileNameAsHeadingWhenMissing(string name, string content, string expected)
+        => Assert.Equal(expected, NoteStore.ImportText(name, content));
+
+    [Theory]
+    [InlineData("a.md", true)]
+    [InlineData("b.TXT", true)]
+    [InlineData("c.markdown", true)]
+    [InlineData("d.docx", false)]
+    public void CanImport_AcceptsMarkdownAndText(string path, bool expected)
+        => Assert.Equal(expected, NoteStore.CanImport(path));
 }

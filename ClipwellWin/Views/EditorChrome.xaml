@@ -102,13 +102,16 @@
     <!-- Left-aligned navigation entry (Dashboard, Gesamtübersicht). -->
     <Style x:Key="NavRadioStyle" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
-        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Margin" Value="0,0,0,2" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
                     <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
-                            BorderThickness="1" CornerRadius="4" Padding="10,7">
+                            BorderThickness="1" CornerRadius="4" Padding="10,3">
                         <ContentPresenter VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -117,6 +120,9 @@
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorSelectedBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>

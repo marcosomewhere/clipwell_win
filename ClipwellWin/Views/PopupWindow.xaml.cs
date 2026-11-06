@@ -403,7 +403,6 @@ public partial class PopupWindow : Window
     private void UpdateRecordButton()
     {
         var recording = _app.Recorder.IsRecording;
-        RecordButton.Content = recording ? "" : "";
         RecordButton.ToolTip = recording
             ? "Desktop-Aufnahme beenden"
             : "Desktop-Aufnahme starten (sichtbarer Text als Markdown)";
@@ -792,6 +791,13 @@ public partial class PopupWindow : Window
     private void RegexToggle_Click(object sender, RoutedEventArgs e)
     {
         _vm.IsRegexSearch = RegexToggle.IsChecked == true;
+    }
+
+    private void ClearSearch_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Clear();
+        SearchBox.Focus();
+        SuggestionsPopup.IsOpen = false;
     }
 
     private void SortMenuButton_Click(object sender, RoutedEventArgs e)

@@ -1289,6 +1289,12 @@ public partial class App : System.Windows.Application
         _notes.Run(action, initialText);
     }
 
+    internal void OpenNote(string id)
+    {
+        OpenNotes();
+        _notes?.SelectNote(id);
+    }
+
     /// <summary>
     /// Starts dictation for <paramref name="owner"/>, or stops it and returns the transcript.
     /// Returns null when nothing was transcribed (started, cancelled, failed or busy elsewhere).
