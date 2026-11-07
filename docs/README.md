@@ -17,10 +17,17 @@ User-facing names: Merkautomat (app), Ideenkombinat (knowledge base), Pinstation
 - Pinstation: always-on-top window with the pinned entries.
 - Eyedropper overlay for picking screen colors into history and clipboard.
 - Desktop recording: after pressing Record, the visible text of the foreground window is read through UI Automation (no screenshots) and every stable change is appended as Markdown.
-- Sprechwerk: voice notes window with search and autosave, local Whisper dictation into the note, export to the Ideenkombinat; tray submenu "Sprechwerk".
+- Sprechwerk: voice notes within the Ideenkombinat with local Whisper dictation and popup quick notes; legacy notes without an export are included. No separate window or tray submenu.
 - Ideenkombinat (knowledge base window): overall Markdown summary of clipboard history, exported notes and all recordings, per-item view, copy and export.
 - Ideenkombinat semantic search: local embedding model (multilingual-e5-small, bundled) finds clipboard entries, voice notes and recordings by meaning; hybrid ranking with word matches, similar entries and near-duplicate detection.
+- Ideenkombinat "Fragen": the semantic search answers questions with local Granite from the best hits, citing them as [n]; "Aufgaben": tasks from clipboard entries (popup context menu) or typed in, with due date, notes and done state.
 - Ideenkombinat "Brain": knowledge network of all indexed items with links by meaning, time, recording and website, automatic topics with keyword names, interactive force layout, focus and search.
+- Optional local Granite 4.2 3B for Brain title/category suggestions. Select it in Kontrollstation → Lokale KI and download once (2.27 GB); inference stays on the CPU, with explicit suggestion review before saving. Apache 2.0 / MIT, no API account required.
+- Fast E5 categorization in the same dropdown reuses the bundled search model to compare existing category names. Ambiguous or mixed excerpts remain unassigned; titles are preserved. Saved manual assignments act as examples per category (Rocchio prototype); no extra download, no training run and no self-training from graph edges or unsaved suggestions.
+- Categorization pass (`CategorizeDialog`) from a Brain node or topic, all uncategorized entries, marked search results or the library selection: shared suggestion for marked entries plus one-by-one confirmation; each confirmation is saved and learned immediately.
+- Rocchio details (`RocchioModel`): up to three sub-prototypes for broad categories, enabled only when a leave-one-out check on the saved assignments shows a benefit; top-3 candidates and the nearest own example in each suggestion; "Qualität prüfen" in the Kontrollstation opens the evaluation window.
+- Category analysis with Granite (`CategoryDiscoveryWindow`): uncategorized entries are grouped by their search vectors, Granite names each group, the user reviews and applies the proposals.
+- Classifier choice and report (`ClassifierReportWindow`): names only, Rocchio with/without names, sub-prototypes, k-NN and logistic regression compared by grouped 5-fold cross-validation (3 repeats); Rocchio with hard negatives (gamma 0.1/0.2), textbook Euclidean and robust (trimmed) Rocchio as ablations; flagged assignments that look mislabeled, with a jump into the categorization window; top-1, Wilson interval, unknown-topic rejection and a calibrated abstention threshold (40+ examples) per method; automatic choice of the simplest method unless another is clearly better; chart, metrics table, per-category results with confusion matrix, real-use feedback, history and Markdown export.
 - Export/import as JSON, SQLite backup export, auto-backup rotation and secure delete via VACUUM.
 - Privacy controls: monitoring pause via tray menu.
 - SQLite recovery prompt when `quick_check` fails.
@@ -57,8 +64,8 @@ Supported prefixes:
 - Image editor style memory: `%APPDATA%\Clipwell\editor-styles.json`
 - Desktop recordings: `%APPDATA%\Clipwell\recordings\*.md`
 - Notes: `%APPDATA%\Clipwell\notes\*.md`; notes exported to the KB: `%APPDATA%\Clipwell\kb\notes\*.md`
-- Whisper base model: bundled as `models\ggml-base.bin` next to `Clipwell.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`); the build fetches it into `Tools\whisper` if missing. Larger models (small/medium) download on demand to `%APPDATA%\Clipwell\models`.
-- Semantic search: model bundled as `models\e5-small\` next to `Clipwell.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`; the build fetches it into `Tools\e5-small` if missing), vector index (no text) in `%APPDATA%\Clipwell\semantic.db`
+- Whisper base model: bundled as `models\ggml-base.bin` next to `Merkautomat.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`); the build fetches it into `Tools\whisper` if missing. Larger models (small/medium) download on demand to `%APPDATA%\Clipwell\models`.
+- Semantic search: model bundled as `models\e5-small\` next to `Merkautomat.exe` (MIT, see `THIRD-PARTY-NOTICES.txt`; the build fetches it into `Tools\e5-small` if missing), vector index (no text) in `%APPDATA%\Clipwell\semantic.db`
 - Recovery backups: next to `history.db` with `.broken-YYYYMMDD-HHMMSS` suffix
 
 ## Build
@@ -71,14 +78,14 @@ Requirements:
 Build Release:
 
 ```powershell
-taskkill /IM Clipwell.exe /F
+taskkill /IM Merkautomat.exe /F
 dotnet build ClipwellWin\ClipwellWin.csproj -c Release --nologo -v q
 ```
 
 Run Release:
 
 ```powershell
-Start-Process ClipwellWin\bin\Release\net10.0-windows10.0.19041.0\Clipwell.exe
+Start-Process ClipwellWin\bin\Release\net10.0-windows10.0.19041.0\Merkautomat.exe
 ```
 
 Test:
@@ -87,7 +94,7 @@ Test:
 dotnet test --project ClipwellWin.Tests\ClipwellWin.Tests.csproj -c Release
 ```
 
-Current suite: 234 xUnit v3 tests (one network test for the fallback model download runs only with `CLIPWELL_E5_DOWNLOAD=1`).
+Current suite: 380 xUnit v3 tests (one network test for the fallback model download runs only with `CLIPWELL_E5_DOWNLOAD=1`).
 
 Portable single-file build:
 
