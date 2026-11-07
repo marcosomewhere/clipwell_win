@@ -21,6 +21,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClipwellWin\ClipwellWin.csproj" />
+    <!-- The add-in writes the hand-over JSON that MailInbox reads; both sides are tested together. -->
+    <Compile Include="..\MerkautomatOutlook\MailHandover.cs" Link="Outlook\MailHandover.cs" />
+    <Compile Include="..\MerkautomatOutlook\ComInterfaces.cs" Link="Outlook\ComInterfaces.cs" />
   </ItemGroup>
 
 </Project>
