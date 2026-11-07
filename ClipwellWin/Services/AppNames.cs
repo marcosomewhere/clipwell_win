@@ -1,8 +1,8 @@
 namespace ClipwellWin.Services;
 
 /// <summary>
-/// Names shown to the user. Technical identifiers (Clipwell.exe, %APPDATA%\Clipwell, namespaces, registry and
-/// window class names) keep the original name so existing installations and data stay valid.
+/// Names shown to the user. The executable and startup entry use Merkautomat;
+/// legacy data paths and internal identifiers stay compatible with existing installations.
 /// </summary>
 public static class AppNames
 {

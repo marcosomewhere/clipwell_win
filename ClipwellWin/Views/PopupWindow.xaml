@@ -175,6 +175,8 @@
                         <MenuItem Header="Plain Copy" Click="PlainCopyMenuItem_Click" />
                         <Separator />
                         <MenuItem Header="Pinnen" Click="PinMenuItem_Click" />
+                        <MenuItem Header="Hotkey zuweisen …" Click="AssignHotkeyMenuItem_Click" />
+                        <MenuItem Header="Zu Aufgaben hinzufügen" Click="AddTaskMenuItem_Click" />
                         <MenuItem Header="Löschen" Click="DeleteMenuItem_Click" />
                         <MenuItem Header="Sicher löschen (VACUUM)" Click="SecureDeleteMenuItem_Click" />
                         <Separator />
@@ -206,6 +208,7 @@
                         <MenuItem Header="Typ ändern">
                             <MenuItem Header="Als Text behandeln" Click="TreatAsTextMenuItem_Click" />
                             <MenuItem Header="Als Code behandeln" Click="TreatAsCodeMenuItem_Click" />
+                            <MenuItem Header="Als Markdown behandeln" Click="TreatAsMarkdownMenuItem_Click" />
                         </MenuItem>
                     </ContextMenu>
                 </Grid.ContextMenu>
@@ -362,6 +365,11 @@
                     </Border>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                         <TextBlock Text="{Binding RelativeTime}" FontSize="{DynamicResource EntryFontSizeMeta}" Foreground="{DynamicResource PopupTextSubtleBrush}" />
+                        <TextBlock Text="{Binding HotkeyText, StringFormat=' · {0}'}"
+                                   Visibility="{Binding HotkeyText, Converter={StaticResource NullToVis}}"
+                                   ToolTip="Globaler Hotkey: fügt diesen Eintrag in jedem Programm ein"
+                                   FontSize="{DynamicResource EntryFontSizeMeta}" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentBrush}" />
                         <Border Width="12" Height="12" CornerRadius="3" Margin="8,1,4,0"
                                 Background="{Binding HexColor, Converter={StaticResource HexToBrush}}"
                                 Visibility="{Binding HexColor, Converter={StaticResource NullToVis}}" />
@@ -422,7 +430,7 @@
         </DataTemplate>
 
         <!-- Header toolbar button: same size for all actions; Tag "active" (panel/mode open) or "recording". -->
-        <BitmapImage x:Key="ToolbarIcons" UriSource="/Clipwell;component/Assets/popup-toolbar-icons.png" />
+        <BitmapImage x:Key="ToolbarIcons" UriSource="/Merkautomat;component/Assets/popup-toolbar-icons.png" />
         <CroppedBitmap x:Key="ToolbarRecordIcon" Source="{StaticResource ToolbarIcons}" SourceRect="158,145,348,358" />
         <CroppedBitmap x:Key="ToolbarNoteIcon" Source="{StaticResource ToolbarIcons}" SourceRect="746,135,361,362" />
         <CroppedBitmap x:Key="ToolbarPaletteIcon" Source="{StaticResource ToolbarIcons}" SourceRect="127,739,398,354" />
@@ -484,7 +492,7 @@
         </LinearGradientBrush>
         <CroppedBitmap x:Key="HeaderKnowledgeLogo" SourceRect="65,9,1167,1226">
             <CroppedBitmap.Source>
-                <BitmapImage UriSource="/Clipwell;component/Assets/kb-rec-logo.png" />
+                <BitmapImage UriSource="/Merkautomat;component/Assets/kb-rec-logo.png" />
             </CroppedBitmap.Source>
         </CroppedBitmap>
     </Window.Resources>
@@ -504,11 +512,6 @@
                 <RowDefinition Height="Auto" />   <!-- Row 2: Schnellnotiz-Panel -->
                 <RowDefinition Height="Auto" />   <!-- Row 3: Bulk-Aktionsleiste -->
             </Grid.RowDefinitions>
-
-            <!-- Inset by the corner radius so the line sits on the straight top edge. -->
-            <Border Grid.Row="0" Height="2" VerticalAlignment="Top" Margin="12,0,12,0"
-                    CornerRadius="0,0,1,1" Background="{DynamicResource AccentStripeBrush}"
-                    IsHitTestVisible="False" Panel.ZIndex="1" />
 
             <!-- ── Header ─────────────────────────────────────────────────── -->
             <Border Grid.Row="0" Padding="12,8,12,0"
@@ -717,6 +720,13 @@
                                              IsTabStop="True"
                                              Style="{StaticResource FilterChipStyle}"
                                              Click="FilterChip_Click" Tag="Code"
+                                             KeyDown="FilterChip_KeyDown" />
+                                <RadioButton Content="MD" GroupName="TypeFilter"
+                                             IsTabStop="True"
+                                             ToolTip="Nur Markdown-Einträge"
+                                             AutomationProperties.Name="Markdown"
+                                             Style="{StaticResource FilterChipStyle}"
+                                             Click="FilterChip_Click" Tag="Markdown"
                                              KeyDown="FilterChip_KeyDown" />
                                 <RadioButton Content="URL" GroupName="TypeFilter"
                                              IsTabStop="True"
@@ -998,8 +1008,8 @@
                                 ToolTip="Diktieren (lokal per Whisper), erneut klicken zum Beenden"
                                 Click="QuickNoteDictate_Click" />
                         <Button Content="&#xE8A7;" Style="{StaticResource QuickNoteIconButton}"
-                                ToolTip="Im Sprechwerk öffnen (alle Sprachnotizen)"
-                                Click="QuickNoteOpenNotes_Click" />
+                                ToolTip="Im Ideenkombinat öffnen (alle Sprachnotizen)"
+                                Click="QuickNoteOpenKnowledgeBase_Click" />
                         <Button x:Name="QuickNoteSaveButton" Content="Speichern" Style="{StaticResource BulkBtnStyle}"
                                 ToolTip="Als Sprachnotiz speichern und ins Ideenkombinat übernehmen (Enter)"
                                 Click="QuickNoteSave_Click" />

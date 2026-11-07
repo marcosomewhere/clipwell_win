@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -8,7 +7,7 @@ using ClipwellWin.Services;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using Wpf.Ui.Controls;
-using MessageBox = System.Windows.MessageBox;
+using MessageBox = ClipwellWin.Views.AppMessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using MessageBoxResult = System.Windows.MessageBoxResult;
@@ -29,6 +28,10 @@ public partial class SettingsWindow : FluentWindow
         InitializeComponent();
         App.ApplyAppIcon(this);
         LoadCurrentSettings();
+        LoadEntryHotkeys();
+        Activated += (_, _) => LoadEntryHotkeys();
+        InitializeLocalAi();
+        UpdateOutlookAddinStatus();
         PopulateAboutTab();
         Closing += (_, _) =>
         {
@@ -71,6 +74,10 @@ public partial class SettingsWindow : FluentWindow
         };
         UrlPreviewSwitch.IsChecked      = s.UrlPreviewEnabled;
         RecordingContentOnlySwitch.IsChecked = s.RecordingContentOnly;
+        FileContentSwitch.IsChecked = s.FileContentEnabled;
+        FileContentExtensionsBox.Text = FileContentReader.FormatExtensions(FileContentReader.ParseExtensions(s.FileContentExtensions));
+        FileContentMaxKbBox.Text = ClampInt(s.FileContentMaxKb, FileContentReader.MinMaxKb, FileContentReader.MaxMaxKb,
+            FileContentReader.DefaultMaxKb).ToString();
         UrlCacheTtlBox.Text = ClampInt(s.UrlCacheTtlDays, 1, 365, 7).ToString();
         SelectByTag(DictationModelBox, DictationService.NormalizeModel(s.DictationModel));
         SelectByTag(DictationLanguageBox, DictationService.NormalizeLanguage(s.DictationLanguage));
@@ -104,6 +111,67 @@ public partial class SettingsWindow : FluentWindow
         PinboardKeyBox.Text            = s.KeyPinboard;
 
         UpdateHotkeyStatus();
+    }
+
+    public sealed record EntryHotkeyRow(long EntryId, string Hotkey, string Title, string Detail);
+
+    private bool _loadingEntryHotkeys;
+
+    private void LoadEntryHotkeys()
+    {
+        var s = _app.CurrentSettings;
+        _loadingEntryHotkeys = true;
+        EntryHotkeysSwitch.IsChecked = s.EntryHotkeysEnabled;
+        _loadingEntryHotkeys = false;
+
+        var rows = s.EntryHotkeys
+            .Select(h => new EntryHotkeyRow(h.EntryId, EntryHotkeys.Format(h.Modifiers, h.Vk), _app.EntryHotkeyTitle(h.EntryId),
+                _app.EntryHotkeyStatus(h) + (h.PlainText ? " · als reiner Text" : "")))
+            .OrderBy(r => r.Hotkey, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        EntryHotkeyList.ItemsSource = rows;
+        EntryHotkeysSummary.Text = rows.Count == 0
+            ? "Noch keine Hotkeys zugewiesen."
+            : rows.Count == 1 ? "1 Hotkey zugewiesen." : $"{rows.Count} Hotkeys zugewiesen.";
+        RemoveAllEntryHotkeysButton.IsEnabled = rows.Count > 0;
+    }
+
+    private void EntryHotkeysSwitch_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loadingEntryHotkeys) return;
+        _app.SetEntryHotkeysEnabled(EntryHotkeysSwitch.IsChecked == true);
+        LoadEntryHotkeys();
+    }
+
+    private void ChangeEntryHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not long id) return;
+        if (!_app.EntryExists(id))
+        {
+            MessageBox.Show(this, "Den Eintrag zu diesem Hotkey gibt es nicht mehr. Die Zuweisung kann nur noch entfernt werden.",
+                AppNames.App, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        _app.ShowEntryHotkeyDialog(id, this);
+        LoadEntryHotkeys();
+    }
+
+    private void RemoveEntryHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not long id) return;
+        _app.RemoveEntryHotkey(id);
+        LoadEntryHotkeys();
+    }
+
+    private void RemoveAllEntryHotkeys_Click(object sender, RoutedEventArgs e)
+    {
+        var count = _app.CurrentSettings.EntryHotkeys.Count;
+        if (count == 0) return;
+        if (MessageBox.Show(this, $"Alle {count} Eintrags-Hotkeys entfernen? Die Einträge selbst bleiben erhalten.",
+                AppNames.App, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+        _app.RemoveAllEntryHotkeys();
+        LoadEntryHotkeys();
     }
 
     private void HotkeyRecorderBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -214,6 +282,7 @@ public partial class SettingsWindow : FluentWindow
     {
         SaveGeneralSettings();
         SaveStorageLimitSettings();
+        SaveFileContentSettings();
         SaveShortcutSettings();
     }
 
@@ -281,6 +350,34 @@ public partial class SettingsWindow : FluentWindow
     {
         _app.CurrentSettings.UrlPreviewEnabled = UrlPreviewSwitch.IsChecked == true;
         _app.CurrentSettings.UrlCacheTtlDays = ReadInt(UrlCacheTtlBox.Text, 1, 365, 7);
+        _app.SaveSettings();
+    }
+
+    private void FileContent_Click(object sender, RoutedEventArgs e)
+    {
+        _app.CurrentSettings.FileContentEnabled = FileContentSwitch.IsChecked == true;
+        SaveFileContentSettings();
+    }
+
+    private void FileContentExtensions_LostFocus(object sender, RoutedEventArgs e)
+        => SaveFileContentSettings();
+
+    private void FileContentDefaults_Click(object sender, RoutedEventArgs e)
+    {
+        FileContentExtensionsBox.Text = FileContentReader.DefaultExtensions;
+        FileContentMaxKbBox.Text = FileContentReader.DefaultMaxKb.ToString();
+        SaveFileContentSettings();
+    }
+
+    private void SaveFileContentSettings()
+    {
+        var s = _app.CurrentSettings;
+        var extensions = FileContentReader.FormatExtensions(FileContentReader.ParseExtensions(FileContentExtensionsBox.Text));
+        FileContentExtensionsBox.Text = extensions;
+        s.FileContentExtensions = extensions;
+        s.FileContentMaxKb = ReadInt(FileContentMaxKbBox.Text, FileContentReader.MinMaxKb, FileContentReader.MaxMaxKb,
+            FileContentReader.DefaultMaxKb);
+        FileContentMaxKbBox.Text = s.FileContentMaxKb.ToString();
         _app.SaveSettings();
     }
 
@@ -549,20 +646,10 @@ public partial class SettingsWindow : FluentWindow
 
     private void PopulateAboutTab()
     {
-        AboutLogoImage.Source = App.CreateAppIconImageSource(192);
-
         var asm = Assembly.GetExecutingAssembly();
         var ver = asm.GetName().Version;
         AboutVersionLabel.Text = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.0.0";
-
-        var appPath = Environment.ProcessPath ?? AppContext.BaseDirectory;
-        var buildTime = File.GetLastWriteTime(appPath);
-        AboutBuildLabel.Text = buildTime.ToString("yyyy.MM.dd.HHmm");
-
     }
-
-    private void AboutGitHub_Click(object sender, RoutedEventArgs e)
-        => Process.Start(new ProcessStartInfo("https://github.com/marcosomewhere/clipwell_win") { UseShellExecute = true });
 
     private void ShowError(string msg) =>
         MessageBox.Show(msg, AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);

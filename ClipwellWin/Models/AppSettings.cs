@@ -23,9 +23,17 @@ public enum ThemeMode
 
 public class AppSettings
 {
+    public string LocalAiModel { get; set; } = "off";
+    /// <summary>E5 classifier for suggestions: "auto" picks the benchmark winner, otherwise a fixed method id.</summary>
+    public string CategorizationMethod { get; set; } = "auto";
+    public List<CategorizationFeedback> CategorizationFeedback { get; set; } = [];
+    public List<CategorizationRun> CategorizationRuns { get; set; } = [];
     // Win+Shift+V | MOD_NOREPEAT
     public uint HotkeyModifiers { get; set; } = NativeMethods.MOD_WIN | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT;
     public uint HotkeyVk { get; set; } = NativeMethods.VK_V;
+    /// <summary>Global hotkeys assigned to single entries (popup context menu "Hotkey zuweisen").</summary>
+    public List<EntryHotkey> EntryHotkeys { get; set; } = [];
+    public bool EntryHotkeysEnabled { get; set; } = true;
     public bool PauseMonitoring { get; set; } = false;
     public int MaxHistoryItems { get; set; } = 500;
     public HotkeyAction HotkeyAction { get; set; } = HotkeyAction.OpenMenu;
@@ -37,6 +45,11 @@ public class AppSettings
     public int MaxSizeInMb { get; set; } = 0;    // 0 = deaktiviert
 
     public bool UrlPreviewEnabled { get; set; } = true;
+
+    /// <summary>Copied files of a listed type are stored with their text content, not only as a file item.</summary>
+    public bool FileContentEnabled { get; set; } = true;
+    public string FileContentExtensions { get; set; } = Services.FileContentReader.DefaultExtensions;
+    public int FileContentMaxKb { get; set; } = Services.FileContentReader.DefaultMaxKb;
 
     /// <summary>Desktop recording keeps only URL and page content of browser windows.</summary>
     public bool RecordingContentOnly { get; set; } = true;
@@ -97,7 +110,17 @@ public class AppSettings
     public bool BrainEdgeTime { get; set; } = true;
     public bool BrainEdgeSession { get; set; } = true;
     public bool BrainEdgeDomain { get; set; } = true;
+    public bool BrainEdgeSummary { get; set; } = true;
+    public bool BrainEdgeManual { get; set; } = true;
     public bool BrainFocus { get; set; } = false;
+    public Dictionary<string, BrainAnnotation> BrainAnnotations { get; set; } = [];
+    /// <summary>Defined main categories with subcategories and descriptions; used ones without a definition also count.</summary>
+    public List<KnowledgeCategory> KnowledgeCategories { get; set; } = [];
+    /// <summary>Brain groups and colors nodes by saved main category instead of automatic topics.</summary>
+    public bool BrainGroupByCategory { get; set; } = false;
+    public bool BrainEdgeCategory { get; set; } = true;
+    public List<BrainSavedSummary> BrainSummaries { get; set; } = [];
+    public List<BrainRelation> BrainRelations { get; set; } = [];
 
     /// <summary>Stored threshold within the slider range, rounded to whole percent; invalid values fall back to the default.</summary>
     public double EffectiveBrainThreshold()

@@ -10,7 +10,7 @@ using ClipwellWin.Views;
 using Microsoft.Data.Sqlite;
 using Microsoft.Win32;
 using Wpf.Ui.Appearance;
-using MessageBox = System.Windows.MessageBox;
+using MessageBox = ClipwellWin.Views.AppMessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using MessageBoxResult = System.Windows.MessageBoxResult;
@@ -23,7 +23,7 @@ public partial class App : System.Windows.Application
     private const string SingleInstanceMutexName = "Local\\ClipwellWin.SingleInstance";
     private const string ShowEventName = "Local\\ClipwellWin.ShowPopup";
     private const string StartupRunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string StartupRunValueName = "Clipwell";
+    private const string StartupRunValueName = "Merkautomat";
     private const string OnboardingSeenFileName = "onboarding.seen";
     private static readonly object LogLock = new();
     private readonly object _settingsMutationLock = new();
@@ -36,9 +36,9 @@ public partial class App : System.Windows.Application
     private ToolStripMenuItem? _recordMenuItem;
     private DesktopRecorderService? _recorder;
     private KnowledgeBaseWindow? _knowledgeBase;
-    private NotesWindow? _notes;
     private DictationService? _dictation;
     private SemanticIndex? _semantic;
+    private LocalAiService? _localAi;
     private MessageWindowService? _msgWin;
     private DatabaseService? _db;
     private SettingsService? _settings;
@@ -94,6 +94,11 @@ public partial class App : System.Windows.Application
             () => new EmbeddingModel(EmbeddingModel.ResolveModelsDir(AppContext.BaseDirectory, AppPaths.ModelsDir)));
 
         ApplyTheme(_settings.Settings.Theme);
+        _localAi = new LocalAiService(AppPaths.ModelsDir, () => _settings.Settings.LocalAiModel,
+            new E5Categorization(_semantic.EmbedForCategorizationAsync,
+                () => EmbeddingModel.IsInstalled(EmbeddingModel.ResolveModelsDir(AppContext.BaseDirectory, AppPaths.ModelsDir)),
+                _semantic.ItemTexts, () => _settings.Settings.CategorizationMethod,
+                () => KnowledgeCategories.Descriptions(_settings.Settings)));
         SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
 
         _popupVm = new PopupViewModel(
@@ -101,16 +106,20 @@ public partial class App : System.Windows.Application
             () => _settings.Settings.MaxHistoryItems,
             () => _settings.Settings.MaxAgeInDays);
         _popupVm.LoadFromDb();
+        RecheckMarkdownEntries();
 
         _msgWin = new MessageWindowService();
         _msgWin.Initialize();
         _msgWin.ClipboardChanged += OnClipboardChanged;
         _msgWin.HotkeyPressed += OnHotkeyPressed;
+        _msgWin.EntryHotkeyPressed += OnEntryHotkeyPressed;
 
         SetupTray();
 
         if (!RegisterConfiguredHotkey())
             ShowHotkeyRegistrationWarning();
+        RegisterEntryHotkeys();
+        StartMailInbox();
 
         _ = Task.Run(() => RunAutoBackupIfNeeded());
         var liveIds = _popupVm.Entries.Select(e => e.Id).ToHashSet();
@@ -228,7 +237,7 @@ public partial class App : System.Windows.Application
                 try
                 {
                     if (_showEvent.WaitOne(500))
-                        Dispatcher.Invoke(ShowPopup);
+                        Dispatcher.Invoke(() => ShowPopup());
                 }
                 catch (ObjectDisposedException) { return; }
             }
@@ -445,11 +454,6 @@ public partial class App : System.Windows.Application
         _recordMenuItem = new ToolStripMenuItem("Desktop aufzeichnen");
         _recordMenuItem.Click += (_, _) => ToggleRecording();
         menu.Items.Add(_recordMenuItem);
-        var notesMenu = new ToolStripMenuItem(AppNames.VoiceNotes);
-        notesMenu.DropDownItems.Add($"{AppNames.VoiceNotes} öffnen", null, (_, _) => OpenNotes());
-        notesMenu.DropDownItems.Add("Neue Notiz", null, (_, _) => OpenNotes(NotesStartAction.NewNote));
-        notesMenu.DropDownItems.Add("Neue Sprachnotiz (diktieren)", null, (_, _) => OpenNotes(NotesStartAction.NewDictatedNote));
-        menu.Items.Add(notesMenu);
         menu.Items.Add(AppNames.KnowledgeBase, LoadKbMenuIcon(), (_, _) => OpenKnowledgeBase());
         menu.Items.Add(AppNames.Settings, null, (_, _) => OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
@@ -480,7 +484,7 @@ public partial class App : System.Windows.Application
 
     private static Icon CreateTrayIcon()
     {
-        using var bmp = RenderTrayBitmap(96);
+        using var bmp = TrayMonogram.Render(Math.Max(32, SystemInformation.SmallIconSize.Width));
         var hIcon = bmp.GetHicon();
         try
         {
@@ -514,8 +518,8 @@ public partial class App : System.Windows.Application
         window.Icon = CreateAppIconImageSource(32);
     }
 
-    /// <summary>KB symbol shared by tray menu, popup and KB window.</summary>
-    internal const string KbIconUri = "pack://application:,,,/Clipwell;component/Assets/kb-icon-16.png";
+    /// <summary>Small KB symbol for the tray menu and popup.</summary>
+    internal const string KbIconUri = "pack://application:,,,/Merkautomat;component/Assets/kb-icon-16.png";
 
     private static System.Drawing.Image? LoadKbMenuIcon()
     {
@@ -678,6 +682,7 @@ public partial class App : System.Windows.Application
 
         EnsurePopupCreated();
         _popup!.ApplyWindowTheme();
+        RefreshEntryHotkeyLabels();
 
         if (_popup.IsVisible)
         {
@@ -771,6 +776,7 @@ public partial class App : System.Windows.Application
                 key.DeleteValue(StartupRunValueName, throwOnMissingValue: false);
             }
 
+            key.DeleteValue("Clipwell", throwOnMissingValue: false);
             return true;
         }
         catch (Exception ex)
@@ -858,7 +864,8 @@ public partial class App : System.Windows.Application
         if (_settings!.Settings.PauseMonitoring) return;
         if (_ignoreNextClipboard) { _ignoreNextClipboard = false; return; }
 
-        var entry = ClipboardProcessor.BuildEntry(_settings.Settings.CodeDetectionMode);
+        var entry = ClipboardProcessor.BuildEntry(_settings.Settings.CodeDetectionMode,
+            FileContentOptions.From(_settings.Settings));
         if (entry == null) return;
 
         if (entry.Type == EntryType.Image)
@@ -1231,9 +1238,63 @@ public partial class App : System.Windows.Application
         _knowledgeBase.Activate();
     }
 
+    /// <summary>Raised after tasks.json was written, so an open KB window can reload its task list.</summary>
+    internal event EventHandler? TasksChanged;
+
+    internal void NotifyTasksChanged() => TasksChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Adds a history entry as a task and shows it in the Aufgaben section of the KB.</summary>
+    internal void AddTaskFromEntry(long id)
+    {
+        var entry = _popupVm?.Entries.FirstOrDefault(e => e.Id == id)?.Entry;
+        if (entry == null) return;
+        var task = TaskStore.FromEntry(entry, KnowledgeBaseWindow.ClipboardKey(entry.Id), DateTime.Now);
+        try
+        {
+            var tasks = TaskStore.Load(AppPaths.TasksFile);
+            tasks.Add(task);
+            TaskStore.Save(AppPaths.TasksFile, tasks);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogCrash(ex);
+            MessageBox.Show($"Aufgabe konnte nicht gespeichert werden: {ex.Message}", AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        NotifyTasksChanged();
+        OpenKnowledgeBase();
+        _knowledgeBase?.OpenTasks(task.Id);
+    }
+
     internal DictationService Dictation => _dictation!;
 
     internal SemanticIndex Semantic => _semantic!;
+    internal LocalAiService LocalAi => _localAi!;
+
+    private Views.ClassifierReportWindow? _classifierReport;
+
+    internal void OpenCategorizationReport(Window owner)
+    {
+        if (_classifierReport is { IsLoaded: true })
+        {
+            _classifierReport.Activate();
+            return;
+        }
+        _classifierReport = new Views.ClassifierReportWindow(LocalAi.E5, CurrentSettings, SaveSettings, categorize: async keys =>
+        {
+            OpenKnowledgeBase();
+            if (_knowledgeBase != null) await _knowledgeBase.CategorizeKeysAsync(keys);
+        }) { Owner = owner };
+        _classifierReport.Closed += (_, _) => _classifierReport = null;
+        _classifierReport.Show();
+    }
+
+    /// <summary>Counts what happened to a shown suggestion; saved with the next settings write.</summary>
+    internal void RecordCategorizationFeedback(LocalAiSuggestion? suggestion, string appliedCategory)
+    {
+        if (CategorizationReporting.Feedback(suggestion, appliedCategory, DateTime.Now) is not { } feedback) return;
+        CategorizationReporting.Append(CurrentSettings.CategorizationFeedback ??= [], feedback, CategorizationReporting.MaxFeedback);
+    }
 
     /// <summary>Raised on the UI thread whenever the clipboard history gains, loses or reorders entries.</summary>
     internal event System.Collections.Specialized.NotifyCollectionChangedEventHandler? HistoryChanged
@@ -1270,29 +1331,15 @@ public partial class App : System.Windows.Application
     /// </summary>
     internal string SaveQuickNote(string text)
     {
-        var (note, kbPath) = NoteStore.CreateInKb(AppPaths.NotesDir, AppPaths.KbNotesDir, text, DateTime.Now);
-        _notes?.AddExternalNote(note);
+        var (_, kbPath) = NoteStore.CreateInKb(AppPaths.NotesDir, AppPaths.KbNotesDir, text, DateTime.Now);
         NotifyKnowledgeBaseChanged();
         return kbPath;
     }
 
-    internal void OpenNotes(NotesStartAction action = NotesStartAction.None, string? initialText = null)
+    internal void OpenVoiceNotes(string? initialText = null)
     {
-        if (_notes == null || !_notes.IsLoaded)
-        {
-            _notes = new NotesWindow(this);
-            _notes.Closed += (_, _) => _notes = null;
-        }
-        _notes.Show();
-        if (_notes.WindowState == WindowState.Minimized) _notes.WindowState = WindowState.Normal;
-        _notes.Activate();
-        _notes.Run(action, initialText);
-    }
-
-    internal void OpenNote(string id)
-    {
-        OpenNotes();
-        _notes?.SelectNote(id);
+        OpenKnowledgeBase();
+        _knowledgeBase!.OpenVoiceNotes(initialText);
     }
 
     /// <summary>
@@ -1349,7 +1396,6 @@ public partial class App : System.Windows.Application
         if (_trayIcon != null) _trayIcon.Visible = false;
         _recorder?.Stop();
         _knowledgeBase?.Close();
-        _notes?.Close();
         _pinboard?.Close();
         Shutdown();
     }
@@ -1363,9 +1409,11 @@ public partial class App : System.Windows.Application
         if (_ownsSingleInstance) _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
         _trayIcon?.Dispose();
+        StopMailInbox();
         _msgWin?.Dispose();
         _recorder?.Dispose();
         _dictation?.Dispose();
+        _localAi?.Dispose();
         _semantic?.Dispose();
         _db?.Dispose();
         _urlService?.Dispose();

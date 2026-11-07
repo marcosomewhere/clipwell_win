@@ -130,7 +130,7 @@ public class PopupPresentationTests
             if (Application.Current == null) _ = new Application();
             foreach (var name in new[] { "kb-icon-16.png", "kb-rec-logo.png" })
             {
-                var info = Application.GetResourceStream(new Uri($"pack://application:,,,/Clipwell;component/Assets/{name}"));
+                var info = Application.GetResourceStream(new Uri($"pack://application:,,,/Merkautomat;component/Assets/{name}"));
                 Assert.NotNull(info);
                 using var stream = info!.Stream;
                 Assert.True(stream.Length > 0, name);

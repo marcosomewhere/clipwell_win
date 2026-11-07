@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>Clipwell</AssemblyName>
+    <AssemblyName>Merkautomat</AssemblyName>
     <RootNamespace>ClipwellWin</RootNamespace>
     <Version>1.2.0</Version>
     <Product>Merkautomat</Product>
@@ -36,6 +36,7 @@
     <Resource Include="Assets\cb-logo.png" />
     <Resource Include="Assets\navigation-icons.png" />
     <Resource Include="Assets\popup-toolbar-icons.png" />
+    <Resource Include="Assets\about-cover.jpg" />
   </ItemGroup>
 
   <!-- The Whisper base model (MIT) ships next to the EXE under models\. It is too large for git, so a fresh
@@ -52,6 +53,7 @@
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <None Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
           ExcludeFromSingleFile="true" />
+    <None Update="Licenses\**\*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
   <Target Name="FetchWhisperBaseModel" BeforeTargets="AssignTargetPaths" Condition="!Exists('$(WhisperBaseModel)')">
@@ -105,6 +107,24 @@
     <Error Condition="'$(_E5SpmHash.ToLowerInvariant())' != '$(E5SpmSha256)'"
            Text="Embedding-Tokenizer: SHA256 $(_E5SpmHash) passt nicht zu $(E5SpmSha256)." />
     <Move SourceFiles="$(E5Spm).part" DestinationFiles="$(E5Spm)" />
+  </Target>
+
+  <!-- The Outlook add-in (net48, own project) ships next to the EXE under outlook\; the Kontrollstation installs a copy
+       from there. Built separately because a net10 project cannot reference a .NET Framework COM add-in. -->
+  <PropertyGroup>
+    <OutlookAddinProject>$(MSBuildThisFileDirectory)..\MerkautomatOutlook\MerkautomatOutlook.csproj</OutlookAddinProject>
+    <OutlookAddinDll>$(MSBuildThisFileDirectory)..\MerkautomatOutlook\bin\$(Configuration)\net48\MerkautomatOutlook.dll</OutlookAddinDll>
+  </PropertyGroup>
+
+  <Target Name="BuildOutlookAddin" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="$(OutlookAddinProject)" Targets="Restore" Properties="Configuration=$(Configuration);MSBuildRestoreSessionId=$([System.Guid]::NewGuid())"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishSingleFile;TargetFramework;PublishDir;OutDir;OutputPath" />
+    <MSBuild Projects="$(OutlookAddinProject)" Targets="Build" Properties="Configuration=$(Configuration)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishSingleFile;TargetFramework;PublishDir;OutDir;OutputPath" />
+    <ItemGroup>
+      <None Include="$(OutlookAddinDll)" Link="outlook\MerkautomatOutlook.dll" Visible="false"
+            CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    </ItemGroup>
   </Target>
 
   <!-- ONNX Runtime ships its import libraries as native assets; only the DLLs are needed at runtime. -->

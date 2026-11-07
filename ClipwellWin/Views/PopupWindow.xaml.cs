@@ -302,6 +302,7 @@ public partial class PopupWindow : Window
         ChipAll.IsChecked = true;
         _vm.TypeFilter    = null;
         _vm.ShowPinnedOnly = false;
+        _vm.ShowMarkdownOnly = false;
     }
 
     private void SaveQuickNoteDraft()
@@ -370,7 +371,7 @@ public partial class PopupWindow : Window
     {
         var selected = _vm.GetSelectedViewModels();
         if (selected.Count == 0) return;
-        var r = System.Windows.MessageBox.Show(
+        var r = ClipwellWin.Views.AppMessageBox.Show(
             $"{selected.Count} Einträge löschen?", AppNames.App,
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question);
@@ -506,7 +507,7 @@ public partial class PopupWindow : Window
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
             App.LogCrash(ex);
-            System.Windows.MessageBox.Show(this, $"Notiz konnte nicht gespeichert werden: {ex.Message}", AppNames.App,
+            ClipwellWin.Views.AppMessageBox.Show(this, $"Notiz konnte nicht gespeichert werden: {ex.Message}", AppNames.App,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -552,21 +553,15 @@ public partial class PopupWindow : Window
         }
     }
 
-    private async void QuickNoteOpenNotes_Click(object sender, RoutedEventArgs e)
+    private async void QuickNoteOpenKnowledgeBase_Click(object sender, RoutedEventArgs e)
     {
         if (_quickDictation is { IsWorking: true }) return;
         if (_quickDictation != null) await _quickDictation.FinishAsync();
-        HandOverQuickNote(QuickNoteBox.Text.Trim().Length > 0 ? NotesStartAction.NewNote : NotesStartAction.None);
-    }
-
-    /// <summary>Moves the current quick-note text into the notes window for longer editing.</summary>
-    private void HandOverQuickNote(NotesStartAction action)
-    {
         if (_app == null) return;
         var text = QuickNoteBox.Text.Trim();
         ClearQuickNote();
         Hide();
-        _app.OpenNotes(action, text.Length > 0 ? text + "\n" : null);
+        _app.OpenVoiceNotes(text.Length > 0 ? text + "\n" : null);
     }
 
     private Point? _dragStart;
@@ -647,8 +642,9 @@ public partial class PopupWindow : Window
     {
         if (sender is not RadioButton rb) return;
         var tag = rb.Tag as string ?? "";
+        _vm.ShowMarkdownOnly = tag == "Markdown";
 
-        if (string.IsNullOrEmpty(tag))
+        if (string.IsNullOrEmpty(tag) || tag == "Markdown")
         {
             _vm.TypeFilter     = null;
             _vm.ShowPinnedOnly = false;
@@ -1090,6 +1086,19 @@ public partial class PopupWindow : Window
         if (MenuEntry(sender) is { } vm) TogglePinAndRefreshList(vm);
     }
 
+    // The popup hides when the dialog takes focus; the dialog therefore centers on the screen.
+    private void AssignHotkeyMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuEntry(sender) is { } vm) _app.ShowEntryHotkeyDialog(vm.Id);
+    }
+
+    private void AddTaskMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuEntry(sender) is not { } vm) return;
+        Hide();
+        _app.AddTaskFromEntry(vm.Id);
+    }
+
     private void DeleteMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (MenuEntry(sender) is { } vm) _vm.Delete(vm);
@@ -1098,7 +1107,7 @@ public partial class PopupWindow : Window
     private void SecureDeleteMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (MenuEntry(sender) is not { } vm) return;
-        var r = System.Windows.MessageBox.Show(
+        var r = ClipwellWin.Views.AppMessageBox.Show(
             "Eintrag sicher löschen? Die Daten werden durch VACUUM endgültig aus der Datenbank entfernt.",
             "Sicher löschen", System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Warning);
@@ -1130,6 +1139,11 @@ public partial class PopupWindow : Window
     private void TreatAsCodeMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (MenuEntry(sender) is { } vm) _vm.SetType(vm, EntryType.Code);
+    }
+
+    private void TreatAsMarkdownMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuEntry(sender) is { } vm) _vm.SetType(vm, EntryType.Text, "MARKDOWN");
     }
 
     private static EntryViewModel? MenuEntry(object sender)

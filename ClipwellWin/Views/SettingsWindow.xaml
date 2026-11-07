@@ -149,6 +149,44 @@
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
+                                    <TextBlock Text="Kopierte Dateien mit Inhalt speichern" FontWeight="SemiBold" />
+                                    <TextBlock Text="Wird eine Datei (z. B. im Explorer) kopiert, übernimmt Merkautomat bei den unten genannten Dateitypen den Textinhalt; Dateiname und Pfad bleiben als Quelle am Eintrag. Aus = kopierte Dateien werden nicht gespeichert." FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch x:Name="FileContentSwitch" Click="FileContent_Click" />
+                        </ui:CardControl>
+
+                        <Border Margin="0,0,0,8" Padding="16,14" CornerRadius="8" BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Lesbare Dateitypen" FontWeight="SemiBold" />
+                                <TextBlock Text="Endungen durch Komma getrennt, ohne Punkt. Dateien ohne Endung zählen über ihren Namen (z. B. dockerfile, makefile). Binärdateien werden auch bei passender Endung übersprungen." FontSize="12" Opacity="0.6" TextWrapping="Wrap" Margin="0,2,0,8" />
+                                <ui:TextBox x:Name="FileContentExtensionsBox"
+                                            TextWrapping="Wrap"
+                                            AcceptsReturn="False"
+                                            MinHeight="64"
+                                            MaxHeight="140"
+                                            VerticalScrollBarVisibility="Auto"
+                                            LostFocus="FileContentExtensions_LostFocus" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Höchstgröße je Kopie (KB)" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <ui:TextBox x:Name="FileContentMaxKbBox" Grid.Column="1" Width="90"
+                                                PlaceholderText="1024" LostFocus="FileContentExtensions_LostFocus" />
+                                    <ui:Button Grid.Column="3" Content="Standardliste" Click="FileContentDefaults_Click" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <ui:CardControl Margin="0,0,0,8">
+                            <ui:CardControl.Header>
+                                <StackPanel>
                                     <TextBlock Text="Desktop-Aufnahme: nur Seiteninhalt" FontWeight="SemiBold" />
                                     <TextBlock Text="Im Browser nur URL und Seiteninhalt aufzeichnen, ohne Tabs, Symbolleisten und Navigationsbereiche. Aus = alles Sichtbare." FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
                                 </StackPanel>
@@ -457,6 +495,131 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                         <ui:Button Content="Auf Standard zurücksetzen"
                                    Click="ResetShortcuts_Click" Margin="0,8,0,16" />
 
+                        <!-- Globale Hotkeys fuer einzelne Eintraege -->
+                        <TextBlock Text="Hotkeys für Einträge" FontWeight="SemiBold"
+                                   FontSize="14" Margin="0,8,0,6" />
+                        <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   Text="Globale Tastenkombinationen, die einen bestimmten Eintrag in jedem Programm einfügen. Zuweisen per Rechtsklick auf einen Eintrag im Popup → Hotkey zuweisen …; der Eintrag wird dabei gepinnt." />
+                        <Border Margin="0,0,0,16" Padding="16,14" CornerRadius="8" BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Eintrags-Hotkeys aktiv" FontWeight="SemiBold" FontSize="14" />
+                                        <TextBlock x:Name="EntryHotkeysSummary" FontSize="12" Opacity="0.6" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" x:Name="EntryHotkeysSwitch" VerticalAlignment="Center"
+                                                     AutomationProperties.Name="Eintrags-Hotkeys aktiv"
+                                                     Checked="EntryHotkeysSwitch_Changed" Unchecked="EntryHotkeysSwitch_Changed" />
+                                </Grid>
+
+                                <ItemsControl x:Name="EntryHotkeyList" Margin="0,10,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,6,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="130" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Hotkey}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.6" />
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="2" Content="Ändern …" Tag="{Binding EntryId}"
+                                                           Click="ChangeEntryHotkey_Click" Margin="0,0,6,0" />
+                                                <ui:Button Grid.Column="3" Content="Entfernen" Tag="{Binding EntryId}"
+                                                           Click="RemoveEntryHotkey_Click" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <ui:Button x:Name="RemoveAllEntryHotkeysButton" Content="Alle entfernen"
+                                           Click="RemoveAllEntryHotkeys_Click" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Lokale KI">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="4,20,12,16">
+                        <StackPanel.Resources>
+                            <ResourceDictionary>
+                                <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="BrainDialogResources.xaml" /></ResourceDictionary.MergedDictionaries>
+                                <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+                            </ResourceDictionary>
+                        </StackPanel.Resources>
+                        <TextBlock Text="Wissen automatisch einordnen" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="E5 ordnet Quellen vorhandenen Kategorien zu. Granite kann zusätzlich Kategorien und Thementitel formulieren. Du prüfst den Vorschlag und entscheidest, was gespeichert wird." Margin="0,8,0,20" Opacity="0.75" />
+                        <TextBlock Text="Lokale KI / Local AI" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <ComboBox x:Name="LocalAiModelBox" HorizontalAlignment="Stretch" SelectionChanged="LocalAiModel_Changed">
+                            <ComboBoxItem Tag="off" Content="Aus" />
+                            <ComboBoxItem Tag="e5-categories" Content="E5 · bestehende Kategorien (schnell, mitgeliefert)" />
+                            <ComboBoxItem Tag="granite-4.2-3b" Content="Granite 4.2 3B · lokal (CPU)" />
+                        </ComboBox>
+                        <TextBlock x:Name="LocalAiModelHint" Margin="0,12,0,16" Opacity="0.75" />
+                        <Border Style="{StaticResource BrainCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="LocalAiStatus" FontWeight="SemiBold" Text="Lokale KI ausgeschaltet." />
+                                <ProgressBar x:Name="LocalAiProgressBar" Minimum="0" Maximum="100" Height="6" Margin="0,12,0,0" Visibility="Collapsed" />
+                                <WrapPanel Margin="0,14,0,0">
+                                    <Button x:Name="LocalAiDownloadButton" Content="Modell herunterladen" Click="LocalAiDownload_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,8,8" />
+                                    <Button x:Name="LocalAiTestButton" Content="Funktion testen" Click="LocalAiTest_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,8,8" />
+                                    <Button x:Name="LocalAiEvaluateButton" Content="Auswertung öffnen …" Click="LocalAiEvaluate_Click" Style="{StaticResource EditorButtonStyle}" Visibility="Collapsed" Margin="0,0,8,8"
+                                            ToolTip="Verfahren auf deinen gespeicherten Zuordnungen vergleichen, Verfahren wählen und Praxiswerte ansehen" />
+                                    <Button x:Name="LocalAiCancelButton" Content="Abbrechen" Click="LocalAiCancel_Click" Style="{StaticResource EditorButtonStyle}" Visibility="Collapsed" Margin="0,0,0,8" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="So funktioniert es" FontWeight="SemiBold" Margin="0,24,0,8" />
+                        <TextBlock Text="Im Brain bei „Thema zuordnen“ oder „Zusammenfassen“ erstellt die aktivierte KI automatisch einen Vorschlag. „KI-Vorschlag übernehmen“ setzt die Kategorie; bei Granite auch den Titel. Erst das anschließende Speichern schreibt die Änderung. E5 benötigt mindestens zwei bereits gespeicherte Kategorien. Mit „Mit lokaler KI einordnen …“ im Brain, „Ohne Kategorie einordnen …“ und „Markierte einordnen …“ in der Suche lassen sich auch viele Einträge nacheinander bestätigen." Opacity="0.75" />
+                        <TextBlock Text="Noch keine Kategorien? Im Ideenkombinat „Mehr → Kategorien analysieren (Granite) …“ gruppiert die Einträge und lässt Granite Kategorien vorschlagen, auch wenn hier E5 gewählt ist. E5 lernt aus deinen gespeicherten Zuordnungen (Rocchio-Prototypen: Kategoriename plus Mittel der eigenen Beispiele). Breite Kategorien bekommen bis zu drei Schwerpunkte, als Vergleichsverfahren. „Auswertung öffnen …“ vergleicht alle Verfahren (Rocchio mit und ohne Namen, mehrere Prototypen, k-NN, logistische Regression) auf deinen Zuordnungen; „Automatisch“ nimmt das einfachste, außer ein anderes ist messbar besser. Die Werte sind Ähnlichkeiten, keine Wahrscheinlichkeiten." Margin="0,10,0,0" Opacity="0.75" />
+                        <TextBlock Text="Auswertung: bis zu acht unterschiedliche Quellenauszüge mit je 700 Zeichen. Bei unklaren oder gemischten Treffern bleibt die Kategorie offen. Kein automatisches Training aus Brain-Verbindungen. Bestehende Zuordnungen und Originale werden nicht automatisch geändert." Margin="0,10,0,0" Opacity="0.75" />
+                        <TextBlock Text="Datenschutz und Lizenz" FontWeight="SemiBold" Margin="0,24,0,8" />
+                        <TextBlock Text="Die Auswertung erfolgt lokal. Nur Modelldownloads benötigen Internet. Granite gibt nach drei Minuten Leerlauf seinen Modellspeicher frei; „Aus“ beendet den Granite-Prozess. E5 teilt das bereits vorhandene Modell mit der Suche." Opacity="0.75" />
+                        <TextBlock Text="E5: MIT · Granite: Apache 2.0 · llama.cpp: MIT. Keine Lizenzgebühren. Lizenzhinweise stehen in THIRD-PARTY-NOTICES.txt und im Ordner Licenses neben der Anwendung." Margin="0,10,0,0" Opacity="0.75" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Outlook">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="4,20,12,16">
+                        <StackPanel.Resources>
+                            <ResourceDictionary>
+                                <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="BrainDialogResources.xaml" /></ResourceDictionary.MergedDictionaries>
+                                <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+                            </ResourceDictionary>
+                        </StackPanel.Resources>
+                        <TextBlock Text="Aufgaben aus Outlook" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Ein kleines Add-in für das klassische Outlook (Microsoft 365, Desktop) ergänzt das Kontextmenü einer Mail um „Aufgabe in Merkautomat erstellen“. Betreff, Absender, Datum und Text der Mail werden an Merkautomat übergeben und landen als Aufgabe im Ideenkombinat." Margin="0,8,0,20" Opacity="0.75" />
+                        <Border Style="{StaticResource BrainCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="OutlookAddinStatus" FontWeight="SemiBold" />
+                                <WrapPanel Margin="0,14,0,0">
+                                    <Button x:Name="OutlookAddinInstallButton" Content="Add-in einrichten" Click="OutlookAddinInstall_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,8,8" />
+                                    <Button x:Name="OutlookAddinReenableButton" Content="Wieder aktivieren" Click="OutlookAddinReenable_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,8,8" Visibility="Collapsed"
+                                            ToolTip="Outlook hat das Add-in abgeschaltet; beim nächsten Start erneut laden" />
+                                    <Button x:Name="OutlookAddinRemoveButton" Content="Add-in entfernen" Click="OutlookAddinRemove_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,8,8" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="So funktioniert es" FontWeight="SemiBold" Margin="0,24,0,8" />
+                        <TextBlock Text="Nach dem Einrichten Outlook neu starten. Dann Rechtsklick auf eine Mail (oder mehrere markierte, bis zu 20) → „Aufgabe in Merkautomat erstellen“. Der Titel ist der Betreff ohne AW:/WG:, der Mailtext steht als Quelle bei der Aufgabe (bis 4000 Zeichen). Läuft Merkautomat nicht, startet das Add-in ihn; sonst holt Merkautomat die Mail beim nächsten Start ab." Opacity="0.75" />
+                        <TextBlock Text="Eingerichtet wird nur für deinen Windows-Benutzer, ohne Adminrechte. Das Add-in wird nach %LOCALAPPDATA%\Clipwell\outlook kopiert. Nach einem Merkautomat-Update „Add-in einrichten“ erneut wählen, bei geschlossenem Outlook." Margin="0,10,0,0" Opacity="0.75" />
+                        <TextBlock Text="Datenschutz" FontWeight="SemiBold" Margin="0,24,0,8" />
+                        <TextBlock Text="Das Add-in liest nur die Mails, die du über das Kontextmenü übergibst, und nur deren Betreff, Absendername, Empfangszeit und Text, keine Anhänge. Die Übergabe läuft über eine Datei in %APPDATA%\Clipwell\inbox, die Merkautomat sofort wieder löscht. Nichts verlässt den Rechner. Das neue Outlook unterstützt solche Add-ins nicht. Lässt eine Firmenrichtlinie nur freigegebene Add-ins zu, lädt Outlook es nicht." Opacity="0.75" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -474,61 +637,16 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                         </Grid.ColumnDefinitions>
 
                         <Border Grid.Column="0"
-                                Padding="20"
                                 CornerRadius="8,0,0,8"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                BorderThickness="0,0,1,0">
+                                BorderThickness="0,0,1,0"
+                                ToolTip="Merkautomat für Windows">
                             <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#1E1E1E" Offset="0" />
-                                    <GradientStop Color="#0A0A0A" Offset="1" />
-                                </LinearGradientBrush>
+                                <ImageBrush ImageSource="/Assets/about-cover.jpg"
+                                            Stretch="UniformToFill"
+                                            AlignmentX="Center"
+                                            AlignmentY="Top" />
                             </Border.Background>
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-
-                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Image x:Name="AboutLogoImage"
-                                           Width="100" Height="100"
-                                           Stretch="Uniform"
-                                           HorizontalAlignment="Center"
-                                           Margin="0,0,0,16" />
-                                    <TextBlock Text="Merkautomat"
-                                               FontSize="26"
-                                               FontWeight="Bold"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#FFFFFFFF"
-                                               Margin="0,0,0,4" />
-                                    <TextBlock Text="für Windows"
-                                               FontSize="13"
-                                               Opacity="0.66"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#FFFFFFFF" />
-                                </StackPanel>
-
-                                <StackPanel Grid.Row="1">
-                                    <Grid Margin="12,0,12,12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Height="1" VerticalAlignment="Center" Background="#40FFFFFF" />
-                                        <TextBlock Grid.Column="1" Text="♥" FontSize="14"
-                                                   Foreground="#FFE34A4A" Margin="10,0" />
-                                        <Border Grid.Column="2" Height="1" VerticalAlignment="Center"
-                                                Background="#40FFFFFF" />
-                                    </Grid>
-                                    <TextBlock TextAlignment="Center" FontSize="11.5" Foreground="#CCFFFFFF">
-                                        <Run Text="Made with " />
-                                        <Run Text="♥" Foreground="#FFE34A4A" />
-                                        <Run Text=" from Marco Seefeldt" />
-                                    </TextBlock>
-                                </StackPanel>
-                            </Grid>
                         </Border>
 
                         <Grid Grid.Column="1" Margin="26,22,26,22">
@@ -537,72 +655,103 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <StackPanel Grid.Row="0" Margin="0,0,0,18">
-                                <TextBlock Text="Dein stiller Begleiter"
+                            <StackPanel Grid.Row="0" Margin="0,0,0,22">
+                                <TextBlock Text="Nichts geht mehr verloren"
                                            FontSize="20"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,8" />
                                 <TextBlock TextWrapping="Wrap"
-                                           Opacity="0.70"
+                                           Opacity="0.75"
                                            FontSize="13.5"
                                            LineHeight="21">
-                                    Alles, was du kopierst, wartet auf dich. Clipwell läuft im Hintergrund, ohne dich zu stören, und bringt deine History mit einem Tastendruck zurück – egal ob Text, Bild oder Link.
+                                    Du hast etwas kopiert und brauchst es zwei Minuten später wieder? Merkautomat hat es sich gemerkt. Er läuft leise im Hintergrund und holt dir mit einem Tastendruck zurück, was du suchst.
                                 </TextBlock>
                             </StackPanel>
 
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,0">
-                                <Border Padding="14,10"
-                                        CornerRadius="6"
-                                        BorderThickness="1"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                        Margin="0,0,10,0">
+                            <StackPanel Grid.Row="1">
+                                <StackPanel.Resources>
+                                    <Style x:Key="AboutBenefitDot" TargetType="Border">
+                                        <Setter Property="Width" Value="7" />
+                                        <Setter Property="Height" Value="7" />
+                                        <Setter Property="CornerRadius" Value="3.5" />
+                                        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                        <Setter Property="VerticalAlignment" Value="Top" />
+                                        <Setter Property="Margin" Value="0,7,12,0" />
+                                    </Style>
+                                    <Style x:Key="AboutBenefitTitle" TargetType="TextBlock">
+                                        <Setter Property="FontSize" Value="13.5" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                        <Setter Property="Margin" Value="0,0,0,2" />
+                                    </Style>
+                                    <Style x:Key="AboutBenefitText" TargetType="TextBlock">
+                                        <Setter Property="FontSize" Value="12.5" />
+                                        <Setter Property="Opacity" Value="0.7" />
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                        <Setter Property="LineHeight" Value="19" />
+                                    </Style>
+                                </StackPanel.Resources>
+
+                                <DockPanel Margin="0,0,0,14">
+                                    <Border Style="{StaticResource AboutBenefitDot}" />
                                     <StackPanel>
-                                        <TextBlock Text="Version" Opacity="0.55" FontSize="11" Margin="0,0,0,4" />
-                                        <TextBlock x:Name="AboutVersionLabel" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="Schneller wiederfinden" Style="{StaticResource AboutBenefitTitle}" />
+                                        <TextBlock Text="Text, Bilder, Links und Code: einfach eintippen, woran du dich erinnerst."
+                                                   Style="{StaticResource AboutBenefitText}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Padding="14,10"
-                                        CornerRadius="6"
-                                        BorderThickness="1"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                </DockPanel>
+                                <DockPanel Margin="0,0,0,14">
+                                    <Border Style="{StaticResource AboutBenefitDot}" />
                                     <StackPanel>
-                                        <TextBlock Text="Build" Opacity="0.55" FontSize="11" Margin="0,0,0,4" />
-                                        <TextBlock x:Name="AboutBuildLabel" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="Gedanken festhalten" Style="{StaticResource AboutBenefitTitle}" />
+                                        <TextBlock Text="Sprich eine Idee einfach ein, Merkautomat schreibt sie für dich auf."
+                                                   Style="{StaticResource AboutBenefitText}" />
                                     </StackPanel>
-                                </Border>
+                                </DockPanel>
+                                <DockPanel Margin="0,0,0,14">
+                                    <Border Style="{StaticResource AboutBenefitDot}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Aus Schnipseln wird Wissen" Style="{StaticResource AboutBenefitTitle}" />
+                                        <TextBlock Text="Im Ideenkombinat findest du Dinge auch dann, wenn dir das genaue Wort fehlt."
+                                                   Style="{StaticResource AboutBenefitText}" />
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel>
+                                    <Border Style="{StaticResource AboutBenefitDot}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Bleibt bei dir" Style="{StaticResource AboutBenefitTitle}" />
+                                        <TextBlock Text="Alles bleibt auf deinem Rechner, ohne Konto und ohne Cloud."
+                                                   Style="{StaticResource AboutBenefitText}" />
+                                    </StackPanel>
+                                </DockPanel>
                             </StackPanel>
 
-                            <Border Grid.Row="3"
-                                    Padding="14,12"
-                                    CornerRadius="8"
-                                    BorderThickness="1"
-                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
-                                <Grid>
+                            <TextBlock Grid.Row="3"
+                                       HorizontalAlignment="Center"
+                                       FontSize="11.5"
+                                       Opacity="0.5">
+                                <Run Text="Version " /><Run x:Name="AboutVersionLabel" />
+                            </TextBlock>
+
+                            <StackPanel Grid.Row="4" Margin="0,18,0,0">
+                                <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="Quellcode &amp; Updates"
-                                                   FontWeight="SemiBold" FontSize="13" />
-                                    </StackPanel>
-                                    <ui:Button Grid.Column="1"
-                                               Click="AboutGitHub_Click"
-                                               MinWidth="100"
-                                               Height="34"
-                                               Margin="16,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <ui:SymbolIcon Symbol="Globe24" FontSize="15" Margin="0,0,7,0" />
-                                            <TextBlock Text="GitHub" />
-                                        </StackPanel>
-                                    </ui:Button>
+                                    <Border Height="1" VerticalAlignment="Center" Background="#40FFFFFF" />
+                                    <TextBlock Grid.Column="1" Text="♥" FontSize="14"
+                                               Foreground="#FFE34A4A" Margin="10,0" />
+                                    <Border Grid.Column="2" Height="1" VerticalAlignment="Center"
+                                            Background="#40FFFFFF" />
                                 </Grid>
-                            </Border>
+                                <TextBlock TextAlignment="Center" FontSize="11.5" Opacity="0.8">
+                                    <Run Text="From Germany by Marco Seefeldt" />
+                                </TextBlock>
+                            </StackPanel>
                         </Grid>
                     </Grid>
                 </Border>

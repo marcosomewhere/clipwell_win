@@ -355,7 +355,8 @@ public partial class PinboardWindow : Window
 
     private bool TryBuildDataEntry(System.Windows.IDataObject data, out ClipboardEntry entry)
     {
-        entry = ClipboardProcessor.BuildEntry(data, _app.CurrentSettings.CodeDetectionMode)!;
+        entry = ClipboardProcessor.BuildEntry(data, _app.CurrentSettings.CodeDetectionMode,
+            FileContentOptions.From(_app.CurrentSettings, always: true))!;
         if (entry == null) return false;
 
         return true;
@@ -371,7 +372,7 @@ public partial class PinboardWindow : Window
 
         foreach (var file in files)
         {
-            if (TryBuildImageFileEntry(file, out entry) || TryBuildTextFileEntry(file, out entry))
+            if (TryBuildImageFileEntry(file, out entry))
                 return true;
         }
 
@@ -411,29 +412,7 @@ public partial class PinboardWindow : Window
         }
     }
 
-    private bool TryBuildTextFileEntry(string file, out ClipboardEntry entry)
-    {
-        entry = null!;
-        if (!File.Exists(file) || !IsKnownTextFile(file)) return false;
-
-        try
-        {
-            var info = new FileInfo(file);
-            if (info.Length > 1024 * 1024) return false;
-
-            var text = File.ReadAllText(file).Trim();
-            if (string.IsNullOrWhiteSpace(text)) return false;
-
-            var data = new System.Windows.DataObject(System.Windows.DataFormats.UnicodeText, text);
-            return TryBuildDataEntry(data, out entry);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool HasSupportedDropData(System.Windows.IDataObject data)
+    private bool HasSupportedDropData(System.Windows.IDataObject data)
         => data.GetDataPresent(System.Windows.DataFormats.Bitmap, true)
            || data.GetDataPresent(System.Windows.DataFormats.UnicodeText, true)
            || data.GetDataPresent(System.Windows.DataFormats.Text, true)
@@ -441,11 +420,12 @@ public partial class PinboardWindow : Window
            || data.GetDataPresent(System.Windows.DataFormats.Rtf, true)
            || HasSupportedFileDrop(data);
 
-    private static bool HasSupportedFileDrop(System.Windows.IDataObject data)
+    private bool HasSupportedFileDrop(System.Windows.IDataObject data)
     {
         if (!data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return false;
         if (data.GetData(System.Windows.DataFormats.FileDrop) is not string[] files) return false;
-        return files.Any(file => IsKnownImageFile(file) || IsKnownTextFile(file));
+        var extensions = FileContentReader.ParseExtensions(_app.CurrentSettings.FileContentExtensions);
+        return files.Any(file => IsKnownImageFile(file) || FileContentReader.IsReadable(file, extensions));
     }
 
     private static bool IsKnownImageFile(string file)
@@ -458,32 +438,6 @@ public partial class PinboardWindow : Window
             || ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".tif", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".tiff", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsKnownTextFile(string file)
-    {
-        var ext = Path.GetExtension(file);
-        return ext.Equals(".txt", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".md", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".json", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".xml", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".html", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".htm", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".css", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".js", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".ts", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".cs", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".xaml", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".yaml", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".yml", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".ini", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".toml", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".env", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".ps1", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".sh", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".sql", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".csv", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".log", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsInsideButton(DependencyObject? source)

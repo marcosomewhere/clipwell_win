@@ -10,14 +10,13 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using ClipwellWin.Models;
 using ClipwellWin.Services;
-using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using DataFormats = System.Windows.DataFormats;
 using DragDropEffects = System.Windows.DragDropEffects;
 using DragEventArgs = System.Windows.DragEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using ListBox = System.Windows.Controls.ListBox;
-using MessageBox = System.Windows.MessageBox;
+using MessageBox = ClipwellWin.Views.AppMessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
@@ -25,13 +24,29 @@ namespace ClipwellWin.Views;
 
 public partial class KnowledgeBaseWindow : Window
 {
-    private enum KbView { Dashboard, Overview, Articles, Semantic, Brain }
+    private enum KbView { Dashboard, Overview, Articles, Tasks, Semantic, Brain }
 
     /// <summary>The section whose creation panel is shown below the lists.</summary>
     private enum KbArea { None, Notes, Recordings, Clipboard }
 
-    public sealed class KbItem
+    public sealed class KbItem : INotifyPropertyChanged
     {
+        private string _categoryLabel = "";
+        /// <summary>Saved category as "Haupt › Unter"; empty without category.</summary>
+        public string CategoryLabel
+        {
+            get => _categoryLabel;
+            set
+            {
+                if (_categoryLabel == value) return;
+                _categoryLabel = value;
+                PropertyChanged?.Invoke(this, new(nameof(CategoryLabel)));
+                PropertyChanged?.Invoke(this, new(nameof(CategoryVisibility)));
+            }
+        }
+        public Visibility CategoryVisibility => _categoryLabel.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public required KbArticleKind ArticleKind { get; init; }
         public required string Title { get; init; }
         public required string Subtitle { get; init; }
@@ -48,6 +63,7 @@ public partial class KnowledgeBaseWindow : Window
 
     private static readonly CultureInfo De = CultureInfo.GetCultureInfo("de-DE");
     private static readonly SolidColorBrush RecordingRed = new(Color.FromRgb(0xE8, 0x3B, 0x3B));
+    private static readonly SolidColorBrush RecordingGreen = new(Color.FromRgb(0x4C, 0xCB, 0x75));
     private static readonly SolidColorBrush IdleGray = new(Color.FromRgb(0x6B, 0x6B, 0x6B));
 
     private readonly App _app;
@@ -64,7 +80,7 @@ public partial class KnowledgeBaseWindow : Window
     private List<RecordingSession> _sessions = [];
     private List<KbNote> _notes = [];
     private KbView _view = KbView.Dashboard;
-    private KbArea _area = KbArea.None;
+    private KbArea _expandedArea = KbArea.Clipboard;
     private bool _suppressSelection;
     private string? _pendingSelectPath;
     private bool _selectRecordingOnStart;
@@ -74,7 +90,6 @@ public partial class KnowledgeBaseWindow : Window
         _app = app;
         InitializeComponent();
         EditorChrome.ApplyTheme(this);
-        App.ApplyAppIcon(this);
         var work = SystemParameters.WorkArea;
         Width = Math.Max(MinWidth, Math.Min(Width, work.Width - 40));
         Height = Math.Max(MinHeight, Math.Min(Height, work.Height - 40));
@@ -109,12 +124,15 @@ public partial class KnowledgeBaseWindow : Window
             _refreshDebounce.Stop();
             _searchDebounce.Stop();
             _recordTimer.Stop();
+            CloseAsk();
             CloseSemantic();
             CloseBrain();
+            CloseTasks();
         };
 
         InitSemantic();
         InitBrain();
+        InitTasks();
         UpdateNoteDictationUi();
         Reload();
         UpdateRecordButton();
@@ -137,11 +155,23 @@ public partial class KnowledgeBaseWindow : Window
 
     private void App_KnowledgeBaseChanged(object? sender, EventArgs e) => Reload();
 
+    internal void OpenVoiceNotes(string? initialText = null)
+    {
+        OverviewNav.IsChecked = true;
+        SetArea(KbArea.Notes);
+        if (!string.IsNullOrEmpty(initialText))
+        {
+            if (NoteInput.Text.Length > 0) NoteInput.AppendText("\n\n");
+            NoteInput.AppendText(initialText);
+            NoteInput.CaretIndex = NoteInput.Text.Length;
+        }
+        NoteInput.Focus();
+    }
+
     private void UpdateRecordButton()
     {
         var recording = _app.Recorder.IsRecording;
-        RecordIcon.Text = recording ? "" : "";
-        RecordIcon.Foreground = recording ? RecordingRed : (Brush)FindResource("OnboardingTextPrimaryBrush");
+        RecordIndicator.Fill = recording ? RecordingRed : RecordingGreen;
         RecordButton.ToolTip = recording ? "Aufnahme beenden" : "Aufnahme starten";
         HeaderStateDot.Fill = recording ? RecordingRed : IdleGray;
         HeaderStateLabel.Text = recording ? "Bildschirmaufnahme läuft" : "Keine Aufnahme";
@@ -166,12 +196,13 @@ public partial class KnowledgeBaseWindow : Window
 
     private void SetArea(KbArea area)
     {
-        _area = area;
+        if (area != KbArea.None) _expandedArea = area;
         NotesHeader.Tag = area == KbArea.Notes ? "active" : null;
         RecordingsHeader.Tag = area == KbArea.Recordings ? "active" : null;
         ClipboardHeader.Tag = area == KbArea.Clipboard ? "active" : null;
         NoteComposer.Visibility = area == KbArea.Notes ? Visibility.Visible : Visibility.Collapsed;
         RecordingComposer.Visibility = area == KbArea.Recordings ? Visibility.Visible : Visibility.Collapsed;
+        LayoutAreas();
     }
 
     private KbArea AreaOf(ListBox list)
@@ -195,11 +226,30 @@ public partial class KnowledgeBaseWindow : Window
 
     private IEnumerable<KbItem> AllItems() => _noteItems.Concat(_recordingItems).Concat(_clipboardItems);
 
-    private void NotesHeader_Click(object sender, MouseButtonEventArgs e) => SetArea(KbArea.Notes);
+    private void ToggleArea(KbArea area)
+    {
+        if (_expandedArea == area)
+        {
+            _expandedArea = KbArea.None;
+            SetArea(KbArea.None);
+        }
+        else SetArea(area);
+    }
 
-    private void RecordingsHeader_Click(object sender, MouseButtonEventArgs e) => SetArea(KbArea.Recordings);
+    private void NotesHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (e.Source == sender) ToggleArea(KbArea.Notes);
+    }
 
-    private void ClipboardHeader_Click(object sender, MouseButtonEventArgs e) => SetArea(KbArea.Clipboard);
+    private void RecordingsHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (e.Source == sender) ToggleArea(KbArea.Recordings);
+    }
+
+    private void ClipboardHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (e.Source == sender) ToggleArea(KbArea.Clipboard);
+    }
 
     private void ArticleList_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
@@ -267,12 +317,14 @@ public partial class KnowledgeBaseWindow : Window
 
         try { _sessions = RecordingMarkdown.LoadSessions(_app.Recorder.Directory); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { App.LogCrash(ex); _sessions = []; }
-        try { _notes = NoteStore.LoadKbNotes(AppPaths.KbNotesDir); }
+        try { _notes = NoteStore.LoadKnowledgeNotes(AppPaths.NotesDir, AppPaths.KbNotesDir); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { App.LogCrash(ex); _notes = []; }
 
         _noteItems = BuildNoteItems(_notes);
         _recordingItems = BuildRecordingItems(_sessions, _app.Recorder.CurrentSessionPath);
         _clipboardItems = BuildClipboardItems(_app.SnapshotEntries());
+        UpdateCategoryLabels();
+        FillCategoryFilter();
 
         // Show a just-created item even if the search would hide it.
         var target = pending == null ? null
@@ -292,6 +344,7 @@ public partial class KnowledgeBaseWindow : Window
             _view = KbView.Articles;
             DashboardNav.IsChecked = false;
             OverviewNav.IsChecked = false;
+            TasksNav.IsChecked = false;
             SemanticNav.IsChecked = false;
             BrainNav.IsChecked = false;
             SetArea(AreaOf(target.ArticleKind));
@@ -366,6 +419,7 @@ public partial class KnowledgeBaseWindow : Window
     private bool FilterItem(object o)
     {
         if (o is not KbItem item) return false;
+        if (!CategoryFilterMatches(item)) return false;
         var q = SearchBox.Text.Trim();
         if (q.Length == 0) return true;
         if (item.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || item.Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase))
@@ -395,7 +449,7 @@ public partial class KnowledgeBaseWindow : Window
         var notes = Visible(_notesView).Count();
         var recordings = Visible(_recordingsView).Count();
         var clips = Visible(_clipboardView).Count();
-        var searching = SearchBox.Text.Trim().Length > 0;
+        var searching = SearchBox.Text.Trim().Length > 0 || CategoryFilterActive;
 
         NotesCount.Text = searching ? $"{notes} von {_noteItems.Count}" : notes.ToString(De);
         RecordingsCount.Text = searching ? $"{recordings} von {_recordingItems.Count}" : recordings.ToString(De);
@@ -408,15 +462,15 @@ public partial class KnowledgeBaseWindow : Window
         ClipboardEmpty.Visibility = clips == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         LayoutAreas();
-        // Item containers only have their real height after the next layout pass.
-        Dispatcher.BeginInvoke(LayoutAreas, DispatcherPriority.Loaded);
+
 
         var selected = SelectedItems().ToList();
         SelectionLabel.Text = selected.Count == 0
-            ? $"{notes + recordings + clips} Artikel"
+            ? ""
             : $"{selected.Count} ausgewählt";
         SelectionLabel.ToolTip = selected.Count == 0 ? null : SelectionBreakdown(selected);
         DeleteButton.IsEnabled = selected.Any(CanDelete);
+        if (_view == KbView.Tasks) DeleteButton.IsEnabled = TasksList.SelectedItem != null;
     }
 
     private static string SelectionBreakdown(IReadOnlyCollection<KbItem> items)
@@ -424,65 +478,22 @@ public partial class KnowledgeBaseWindow : Window
            + $"{items.Count(i => i.ArticleKind == KbArticleKind.Recording)} Bildschirmaufnahmen, "
            + $"{items.Count(i => i.ArticleKind == KbArticleKind.Clipboard)} Zwischenablage-Einträge";
 
-    private const int SmallAreaItems = 3;
-    private const double FallbackItemHeight = 50;
-    private const double ListBottomPadding = 5;
-
-    private void SidePanel_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (e.HeightChanged) LayoutAreas();
-    }
-
-    /// <summary>
-    /// Sprachnotizen and Bildschirmaufnahmen get room for whole entries (up to three, more when the clipboard
-    /// needs less), the clipboard takes the rest, so no small list shows a half entry.
-    /// </summary>
     private void LayoutAreas()
     {
-        double fixedHeight = 0;
-        foreach (var row in SidePanel.RowDefinitions)
-            if (row != NotesRow && row != RecordingsRow && row != ClipboardRow) fixedHeight += row.ActualHeight;
-        var available = SidePanel.ActualHeight - fixedHeight;
-        if (available <= 0) return;
-
-        var notes = Visible(_notesView).Count();
-        var recordings = Visible(_recordingsView).Count();
-        var clips = Visible(_clipboardView).Count();
-        var itemHeight = MeasuredItemHeight();
-        double HeightOf(int shown) => shown * itemHeight + ListBottomPadding;
-
-        int shownNotes = Math.Min(notes, SmallAreaItems), shownRecordings = Math.Min(recordings, SmallAreaItems);
-        var clipboardNeed = clips == 0 ? itemHeight : HeightOf(Math.Min(clips, 2));
-        while (HeightOf(shownNotes) + HeightOf(shownRecordings) + clipboardNeed > available
-               && (shownNotes > 1 || shownRecordings > 1))
-        {
-            if (shownNotes >= shownRecordings && shownNotes > 1) shownNotes--;
-            else shownRecordings--;
-        }
-        // Space the clipboard does not need goes to the other areas, again in whole entries.
-        var spare = available - HeightOf(shownNotes) - HeightOf(shownRecordings) - (clips == 0 ? itemHeight : HeightOf(clips));
-        while (spare >= itemHeight && (shownNotes < notes || shownRecordings < recordings))
-        {
-            if (shownNotes < notes && (shownNotes <= shownRecordings || shownRecordings >= recordings)) shownNotes++;
-            else shownRecordings++;
-            spare -= itemHeight;
-        }
-
-        NotesRow.Height = notes == 0 ? GridLength.Auto : new GridLength(HeightOf(shownNotes));
-        RecordingsRow.Height = recordings == 0 ? GridLength.Auto : new GridLength(HeightOf(shownRecordings));
-        ClipboardRow.Height = new GridLength(1, GridUnitType.Star);
+        if (NotesList == null || RecordingsList == null || ClipboardList == null) return;
+        SetListLayout(KbArea.Notes, NotesRow, NotesList, NotesEmpty, NotesChevron);
+        SetListLayout(KbArea.Recordings, RecordingsRow, RecordingsList, RecordingsEmpty, RecordingsChevron);
+        SetListLayout(KbArea.Clipboard, ClipboardRow, ClipboardList, ClipboardEmpty, ClipboardChevron);
     }
 
-    private double MeasuredItemHeight()
+    private void SetListLayout(KbArea area, RowDefinition row, ListBox list, TextBlock empty, TextBlock chevron)
     {
-        foreach (var list in AllLists())
-        {
-            if (list.Items.Count == 0 || list.ItemContainerGenerator.ContainerFromIndex(0) is not FrameworkElement item) continue;
-            if (item.ActualHeight > 0) return Math.Ceiling(item.ActualHeight + item.Margin.Top + item.Margin.Bottom);
-        }
-        return FallbackItemHeight;
+        var expanded = _expandedArea == area;
+        row.Height = expanded ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        list.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        empty.Visibility = expanded && list.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        chevron.Text = expanded ? "\uE70D" : "\uE76C";
     }
-
     // ---- Selection and display ------------------------------------------------------------------------------
 
     /// <summary>Selection across all areas: notes, recordings, clipboard, each in list order.</summary>
@@ -506,6 +517,7 @@ public partial class KnowledgeBaseWindow : Window
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
         _view = sender == OverviewNav ? KbView.Overview
+            : sender == TasksNav ? KbView.Tasks
             : sender == SemanticNav ? KbView.Semantic
             : sender == BrainNav ? KbView.Brain
             : KbView.Dashboard;
@@ -518,6 +530,7 @@ public partial class KnowledgeBaseWindow : Window
         ShowCurrent(keepScroll: false);
         if (_view == KbView.Semantic) EnterSemantic();
         else if (_view == KbView.Brain) EnterBrain();
+        else if (_view == KbView.Tasks) EnterTasks();
     }
 
     private void ArticleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -529,6 +542,7 @@ public partial class KnowledgeBaseWindow : Window
             _view = KbView.Articles;
             DashboardNav.IsChecked = false;
             OverviewNav.IsChecked = false;
+            TasksNav.IsChecked = false;
             SemanticNav.IsChecked = false;
             BrainNav.IsChecked = false;
             ShowCurrent(keepScroll: false);
@@ -541,11 +555,18 @@ public partial class KnowledgeBaseWindow : Window
 
     private void ShowCurrent(bool keepScroll)
     {
+        UpdateBrainLibrary();
         var offset = MarkdownView.VerticalOffset;
         DashboardView.Visibility = _view == KbView.Dashboard ? Visibility.Visible : Visibility.Collapsed;
         SemanticView.Visibility = _view == KbView.Semantic ? Visibility.Visible : Visibility.Collapsed;
         BrainView.Visibility = _view == KbView.Brain ? Visibility.Visible : Visibility.Collapsed;
-        MarkdownView.Visibility = _view is KbView.Overview or KbView.Articles ? Visibility.Visible : Visibility.Collapsed;
+        TasksView.Visibility = _view == KbView.Tasks ? Visibility.Visible : Visibility.Collapsed;
+        TaskDeleteButton.Visibility = TasksView.Visibility;
+        TaskTodayDoneButton.Visibility = TasksView.Visibility;
+        var article = _view is KbView.Overview or KbView.Articles;
+        MarkdownView.Visibility = article && !_formattedMarkdown ? Visibility.Visible : Visibility.Collapsed;
+        FormattedMarkdownView.Visibility = article && _formattedMarkdown ? Visibility.Visible : Visibility.Collapsed;
+        ArticleViewSwitch.Visibility = article ? Visibility.Visible : Visibility.Collapsed;
         ContentHeader.Visibility = _view == KbView.Dashboard ? Visibility.Collapsed : Visibility.Visible;
 
         switch (_view)
@@ -562,6 +583,11 @@ public partial class KnowledgeBaseWindow : Window
                 MarkdownView.Text = "";
                 ContentTitle.Text = "Brain";
                 UpdateBrainStatus();
+                return;
+            case KbView.Tasks:
+                MarkdownView.Text = "";
+                ContentTitle.Text = "Aufgaben";
+                UpdateTasksSubtitle();
                 return;
             case KbView.Overview:
                 ContentTitle.Text = "Gesamtübersicht";
@@ -580,7 +606,7 @@ public partial class KnowledgeBaseWindow : Window
                 {
                     var item = selected[0];
                     ContentTitle.Text = $"{item.KindName}: {item.Title}";
-                    ContentSubtitle.Text = item.Subtitle;
+                    ContentSubtitle.Text = item.Subtitle + (item.CategoryLabel.Length > 0 ? " · Kategorie: " + item.CategoryLabel : "");
                     MarkdownView.Text = ReadArticle(item);
                 }
                 else
@@ -593,6 +619,7 @@ public partial class KnowledgeBaseWindow : Window
         }
         if (keepScroll) MarkdownView.ScrollToVerticalOffset(offset);
         else MarkdownView.ScrollToHome();
+        RefreshMarkdownPreview(keepScroll);
     }
 
     private string BuildOverview()
@@ -605,9 +632,9 @@ public partial class KnowledgeBaseWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return $"Datei konnte nicht gelesen werden: {ex.Message}"; }
     }
 
-    private static List<KbArticle> ToArticles(IEnumerable<KbItem> items)
+    private List<KbArticle> ToArticles(IEnumerable<KbItem> items)
         => items.Select(i => new KbArticle(i.ArticleKind, i.Title, i.Date,
-                i.Entry != null ? KnowledgeExport.ClipboardFileName(i.Entry) : Path.GetFileName(i.FilePath), ReadArticle(i)))
+                i.Entry != null ? KnowledgeExport.ClipboardFileName(i.Entry) : Path.GetFileName(i.FilePath), ReadArticle(i), CategoryOf(i)))
             .ToList();
 
     private void SelectNotes_Click(object sender, RoutedEventArgs e)
@@ -688,6 +715,7 @@ public partial class KnowledgeBaseWindow : Window
             KbView.Dashboard => BuildOverview(),
             KbView.Semantic => SemanticPreview.Text,
             KbView.Brain => BrainCopyText(),
+            KbView.Tasks => TasksCopyText(),
             _ => MarkdownView.Text,
         };
         if (string.IsNullOrEmpty(text)) return;
@@ -733,7 +761,7 @@ public partial class KnowledgeBaseWindow : Window
             else
             {
                 var text = articles.Count == 0 ? overview ?? ""
-                    : articles.Count == 1 && overview == null ? articles[0].Content
+                    : articles.Count == 1 && overview == null ? articles[0].ExportContent
                     : KnowledgeExport.BuildCombined(articles, DateTime.Now, overview);
                 File.WriteAllText(save.FileName, text, new System.Text.UTF8Encoding(false));
             }
@@ -743,6 +771,13 @@ public partial class KnowledgeBaseWindow : Window
         {
             MessageBox.Show(this, $"Export fehlgeschlagen: {ex.Message}", AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private void MoreMenu_Click(object sender, RoutedEventArgs e)
+    {
+        SemanticClearButton.Visibility = _view == KbView.Semantic ? Visibility.Visible : Visibility.Collapsed;
+        MoreButton.ContextMenu.PlacementTarget = MoreButton;
+        MoreButton.ContextMenu.IsOpen = true;
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
@@ -763,6 +798,8 @@ public partial class KnowledgeBaseWindow : Window
 
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
+        if (_view == KbView.Semantic) { SemanticDeleteMarked_Click(sender, e); return; }
+        if (_view == KbView.Tasks) { TaskDelete_Click(sender, e); return; }
         var targets = SelectedItems().Where(CanDelete).ToList();
         if (targets.Count == 0) return;
 
@@ -804,13 +841,21 @@ public partial class KnowledgeBaseWindow : Window
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (e.Key == Key.Escape)
         {
-            if (_noteDictation.IsActive) _noteDictation.Cancel();
+            if (TaskDuePopup.IsOpen) TaskDuePopup.IsOpen = false;
+            else if (_noteDictation.IsActive) _noteDictation.Cancel();
             else if (SearchBox.IsKeyboardFocusWithin && SearchBox.Text.Length > 0) SearchBox.Text = "";
             else if (SemanticQuery.IsKeyboardFocusWithin && SemanticQuery.Text.Length > 0) SemanticQuery.Text = "";
             else if (BrainQuery.IsKeyboardFocusWithin && BrainQuery.Text.Length > 0) BrainQuery.Text = "";
+            else if (NewTaskInput.IsKeyboardFocusWithin && NewTaskInput.Text.Length > 0) NewTaskInput.Text = "";
             else if (_view == KbView.Brain && BrainCanvasView.SelectedNode >= 0) ShowBrainOverview();
             else if (NoteInput.IsKeyboardFocusWithin && NoteInput.Text.Length > 0) NotesList.Focus();
             else Close();
+            e.Handled = true;
+        }
+        else if (ctrl && e.Key == Key.T)
+        {
+            if (TasksNav.IsChecked == true) NewTaskInput.Focus();
+            else TasksNav.IsChecked = true;
             e.Handled = true;
         }
         else if (ctrl && e.Key == Key.B)
@@ -823,6 +868,11 @@ public partial class KnowledgeBaseWindow : Window
             BrainCanvasView.FitToView();
             e.Handled = true;
         }
+        else if (ctrl && (Keyboard.Modifiers & ModifierKeys.Shift) != 0 && e.Key == Key.K)
+        {
+            AssignCategory_Click(this, e);
+            e.Handled = true;
+        }
         else if (ctrl && e.Key == Key.K)
         {
             if (SemanticNav.IsChecked == true) FocusSemanticQuery();
@@ -831,7 +881,7 @@ public partial class KnowledgeBaseWindow : Window
         }
         else if (ctrl && e.Key == Key.F)
         {
-            var box = _view == KbView.Semantic ? SemanticQuery : SearchBox;
+            var box = _view == KbView.Semantic ? SemanticQuery : _view == KbView.Brain ? BrainQuery : SearchBox;
             box.Focus();
             box.SelectAll();
             e.Handled = true;
@@ -851,7 +901,7 @@ public partial class KnowledgeBaseWindow : Window
             Reload();
             e.Handled = true;
         }
-        else if (e.Key == Key.Delete && AllLists().Any(l => l.IsKeyboardFocusWithin))
+        else if (e.Key == Key.Delete && (AllLists().Any(l => l.IsKeyboardFocusWithin) || SemanticResults.IsKeyboardFocusWithin || TasksList.IsKeyboardFocusWithin))
         {
             Delete_Click(this, e);
             e.Handled = true;
@@ -975,14 +1025,11 @@ public partial class KnowledgeBaseWindow : Window
     private void UpdateNoteDictationUi()
     {
         var recording = _noteDictation.IsRecording;
-        NoteDictateIcon.Text = recording ? "" : "";
-        NoteDictateIcon.Foreground = recording ? RecordingRed : (Brush)FindResource("OnboardingTextPrimaryBrush");
-        NoteDictateLabel.Text = recording ? "Beenden" : _noteDictation.IsWorking ? "Bitte warten" : "";
-        NoteDictateLabel.Visibility = NoteDictateLabel.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoteRecordIndicator.Fill = recording ? RecordingRed : RecordingGreen;
         NoteDictateButton.IsEnabled = !_noteDictation.IsBlocked && !_noteDictation.IsWorking;
         NoteDictateButton.ToolTip = _noteDictation.IsBlocked
             ? "Ein anderes Fenster diktiert gerade"
-            : "Diktieren (lokal per Whisper), erneut klicken zum Beenden";
+            : recording ? "Diktat beenden" : "Diktieren (lokal per Whisper)";
         NoteSaveButton.IsEnabled = !_noteDictation.IsWorking;
         NoteStatus.Text = _noteDictation.StatusText;
     }
