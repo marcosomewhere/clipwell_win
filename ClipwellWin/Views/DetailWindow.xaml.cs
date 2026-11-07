@@ -73,6 +73,13 @@ public partial class DetailWindow : Window
     private double _textScrollX;
     private double _textScrollY;
     private bool _isMarkdownPreviewActive;
+    private bool _isMarkdownEditor;
+    private string? _renderedMarkdown;
+    // Above these sizes the per-token overlay (one Run per token, rebuilt per edit) makes typing lag; the editor stays plain.
+    public const int HighlightMaxChars = 40_000;
+    public const int HighlightMaxLines = 1_500;
+    private bool _highlightActive;
+    private int _lineNumberCount = -1;
     private static readonly TimeSpan UiRegexTimeout = TimeSpan.FromMilliseconds(100);
 
     private sealed record StyleMemory(string Color, double Thickness);
@@ -165,7 +172,7 @@ public partial class DetailWindow : Window
 
         if (HasUnsavedImageChanges())
         {
-            var r = System.Windows.MessageBox.Show(
+            var r = ClipwellWin.Views.AppMessageBox.Show(
                 "Bildaenderungen gehen verloren. Trotzdem schliessen?",
                 "Ungespeicherte Aenderungen",
                 MessageBoxButton.OKCancel,
@@ -175,7 +182,7 @@ public partial class DetailWindow : Window
 
         if (!HasUnsavedTextChanges()) return;
 
-        var result = System.Windows.MessageBox.Show(
+        var result = ClipwellWin.Views.AppMessageBox.Show(
             "Textaenderungen vor dem Schliessen speichern?",
             "Ungespeicherte Aenderungen",
             MessageBoxButton.YesNoCancel,
@@ -308,6 +315,7 @@ public partial class DetailWindow : Window
     {
         TitleLabel.Text = vm.Type switch
         {
+            EntryType.Text or EntryType.Code when IsMarkdownEntry(vm, vm.Content ?? "") => "Markdown",
             EntryType.Image => "Bild",
             EntryType.Url   => vm.UrlTitle ?? vm.Content ?? "URL",
             EntryType.Code  => vm.Language ?? "Code",
@@ -326,7 +334,7 @@ public partial class DetailWindow : Window
         if (showSource)
         {
             TitleSeparator.Visibility = Visibility.Visible;
-            SourceLinkRun.Text = DisplaySourceUrl(sourceUrl!);
+            SourceLinkRun.Text = FileContentReader.Headline(sourceUrl) ?? DisplaySourceUrl(sourceUrl!);
             SourceLinkLabel.ToolTip = sourceUrl;
         }
 
@@ -354,8 +362,15 @@ public partial class DetailWindow : Window
         BottomActionBar.Visibility = Visibility.Collapsed;
 
         _savedTextPreview = text;
-        _isCodeEditor = vm.Type == EntryType.Code;
+        _isMarkdownEditor = IsMarkdownEntry(vm, text);
+        _isCodeEditor = vm.Type == EntryType.Code && !_isMarkdownEditor;
         _textPreviewEditable = vm.Type is EntryType.Text or EntryType.Code;
+        if (_isMarkdownPreviewActive)
+        {
+            _isMarkdownPreviewActive = false;
+            MarkdownPreviewToggle.IsChecked = false;
+            HideMarkdownPreview();
+        }
         _editorLanguage = _isCodeEditor
             ? vm.Language ?? SyntaxService.DetectLanguage(text) ?? "Code"
             : null;
@@ -372,15 +387,19 @@ public partial class DetailWindow : Window
         TextPreview.HorizontalScrollBarVisibility = EditorWrapToggle.IsChecked == true
             ? ScrollBarVisibility.Disabled
             : ScrollBarVisibility.Auto;
-        CodeHighlightOverlay.Visibility = _isCodeEditor ? Visibility.Visible : Visibility.Collapsed;
-        TextPreview.Foreground = _isCodeEditor ? Brushes.Transparent : (Brush)Resources["EditorTextBrush"];
+        _highlightActive = false;
+        CodeHighlightOverlay.Inlines.Clear();
+        CodeHighlightOverlay.Visibility = Visibility.Collapsed;
+        TextPreview.Foreground = (Brush)Resources["EditorTextBrush"];
         TextPreview.CaretBrush = new SolidColorBrush(Color.FromRgb(168, 230, 35));
         TextEditorTitleLabel.Text = _isCodeEditor
             ? "Skripteditor"
-            : (string.Equals(vm.ContentKind, "NOTE", StringComparison.OrdinalIgnoreCase)
-                ? "Notiz aus Zwischenablage"
-                : "Text aus Zwischenablage");
-        TextModeLabel.Text = _isCodeEditor ? $"Sprache: {_editorLanguage}" : "Nur-Text";
+            : _isMarkdownEditor
+                ? "Markdown-Editor"
+                : (string.Equals(vm.ContentKind, "NOTE", StringComparison.OrdinalIgnoreCase)
+                    ? "Notiz aus Zwischenablage"
+                    : "Text aus Zwischenablage");
+        TextModeLabel.Text = _isCodeEditor ? $"Sprache: {_editorLanguage}" : _isMarkdownEditor ? "Markdown" : "Nur-Text";
         EditorLanguageBox.Visibility = _isCodeEditor ? Visibility.Visible : Visibility.Collapsed;
         if (_isCodeEditor)
             EditorLanguageBox.SelectedItem = _editorLanguage;
@@ -394,9 +413,8 @@ public partial class DetailWindow : Window
         QueueTextEditorSync();
         ApplyEditorTheme();
 
-        var isMarkdown = string.Equals(vm.ContentKind, "MARKDOWN", StringComparison.OrdinalIgnoreCase);
         if (MarkdownPreviewToggle != null)
-            MarkdownPreviewToggle.Visibility = isMarkdown ? Visibility.Visible : Visibility.Collapsed;
+            MarkdownPreviewToggle.Visibility = _isMarkdownEditor ? Visibility.Visible : Visibility.Collapsed;
         if (WebContentToggle != null)
         {
             WebContentToggle.Visibility = vm.Entry.HasHtml ? Visibility.Visible : Visibility.Collapsed;
@@ -404,6 +422,25 @@ public partial class DetailWindow : Window
         }
 
         ValidateStructuredContent(text, _editorLanguage, vm.ContentKind);
+
+        // Markdown opens as formatted view; "Bearbeiten" switches to the source.
+        if (_isMarkdownEditor && MarkdownPreviewToggle != null)
+        {
+            _isMarkdownPreviewActive = true;
+            MarkdownPreviewToggle.IsChecked = true;
+            ShowMarkdownPreview();
+        }
+    }
+
+    /// <summary>Stored as Markdown, or older text/code entries whose content is Markdown prose.</summary>
+    public static bool IsMarkdownEntry(EntryViewModel vm, string text)
+    {
+        if (vm.Type is not (EntryType.Text or EntryType.Code)) return false;
+        if (string.Equals(vm.ContentKind, "NOTE", StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.Equals(vm.ContentKind, "MARKDOWN", StringComparison.OrdinalIgnoreCase)) return true;
+        // A manual "Als Code behandeln" wins over the content check.
+        if (vm.DetectionReason?.StartsWith("Manuell als Code", StringComparison.Ordinal) == true) return false;
+        return ContentKindService.LooksLikeMarkdownDocument(text);
     }
 
     private void ShowColor(string hex)
@@ -1850,7 +1887,11 @@ public partial class DetailWindow : Window
         var lineCount = TextPreview.IsLoaded
             ? Math.Max(1, TextPreview.LineCount)
             : Math.Max(1, text.Replace("\r", "").Split('\n').Length);
-        LineNumberText.Text = string.Join(Environment.NewLine, Enumerable.Range(1, lineCount));
+        if (lineCount != _lineNumberCount)
+        {
+            LineNumberText.Text = string.Join(Environment.NewLine, Enumerable.Range(1, lineCount));
+            _lineNumberCount = lineCount;
+        }
         TextLineCountLabel.Text = $"Zeilen: {lineCount}";
         TextCharCountLabel.Text = $"Zeichen: {text.Length}";
     }
@@ -1941,8 +1982,12 @@ public partial class DetailWindow : Window
         LineNumberPanel.Background = gutter;
         LineNumberPanel.BorderBrush = border;
         TextPreview.Background = panel;
-        TextPreview.Foreground = _isCodeEditor ? Brushes.Transparent : text;
         CodeHighlightOverlay.Foreground = text;
+        TextPreview.Foreground = _highlightActive ? Brushes.Transparent : text;
+        MarkdownViewer.Background = panel;
+        MarkdownViewer.Foreground = text;
+        _renderedMarkdown = null;
+        if (_isMarkdownPreviewActive) RefreshMarkdownPreview();
         LineNumberText.Foreground = muted;
         TextLineCountLabel.Foreground = muted;
         TextCharCountLabel.Foreground = muted;
@@ -1950,13 +1995,39 @@ public partial class DetailWindow : Window
         TextStatusLabel.Foreground = muted;
     }
 
+    /// <summary>True when the overlay highlighting fits within the size limits.</summary>
+    public static bool ShouldHighlight(string text)
+    {
+        if (text.Length > HighlightMaxChars) return false;
+        var lines = 1;
+        foreach (var c in text)
+            if (c == '\n' && ++lines > HighlightMaxLines) return false;
+        return true;
+    }
+
+    private void SetHighlightActive(bool active)
+    {
+        _highlightActive = active;
+        CodeHighlightOverlay.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        if (!active) CodeHighlightOverlay.Inlines.Clear();
+        TextPreview.Foreground = active ? Brushes.Transparent : CodeHighlightOverlay.Foreground;
+        if (_isCodeEditor)
+            TextModeLabel.Text = active
+                ? $"Sprache: {_editorLanguage}"
+                : $"Sprache: {_editorLanguage} · ohne Hervorhebung (großer Text)";
+    }
+
     private void UpdateCodeHighlightOverlay()
     {
         if (CodeHighlightOverlay == null || !_isCodeEditor)
             return;
 
-        CodeHighlightOverlay.Inlines.Clear();
         var text = TextPreview.Text ?? "";
+        var highlight = ShouldHighlight(text);
+        if (highlight != _highlightActive) SetHighlightActive(highlight);
+        if (!highlight) return;
+
+        CodeHighlightOverlay.Inlines.Clear();
         var syntax = SyntaxProfileFor(_editorLanguage);
         var lines = text.Replace("\r", "").Split('\n');
         for (var i = 0; i < lines.Length; i++)
@@ -2245,10 +2316,8 @@ public partial class DetailWindow : Window
 
     private void TextPreview_TextChanged(object sender, TextChangedEventArgs e)
     {
-        UpdateTextEditorStats();
-        UpdateCodeHighlightOverlay();
-        if (_isMarkdownPreviewActive)
-            RefreshMarkdownPreview();
+        // Stats, line numbers and highlighting are rebuilt once per burst of edits in QueueTextEditorSync,
+        // not synchronously per keystroke; the Markdown view renders when it is shown.
         QueueTextEditorSync();
         if (UndoTextBtn != null)
             UndoTextBtn.IsEnabled = !_loadingTextEditor && TextPreview.CanUndo;
@@ -2321,14 +2390,24 @@ public partial class DetailWindow : Window
 
         var text = TextPreview.Text;
         var isNote = string.Equals(_vm.ContentKind, "NOTE", StringComparison.OrdinalIgnoreCase);
-        var language = _isCodeEditor ? _editorLanguage : isNote ? null : SyntaxService.DetectLanguage(text);
-        var kind = isNote ? "NOTE" : ContentKindService.DetectTextKind(text, language);
-        var reason = _isCodeEditor ? "Code manuell bearbeitet." : isNote ? "Notiz manuell bearbeitet." : "Text manuell bearbeitet.";
+        var language = _isCodeEditor ? _editorLanguage : isNote || _isMarkdownEditor ? null : SyntaxService.DetectLanguage(text);
+        var kind = isNote ? "NOTE" : _isMarkdownEditor ? "MARKDOWN" : ContentKindService.DetectTextKind(text, language);
+        var reason = _isCodeEditor ? "Code manuell bearbeitet."
+            : isNote ? "Notiz manuell bearbeitet."
+            : _isMarkdownEditor ? "Markdown manuell bearbeitet."
+            : "Text manuell bearbeitet.";
 
         if (System.Windows.Application.Current is App app)
             app.Database.UpdateContent(_vm.Id, text, kind, reason, language);
 
         _vm.SetContent(text, kind, reason, language);
+        // Older entries saved as script before Markdown was detected become Markdown text on save.
+        if (_isMarkdownEditor && _vm.Type == EntryType.Code)
+        {
+            if (System.Windows.Application.Current is App typeApp)
+                typeApp.Database.SetType(_vm.Id, EntryType.Text, null, "MARKDOWN", reason);
+            _vm.SetType(EntryType.Text, null, "MARKDOWN", reason);
+        }
         _savedTextPreview = text;
         _savedEditorLanguage = _editorLanguage;
         _loadingTextEditor = true;
@@ -2404,7 +2483,7 @@ public partial class DetailWindow : Window
         => OpenUrl(BrowserTargetUrl());
 
     private void SourceLink_Click(object sender, RoutedEventArgs e)
-        => OpenUrl(_vm.Entry.SourceUrl);
+        => OpenSource(_vm.Entry.SourceUrl);
 
     private string? BrowserTargetUrl()
     {
@@ -2461,6 +2540,10 @@ public partial class DetailWindow : Window
         TextPreview.IsUndoEnabled = true;
         _loadingTextEditor = false;
         TextPreview.IsReadOnly = true;
+        // Plain view until HideWebContent reconfigures the editor for the entry itself.
+        _isCodeEditor = false;
+        _highlightActive = false;
+        CodeHighlightOverlay.Inlines.Clear();
         CodeHighlightOverlay.Visibility = Visibility.Collapsed;
         TextPreview.Foreground = (Brush)Resources["EditorTextBrush"];
         TextEditorTitleLabel.Text = "Webinhalt (aufbereitet)";
@@ -2481,6 +2564,24 @@ public partial class DetailWindow : Window
             HideMarkdownPreview();
         }
         ConfigureTextEditor(_vm, _vm.Content ?? _vm.Entry.OcrText ?? "");
+    }
+
+    /// <summary>Web source in the browser; a copied file is selected in Explorer instead of being run.</summary>
+    private static void OpenSource(string? source)
+    {
+        var paths = FileContentReader.SourcePaths(source);
+        if (paths.Count == 0) { OpenUrl(source); return; }
+        var target = paths.FirstOrDefault(File.Exists) ?? paths.Select(System.IO.Path.GetDirectoryName).FirstOrDefault(Directory.Exists);
+        if (target == null) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe")
+            {
+                Arguments = File.Exists(target) ? $"/select,\"{target}\"" : $"\"{target}\"",
+                UseShellExecute = false,
+            });
+        }
+        catch { }
     }
 
     private static void OpenUrl(string? url)
@@ -2542,7 +2643,7 @@ public partial class DetailWindow : Window
         catch (Exception ex)
         {
             App.LogCrash(ex);
-            System.Windows.MessageBox.Show(
+            ClipwellWin.Views.AppMessageBox.Show(
                 this,
                 $"Die Datei konnte nicht gespeichert werden:\n{ex.Message}",
                 "Speichern fehlgeschlagen",
@@ -2936,27 +3037,36 @@ public partial class DetailWindow : Window
 
     private void ShowMarkdownPreview()
     {
-        if (MarkdownBrowser == null) return;
+        if (MarkdownViewer == null) return;
         RefreshMarkdownPreview();
-        MarkdownBrowser.Visibility = Visibility.Visible;
+        MarkdownViewer.Visibility = Visibility.Visible;
         TextPreview.Visibility = Visibility.Collapsed;
         CodeHighlightScrollViewer.Visibility = Visibility.Collapsed;
-        if (MarkdownPreviewToggle != null) MarkdownPreviewToggle.Content = "Quelltext";
+        LineNumberPanel.Visibility = Visibility.Collapsed;
+        if (MarkdownPreviewToggle != null)
+            MarkdownPreviewToggle.Content = TextPreview.IsReadOnly ? "Quelltext" : "Bearbeiten";
     }
 
+    // Native FlowDocument (same renderer as the Ideenkombinat); only re-rendered when the source changed.
     private void RefreshMarkdownPreview()
     {
-        if (MarkdownBrowser == null) return;
-        var html = MarkdownToHtml(TextPreview.Text ?? "");
-        MarkdownBrowser.NavigateToString(WrapMarkdownHtml(html));
+        if (MarkdownViewer == null) return;
+        var text = TextPreview.Text ?? "";
+        if (_renderedMarkdown == text && MarkdownViewer.Document.Blocks.Count > 0) return;
+        var accent = TryFindResource("OnboardingAccentBrush") as Brush ?? new SolidColorBrush(Color.FromRgb(240, 140, 50));
+        MarkdownViewer.Document = MarkdownPreview.Build(text, CodeHighlightOverlay.Foreground, TextPreview.Background,
+            accent, TextEditorPanel.BorderBrush ?? Brushes.Gray);
+        _renderedMarkdown = text;
     }
 
     private void HideMarkdownPreview()
     {
-        if (MarkdownBrowser != null) MarkdownBrowser.Visibility = Visibility.Collapsed;
+        if (MarkdownViewer != null) MarkdownViewer.Visibility = Visibility.Collapsed;
         TextPreview.Visibility = Visibility.Visible;
         CodeHighlightScrollViewer.Visibility = Visibility.Visible;
+        LineNumberPanel.Visibility = Visibility.Visible;
         if (MarkdownPreviewToggle != null) MarkdownPreviewToggle.Content = "Vorschau";
+        if (!TextPreview.IsReadOnly) TextPreview.Focus();
     }
 
     private static string WrapMarkdownHtml(string body)

@@ -753,9 +753,14 @@
                                            Foreground="{DynamicResource EditorTextBrush}" />
                             </ScrollViewer>
                         </Border>
-                        <WebBrowser x:Name="MarkdownBrowser"
-                                    Grid.Column="1"
-                                    Visibility="Collapsed" />
+                        <RichTextBox x:Name="MarkdownViewer"
+                                     Grid.Column="1"
+                                     IsReadOnly="True" IsDocumentEnabled="True"
+                                     BorderThickness="0"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     AutomationProperties.Name="Markdown-Vorschau"
+                                     Visibility="Collapsed" />
                     </Grid>
 
                     <Grid x:Name="TextEditorFooter"

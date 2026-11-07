@@ -11,6 +11,7 @@ public class EntryBadgeTests
     [InlineData(EntryType.Code, "CODE", "CODE", null)]
     [InlineData(EntryType.Image, "PNG", "IMG", "PNG")]
     [InlineData(EntryType.Text, null, "TEXT", null)]
+    [InlineData(EntryType.Text, "MARKDOWN", "MD", null)]
     public void EntryViewModel_ExposesBadgesForAllEntryTypes(
         EntryType type,
         string? kind,

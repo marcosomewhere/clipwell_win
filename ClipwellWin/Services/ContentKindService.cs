@@ -58,6 +58,66 @@ public static class ContentKindService
         return signals >= 2;
     }
 
+    private static readonly Regex FencedBlockRx = new(@"^ {0,3}(```|~~~)[^\n]*\n.*?^ {0,3}\1[ \t]*$", RegexOptions.Multiline | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromMilliseconds(500));
+    private static readonly Regex InlineCodeRx = new(@"`[^`\n]+`", RegexOptions.Compiled);
+    private static readonly Regex MarkdownStrongRx = new(@"(\*\*|__)\S[^\n]*?\S\1", RegexOptions.Compiled);
+    private static readonly Regex MarkdownTableRx = new(@"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$", RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex MarkdownQuoteRx = new(@"^>\s+\S", RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex ListMarkerRx = new(@"^\s*(?:[-*+]|\d+[.)])\s+", RegexOptions.Compiled);
+    private static readonly Regex CodeStartRx = new(@"^\s*(?:def|class|import|from|function|const|let|var|public|private|protected|static|return|using|namespace|package|#include|if\s*\(|for\s*\(|while\s*\(|\}|\{|<\?php|<\/?[a-z][\w-]*[\s>])", RegexOptions.Compiled);
+    private static readonly Regex WordRx = new(@"\p{L}{2,}", RegexOptions.Compiled);
+    private const double MaxCodeLineShare = 0.25;
+
+    /// <summary>
+    /// Markdown prose (e.g. a chat answer with code samples), checked before code detection. Code blocks are set aside;
+    /// the rest needs at least two Markdown signals and must read as prose: at most a quarter of its lines may look
+    /// like code (code keyword at the start, ending in ; { or }, dense in code punctuation, or without any word).
+    /// </summary>
+    public static bool LooksLikeMarkdownDocument(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var t = text.Replace("\r\n", "\n").Trim();
+
+        string outside;
+        try { outside = FencedBlockRx.Replace(t, "\n"); }
+        catch (RegexMatchTimeoutException) { return false; }
+        var hasFence = outside.Length != t.Length;
+
+        var signals = hasFence ? 1 : 0;
+        if (MarkdownHeaderRx.IsMatch(outside)) signals++;
+        if (MarkdownListRx.IsMatch(outside)) signals++;
+        if (MarkdownLinkRx.IsMatch(outside)) signals++;
+        if (MarkdownStrongRx.IsMatch(outside)) signals++;
+        if (MarkdownTableRx.IsMatch(outside)) signals++;
+        if (MarkdownQuoteRx.IsMatch(outside)) signals++;
+        if (InlineCodeRx.IsMatch(outside)) signals++;
+        if (signals < 2) return false;
+
+        var considered = 0;
+        var codeLike = 0;
+        foreach (var raw in outside.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#') || line.StartsWith('|') || line.StartsWith('>')
+                || line.All(c => c is '-' or '*' or '_' or '=' or ' ')) continue;
+            considered++;
+            if (IsCodeLikeLine(line)) codeLike++;
+        }
+        if (considered == 0) return hasFence;
+        return codeLike <= considered * MaxCodeLineShare;
+    }
+
+    private static bool IsCodeLikeLine(string line)
+    {
+        if (CodeStartRx.IsMatch(line)) return true;
+        var prose = InlineCodeRx.Replace(ListMarkerRx.Replace(line, ""), " ");
+        prose = MarkdownLinkRx.Replace(prose, "link");
+        if (prose.EndsWith(';') || prose.EndsWith('{') || prose.EndsWith('}')) return true;
+        var codeChars = prose.Count(c => c is '{' or '}' or '(' or ')' or ';' or '=' or '<' or '>' or '[' or ']');
+        if (prose.Length >= 8 && codeChars > prose.Length * 0.12) return true;
+        return WordRx.Matches(prose).Count == 0;
+    }
+
     public static string? DetectImageKind(byte[]? data)
     {
         if (data is not { Length: >= 4 }) return "IMG";
@@ -82,12 +142,15 @@ public static class ContentKindService
             : uri.Host;
     }
 
+    public const string MarkdownKind = "MARKDOWN";
+
     public static string PrimaryBadge(ClipboardEntry entry) => entry.Type switch
     {
         EntryType.Url   => "URL",
         EntryType.Image => "IMG",
         EntryType.Code  => "CODE",
         EntryType.Color => "COLOR",
+        _ when string.Equals(entry.ContentKind, MarkdownKind, StringComparison.OrdinalIgnoreCase) => "MD",
         _ => entry.ContentKind ?? "TEXT",
     };
 
