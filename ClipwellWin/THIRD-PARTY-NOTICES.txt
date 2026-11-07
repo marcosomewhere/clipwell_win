@@ -1,5 +1,19 @@
 Clipwell - Third-party notices
 
+Optional local AI (downloaded only on request)
+  IBM Granite 4.2 3B, official Q4_K_M GGUF model, Apache License 2.0.
+  https://huggingface.co/ibm-granite/granite-4.2-3b
+  https://huggingface.co/ibm-granite/granite-4.2-3b-GGUF
+  Model revision: c40945d71cd90f249a56985e8155551a9188dc30
+  The model is used without modifications. Full license: Licenses\Granite-Apache-2.0.txt
+
+  llama.cpp b12110 Windows CPU x64, MIT License.
+  Copyright (c) 2023-2026 The ggml authors.
+  https://github.com/ggml-org/llama.cpp/releases/tag/b12110
+  Full license: Licenses\llama.cpp-MIT.txt
+  Included LLVM OpenMP runtime notices: Licenses\LLVM-OpenMP.txt
+  The downloaded runtime archive retains its LICENSE-LLVM-OpenMP file.
+
 models\ggml-base.bin
   Whisper base model by OpenAI, converted to ggml format by the whisper.cpp project.
   https://github.com/openai/whisper
