@@ -1,0 +1,129 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="EditorChrome.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+    <Style x:Key="BrainInput" TargetType="TextBox" BasedOn="{StaticResource EditorTextBoxStyle}">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style x:Key="BrainCaption" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource EditorMutedBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="BrainCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource EditorPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+        <Setter Property="Background" Value="{DynamicResource EditorPanelAltBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource EditorTextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="MaxDropDownHeight" Value="280" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style x:Key="BrainPrimaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryEditorButtonStyle}">
+        <Style.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{DynamicResource EditorPanelAltBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource EditorMutedBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style TargetType="TabControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TabPanel IsItemsHost="True" Margin="0,0,0,12" />
+                        <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground" Value="{DynamicResource EditorMutedBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Tab" CornerRadius="5" Padding="14,9" Margin="0,0,8,0"
+                            Background="{DynamicResource EditorPanelAltBrush}" BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="1">
+                        <ContentPresenter ContentSource="Header" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Tab" Property="Background" Value="{DynamicResource EditorSelectedBrush}"/>
+                            <Setter TargetName="Tab" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource EditorTextBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Tab" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="BrainListItem" TargetType="ListBoxItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{DynamicResource EditorTextBrush}" />
+        <Setter Property="Padding" Value="10" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Item" CornerRadius="5" Padding="{TemplateBinding Padding}"
+                            Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
+                        <ContentPresenter HorizontalAlignment="Stretch" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource EditorHoverBrush}"/></Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Item" Property="Background" Value="{DynamicResource EditorSelectedBrush}"/>
+                            <Setter TargetName="Item" Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="BrainSourceCheck" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource EditorTextBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border x:Name="Box" Width="17" Height="17" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0"
+                                CornerRadius="3" BorderThickness="1" BorderBrush="{DynamicResource EditorMutedBrush}" Background="{DynamicResource EditorTextBodyBrush}">
+                            <TextBlock x:Name="Mark" Text="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="11" Foreground="#111418"
+                                       Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ContentPresenter Grid.Column="1" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{DynamicResource OnboardingAccentBrush}"/>
+                            <Setter TargetName="Mark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

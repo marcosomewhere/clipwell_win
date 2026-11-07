@@ -15,6 +15,7 @@ public class AppSettingsBrainTests
         Assert.Equal(AppSettings.BrainThresholdDefault, s.BrainThreshold);
         Assert.True(s.BrainShowClipboard && s.BrainShowNotes && s.BrainShowRecordings);
         Assert.True(s.BrainEdgeSemantic && s.BrainEdgeTime && s.BrainEdgeSession && s.BrainEdgeDomain);
+        Assert.True(s.BrainEdgeManual);
         Assert.False(s.BrainFocus);
     }
 
@@ -26,6 +27,7 @@ public class AppSettingsBrainTests
             BrainThreshold = 0.91,
             BrainShowRecordings = false,
             BrainEdgeTime = false,
+            BrainEdgeManual = false,
             BrainFocus = true,
         };
 
@@ -34,6 +36,7 @@ public class AppSettingsBrainTests
         Assert.Equal(0.91, back.BrainThreshold);
         Assert.False(back.BrainShowRecordings);
         Assert.False(back.BrainEdgeTime);
+        Assert.False(back.BrainEdgeManual);
         Assert.True(back.BrainFocus);
         Assert.True(back.BrainShowClipboard);
     }

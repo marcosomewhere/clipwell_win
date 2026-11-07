@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using ClipwellWin.Services;
-using Brush = System.Windows.Media.Brush;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Cursors = System.Windows.Input.Cursors;
 using Brushes = System.Windows.Media.Brushes;
@@ -82,7 +81,7 @@ public sealed class BrainCanvas : FrameworkElement
     /// <summary>Nodes drawn at full strength; everything else is dimmed. Null shows all.</summary>
     public IReadOnlySet<int>? Highlight { get; private set; }
 
-    public HashSet<GraphEdgeKind> VisibleEdgeKinds { get; } = [GraphEdgeKind.Semantic, GraphEdgeKind.Time, GraphEdgeKind.Session, GraphEdgeKind.Domain];
+    public HashSet<GraphEdgeKind> VisibleEdgeKinds { get; } = [GraphEdgeKind.Semantic, GraphEdgeKind.Time, GraphEdgeKind.Session, GraphEdgeKind.Domain, GraphEdgeKind.Summary, GraphEdgeKind.Manual, GraphEdgeKind.Category];
 
     public static Color ClusterColor(int cluster) => cluster < 0 ? Unclustered : Palette[cluster % Palette.Length];
 
@@ -129,7 +128,18 @@ public sealed class BrainCanvas : FrameworkElement
 
     public void FitToView()
     {
+        UserMovedView = false;
         _fitted = false;
+        InvalidateVisual();
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        if (UserMovedView)
+            _offset += new Vector((sizeInfo.NewSize.Width - sizeInfo.PreviousSize.Width) / 2,
+                (sizeInfo.NewSize.Height - sizeInfo.PreviousSize.Height) / 2);
+        else _fitted = false;
         InvalidateVisual();
     }
 
@@ -212,8 +222,8 @@ public sealed class BrainCanvas : FrameworkElement
 
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         DrawEdges(dc);
-        DrawNodes(dc, dpi);
-        DrawClusterLabels(dc, dpi);
+        DrawNodes(dc);
+        if (SelectedNode < 0) DrawClusterLabels(dc, dpi);
         DrawNodeLabels(dc, dpi);
     }
 
@@ -240,6 +250,10 @@ public sealed class BrainCanvas : FrameworkElement
                     ? ClusterColor(_graph.Nodes[e.A].Cluster) : Color.FromRgb(0xB0, 0xB0, 0xB0),
                 GraphEdgeKind.Time => Color.FromRgb(0x64, 0xB5, 0xF6),
                 GraphEdgeKind.Session => Color.FromRgb(0xE0, 0xE0, 0xE0),
+                GraphEdgeKind.Summary => Color.FromRgb(0xFF, 0xB7, 0x4D),
+                GraphEdgeKind.Manual => Color.FromRgb(0xBA, 0xA0, 0xFF),
+                GraphEdgeKind.Category => _graph.Nodes[e.A].Cluster == _graph.Nodes[e.B].Cluster && _graph.Nodes[e.A].Cluster >= 0
+                    ? ClusterColor(_graph.Nodes[e.A].Cluster) : Color.FromRgb(0x4D, 0xD0, 0xE1),
                 _ => Color.FromRgb(0x81, 0xC7, 0x84),
             };
             if (selected) color = Accent;
@@ -256,6 +270,16 @@ public sealed class BrainCanvas : FrameworkElement
             }
             ctx.BeginFigure(a, false, false);
             ctx.LineTo(b, true, false);
+            if (e.Directed && (b - a).Length > 24)
+            {
+                var direction = b - a;
+                direction.Normalize();
+                var tip = a + (b - a) * 0.72;
+                var side = new Vector(-direction.Y, direction.X) * 3.5;
+                ctx.BeginFigure(tip - direction * 7 + side, false, false);
+                ctx.LineTo(tip, true, false);
+                ctx.LineTo(tip - direction * 7 - side, true, false);
+            }
         }
 
         foreach (var (key, ctx) in contexts)
@@ -269,7 +293,7 @@ public sealed class BrainCanvas : FrameworkElement
         }
     }
 
-    private void DrawNodes(DrawingContext dc, double dpi)
+    private void DrawNodes(DrawingContext dc)
     {
         var neighbors = SelectedNode >= 0 ? _graph!.Neighborhood(SelectedNode, 1) : null;
         var order = Enumerable.Range(0, _graph!.Nodes.Count)
@@ -316,32 +340,70 @@ public sealed class BrainCanvas : FrameworkElement
 
     private void DrawClusterLabels(DrawingContext dc, double dpi)
     {
-        foreach (var cluster in _graph!.Clusters)
+        var placed = new List<Rect>();
+        foreach (var cluster in _graph!.Clusters.OrderByDescending(c => c.Members.Count))
         {
             if (cluster.Members.Count < 3) continue;
             var lit = cluster.Members.Any(IsLit);
             var cx = cluster.Members.Average(i => _x[i]) * _zoom + _offset.X;
             var cy = cluster.Members.Min(i => _y[i]) * _zoom + _offset.Y - 22;
             var color = ClusterColor(cluster.Id);
-            var text = new FormattedText(cluster.Label, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
+            var label = cluster.Label.Length > 32 ? cluster.Label[..32] + "…" : cluster.Label;
+            var text = new FormattedText(label, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
                 LabelFace, 12.5, BrushOf(color, lit ? (byte)255 : (byte)70), dpi);
-            var rect = new Rect(cx - text.Width / 2 - 8, cy - 3, text.Width + 16, text.Height + 6);
+            var rect = new Rect(Math.Clamp(cx - text.Width / 2 - 8, 4, Math.Max(4, ActualWidth - text.Width - 20)),
+                cy - 3, text.Width + 16, text.Height + 6);
+            var fits = false;
+            foreach (var offset in new[] { 0, -28, 28, -56, 56 })
+            {
+                var candidate = rect;
+                candidate.Offset(0, offset);
+                if (candidate.Top < 2 || candidate.Bottom > ActualHeight - 2 || placed.Any(r => r.IntersectsWith(candidate))) continue;
+                rect = candidate;
+                fits = true;
+                break;
+            }
+            if (!fits) continue;
+            var reserved = rect;
+            reserved.Inflate(4, 3);
+            placed.Add(reserved);
             dc.DrawRoundedRectangle(BrushOf(Color.FromRgb(0x14, 0x14, 0x14), lit ? (byte)220 : (byte)90),
                 new Pen(BrushOf(color, lit ? (byte)140 : (byte)40), 1), rect, 9, 9);
             dc.DrawText(text, new Point(rect.X + 8, rect.Y + 3));
+        }
+
+        // Category view: subcategories as smaller labels at the centre of their members, where space is left.
+        foreach (var cluster in _graph.Clusters)
+        {
+            foreach (var sub in cluster.Subgroups.Where(s => s.Members.Count >= 3))
+            {
+                var lit = sub.Members.Any(IsLit);
+                var color = ClusterColor(cluster.Id);
+                var label = "› " + (sub.Name.Length > 28 ? sub.Name[..28] + "…" : sub.Name);
+                var text = new FormattedText(label, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
+                    LabelFace, 11, BrushOf(color, lit ? (byte)230 : (byte)60), dpi);
+                var cx = sub.Members.Average(i => _x[i]) * _zoom + _offset.X;
+                var cy = sub.Members.Average(i => _y[i]) * _zoom + _offset.Y;
+                var rect = new Rect(cx - text.Width / 2 - 6, cy - text.Height / 2 - 2, text.Width + 12, text.Height + 4);
+                if (rect.Top < 2 || rect.Bottom > ActualHeight - 2 || rect.Left < 2 || rect.Right > ActualWidth - 2
+                    || placed.Any(r => r.IntersectsWith(rect))) continue;
+                placed.Add(rect);
+                dc.DrawRoundedRectangle(BrushOf(Color.FromRgb(0x14, 0x14, 0x14), lit ? (byte)200 : (byte)80),
+                    new Pen(BrushOf(color, lit ? (byte)90 : (byte)30), 1), rect, 7, 7);
+                dc.DrawText(text, new Point(rect.X + 6, rect.Y + 2));
+            }
         }
     }
 
     private void DrawNodeLabels(DrawingContext dc, double dpi)
     {
         var labelled = new HashSet<int>();
-        if (SelectedNode >= 0) labelled.UnionWith(_graph!.Neighborhood(SelectedNode, 1));
+        if (SelectedNode >= 0) labelled.Add(SelectedNode);
         if (HoverNode >= 0) labelled.Add(HoverNode);
-        if (Highlight != null && Highlight.Count <= 40) labelled.UnionWith(Highlight);
-        if (_zoom >= 1.3)
-            labelled.UnionWith(Enumerable.Range(0, _graph!.Nodes.Count).Where(i => _graph.Nodes[i].Degree >= 6 && IsLit(i)));
+        // Neighbor titles belong in the side list; drawing them all hides the selected hub.
 
-        foreach (var i in labelled)
+        var occupied = new List<Rect>();
+        foreach (var i in labelled.OrderByDescending(i => i == SelectedNode))
         {
             var p = ToScreen(i);
             if (p.X < -100 || p.Y < -30 || p.X > ActualWidth + 100 || p.Y > ActualHeight + 30) continue;
@@ -350,8 +412,20 @@ public sealed class BrainCanvas : FrameworkElement
             var strong = i == SelectedNode || i == HoverNode;
             var text = new FormattedText(title, CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
                 strong ? LabelFace : NodeFace, strong ? 12.5 : 11, strong ? Brushes.White : BrushOf(Color.FromRgb(0xD8, 0xD2, 0xCA), 230), dpi);
-            var at = new Point(p.X + Radius(i) + 6, p.Y - text.Height / 2);
-            dc.DrawRoundedRectangle(BrushOf(Background, 190), null, new Rect(at.X - 3, at.Y - 1, text.Width + 6, text.Height + 2), 3, 3);
+            text.MaxTextWidth = Math.Max(40, ActualWidth - 20);
+            text.MaxLineCount = 1;
+            text.Trimming = TextTrimming.CharacterEllipsis;
+            var at = new Point(Math.Clamp(p.X + Radius(i) + 6, 4, Math.Max(4, ActualWidth - text.Width - 5)),
+                Math.Clamp(p.Y - text.Height / 2, 3, Math.Max(3, ActualHeight - text.Height - 3)));
+            var box = new Rect(at.X - 3, at.Y - 1, text.Width + 6, text.Height + 2);
+            if (occupied.Any(r => r.IntersectsWith(box)))
+            {
+                at.Y += text.Height + 6;
+                box.Offset(0, text.Height + 6);
+                if (box.Bottom > ActualHeight) continue;
+            }
+            occupied.Add(box);
+            dc.DrawRoundedRectangle(BrushOf(Background, 230), null, box, 3, 3);
             dc.DrawText(text, at);
         }
     }

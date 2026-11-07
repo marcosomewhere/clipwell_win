@@ -1,9 +1,10 @@
 using System.Globalization;
+using ClipwellWin.Models;
 
 namespace ClipwellWin.Services;
 
 /// <summary>Why two knowledge items are linked.</summary>
-public enum GraphEdgeKind { Semantic, Time, Session, Domain }
+public enum GraphEdgeKind { Semantic, Time, Session, Domain, Summary, Manual, Category }
 
 public sealed class GraphNode
 {
@@ -23,10 +24,18 @@ public sealed class GraphNode
 
 public sealed record GraphEdge(int A, int B, GraphEdgeKind Kind, float Weight, string Detail)
 {
+    public bool Directed { get; init; }
     public int Other(int node) => node == A ? B : A;
 }
 
-public sealed record GraphCluster(int Id, string Label, IReadOnlyList<string> Keywords, IReadOnlyList<int> Members);
+public sealed record GraphCluster(int Id, string Label, IReadOnlyList<string> Keywords, IReadOnlyList<int> Members)
+{
+    public string Category { get; init; } = "";
+    /// <summary>Category view only: the subcategories of this main category with their members.</summary>
+    public IReadOnlyList<GraphSubgroup> Subgroups { get; init; } = [];
+}
+
+public sealed record GraphSubgroup(string Name, IReadOnlyList<int> Members);
 
 public sealed record BrainOptions
 {
@@ -36,6 +45,11 @@ public sealed record BrainOptions
     public int TimeNeighbors { get; init; } = 3;
     public int MaxNodes { get; init; } = 1000;
     public IReadOnlySet<SemanticSource>? Sources { get; init; }
+    public IReadOnlyDictionary<string, BrainAnnotation>? Annotations { get; init; }
+    public IReadOnlyDictionary<string, IReadOnlyList<string>>? SummarySources { get; init; }
+    public IReadOnlyList<BrainRelation>? Relations { get; init; }
+    /// <summary>Clusters are the saved main categories instead of automatic topics.</summary>
+    public bool GroupByCategory { get; init; }
 }
 
 /// <summary>The knowledge network: items as nodes, typed links as edges, topics as clusters.</summary>
@@ -99,6 +113,9 @@ public sealed class BrainGraph
         GraphEdgeKind.Semantic => e.Weight,
         GraphEdgeKind.Session => 0.9f,
         GraphEdgeKind.Time => 0.7f + 0.2f * e.Weight,
+        GraphEdgeKind.Summary => 1f,
+        GraphEdgeKind.Manual => 1f,
+        GraphEdgeKind.Category => 0.8f,
         _ => 0.75f,
     };
 }
@@ -114,6 +131,9 @@ public static class KnowledgeGraph
         GraphEdgeKind.Semantic => "inhaltlich",
         GraphEdgeKind.Time => "zeitlich",
         GraphEdgeKind.Session => "gleiche Aufnahme",
+        GraphEdgeKind.Summary => "Zusammenfassung",
+        GraphEdgeKind.Manual => "manuell gepflegt",
+        GraphEdgeKind.Category => "gleiche Kategorie",
         _ => "gleiche Webseite",
     };
 
@@ -134,13 +154,50 @@ public static class KnowledgeGraph
         AddSessionEdges(nodes, Add);
         AddTimeEdges(nodes, options, Add);
         AddDomainEdges(nodes, Add);
+        var paths = nodes.Select(n => KnowledgeCategories.Effective(options.Annotations, n.ItemKey)).ToArray();
+        // Only in the category view: these links pull categories together, which would distort the topic layout.
+        if (options.GroupByCategory) AddCategoryEdges(nodes, paths, Add);
+        if (options.SummarySources != null)
+        {
+            var byKey = nodes.ToDictionary(n => n.ItemKey, n => n.Index);
+            foreach (var (summary, sources) in options.SummarySources)
+                if (byKey.TryGetValue(summary, out var target))
+                    foreach (var key in sources)
+                        if (byKey.TryGetValue(key, out var source))
+                            Add(target, source, GraphEdgeKind.Summary, 1f, "Zusammenfassung dieser Quelle");
+        }
+
+        if (options.Relations != null)
+        {
+            var byKey = nodes.ToDictionary(n => n.ItemKey, n => n.Index);
+            foreach (var relation in options.Relations)
+                if (byKey.TryGetValue(relation.FromKey, out var from) && byKey.TryGetValue(relation.ToKey, out var to)
+                    && from != to && !string.IsNullOrWhiteSpace(relation.Kind))
+                    edges.Add(new GraphEdge(from, to, GraphEdgeKind.Manual, 1f,
+                        $"manuell: {nodes[from].Item.Title} → {relation.Kind} → {nodes[to].Item.Title}") { Directed = true });
+        }
 
         foreach (var e in edges)
         {
             nodes[e.A].Degree++;
             nodes[e.B].Degree++;
         }
+        if (options.GroupByCategory) return new BrainGraph(nodes, edges, CategoryClusters(nodes, paths));
         var clusters = Cluster(nodes, edges);
+        if (options.Annotations is { } annotations)
+        {
+            for (var i = 0; i < clusters.Count; i++)
+            {
+                var c = clusters[i];
+                var saved = c.Members.Select(m => annotations.GetValueOrDefault(nodes[m].ItemKey))
+                    .Where(a => a != null).Cast<BrainAnnotation>().ToList();
+                string MostCommon(IEnumerable<string> values) => values.Where(v => !string.IsNullOrWhiteSpace(v))
+                    .GroupBy(v => v, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count())
+                    .ThenBy(g => g.Key, StringComparer.Ordinal).Select(g => g.Key).FirstOrDefault() ?? "";
+                var name = MostCommon(saved.Select(a => a.Name));
+                clusters[i] = c with { Label = name.Length > 0 ? name : c.Label, Category = MostCommon(c.Members.Select(m => paths[m].Main)) };
+            }
+        }
         return new BrainGraph(nodes, edges, clusters);
     }
 
@@ -258,6 +315,56 @@ public static class KnowledgeGraph
         }
     }
 
+    /// <summary>
+    /// Items of one category path are chained in time order (no cliques); the first item of every subcategory is
+    /// linked to the first item of the main category, so subcategories sit inside their main category.
+    /// </summary>
+    private static void AddCategoryEdges(List<GraphNode> nodes, CategoryPath[] paths, Action<int, int, GraphEdgeKind, float, string> add)
+    {
+        foreach (var main in Enumerable.Range(0, nodes.Count).Where(i => !paths[i].IsEmpty)
+                     .GroupBy(i => paths[i].Main, StringComparer.OrdinalIgnoreCase))
+        {
+            var heads = new List<int>();
+            foreach (var group in main.GroupBy(i => paths[i].Sub, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key.Length > 0))
+            {
+                var ordered = group.OrderBy(i => nodes[i].Item.Date).ThenBy(i => i).ToList();
+                var label = paths[ordered[0]].ToString();
+                for (var k = 1; k < ordered.Count; k++)
+                    add(ordered[k - 1], ordered[k], GraphEdgeKind.Category, 1f, "gleiche Kategorie " + label);
+                heads.Add(ordered[0]);
+            }
+            for (var k = 1; k < heads.Count; k++)
+                add(heads[0], heads[k], GraphEdgeKind.Category, 0.6f, "gleiche Hauptkategorie " + main.Key);
+        }
+    }
+
+    /// <summary>Category view: one cluster per saved main category (largest first); items without category stay unassigned.</summary>
+    public static List<GraphCluster> CategoryClusters(IReadOnlyList<GraphNode> nodes, IReadOnlyList<CategoryPath> paths)
+    {
+        foreach (var node in nodes) node.Cluster = -1;
+        var groups = Enumerable.Range(0, nodes.Count).Where(i => !paths[i].IsEmpty)
+            .GroupBy(i => paths[i].Main, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var clusters = new List<GraphCluster>();
+        foreach (var g in groups)
+        {
+            var id = clusters.Count;
+            var members = g.ToList();
+            foreach (var m in members) nodes[m].Cluster = id;
+            var subgroups = members.Where(m => paths[m].HasSub).GroupBy(m => paths[m].Sub, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(s => s.Count()).ThenBy(s => s.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(s => new GraphSubgroup(Spelling(s.Select(m => paths[m].Sub)), s.ToList())).ToList();
+            var name = Spelling(members.Select(m => paths[m].Main));
+            clusters.Add(new GraphCluster(id, name, subgroups.Select(s => s.Name).ToList(), members) { Category = name, Subgroups = subgroups });
+        }
+        return clusters;
+    }
+
+    /// <summary>Most frequent spelling of a name that is compared case-insensitively.</summary>
+    private static string Spelling(IEnumerable<string> names) => names.GroupBy(n => n, StringComparer.Ordinal)
+        .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
+
     // ---- Topics ----------------------------------------------------------------------------------------------
 
     /// <summary>
@@ -275,6 +382,7 @@ public static class KnowledgeGraph
             {
                 GraphEdgeKind.Semantic => e.Weight,
                 GraphEdgeKind.Session => 0.5f,
+                GraphEdgeKind.Summary => 0.9f,
                 _ => 0f,
             };
             if (w <= 0) continue;
@@ -307,7 +415,13 @@ public static class KnowledgeGraph
             .Select(g => g.ToList())
             .ToList();
 
-        var documentTerms = nodes.Select(x => TopicTerms(x.Item.Title + "\n" + x.Text)).ToList();
+        var documentTerms = nodes.Select(x => TopicTerms(x.Source == SemanticSource.Recording
+            ? string.Join('\n', x.Text.Split('\n').Where(line => line.Trim() != x.Item.Title.Trim()))
+            : x.Item.Title + "\n" + x.Text)).ToList();
+        // Copies of the same content must not outvote independent sources when naming a topic.
+        var uniqueTexts = nodes.Select(x => string.Join(' ', SemanticRanking.Terms(x.Text))).ToArray();
+        foreach (var group in Enumerable.Range(0, n).GroupBy(i => uniqueTexts[i]).Where(g => g.Count() > 1))
+            foreach (var duplicate in group.Skip(1)) documentTerms[duplicate] = [];
         var df = new Dictionary<string, int>();
         foreach (var terms in documentTerms)
             foreach (var t in terms) df[t] = df.GetValueOrDefault(t) + 1;
@@ -331,7 +445,8 @@ public static class KnowledgeGraph
         var inCluster = new Dictionary<string, int>();
         foreach (var m in members)
             foreach (var t in documentTerms[m]) inCluster[t] = inCluster.GetValueOrDefault(t) + 1;
-        var minCount = members.Count >= 3 ? 2 : 1;
+        var documents = members.Count(m => documentTerms[m].Count > 0);
+        var minCount = documents >= 3 ? 2 : 1;
         return inCluster
             .Where(kv => kv.Value >= minCount)
             .Select(kv => (Term: kv.Key, Score: (double)kv.Value / members.Count * Math.Log((total + 1.0) / (df[kv.Key] + 0.5))))
@@ -341,9 +456,20 @@ public static class KnowledgeGraph
             .ToList();
     }
 
+    private static readonly HashSet<string> TopicNoise = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "strg", "ctrl", "shift", "alt", "enter", "esc", "escape", "click", "klicken", "öffnen", "oeffnen",
+        "schließen", "schliessen", "auswählen", "auswaehlen", "speichern", "kopieren", "einfügen", "einfuegen",
+        "neueste", "gepinnt", "dashboard", "gesamtübersicht", "zwischenablage", "sprechwerk", "ideenkombinat",
+        "merkautomat", "clipwell", "datei", "bearbeiten", "ansicht", "menü", "menu", "fenster", "text", "bild",
+        "eigentlich", "einfach", "gerade", "irgendwie", "natürlich", "vielleicht", "schon", "noch", "dann",
+        "quelle", "quellen", "kernaussagen", "kategorie", "originalaussagen", "ausgewählte", "markierten",
+        "zusammenfassung", "gesamtaussage", "eintrag", "einträge", "eintraege", "formulierte",
+    };
+
     private static HashSet<string> TopicTerms(string text)
         => SemanticRanking.Terms(text)
-            .Where(t => t.Length >= 4 && !t.All(char.IsDigit) && !t.StartsWith("http", StringComparison.Ordinal))
+            .Where(t => t.Length >= 4 && !TopicNoise.Contains(t) && !t.All(char.IsDigit) && !t.StartsWith("http", StringComparison.Ordinal))
             .Take(400)
             .ToHashSet();
 
@@ -454,6 +580,7 @@ public sealed class ForceLayout
                 GraphEdgeKind.Semantic => 0.4 + e.Weight,
                 GraphEdgeKind.Session => 0.8,
                 GraphEdgeKind.Time => 0.25,
+                GraphEdgeKind.Category => 0.5,
                 _ => 0.2,
             };
             var vx = X[e.A] - X[e.B];

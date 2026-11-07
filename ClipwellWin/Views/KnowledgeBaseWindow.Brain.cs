@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ClipwellWin.Services;
+using ClipwellWin.Models;
 using Brush = System.Windows.Media.Brush;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
@@ -21,6 +22,22 @@ public partial class KnowledgeBaseWindow
         public required Brush Brush { get; init; }
         public int Node { get; init; } = -1;
         public int Cluster { get; init; } = -1;
+        /// <summary>Subcategory row in the category view: its members are highlighted.</summary>
+        public IReadOnlyList<int>? Members { get; init; }
+    }
+
+    private IReadOnlyList<int>? _brainSubMembers;
+    private bool _brainGroupingLoading;
+    private bool ByCategory => BrainGroupCategories.IsChecked == true;
+
+    private void BrainGrouping_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_brainGroupingLoading || BrainGroupCategories == null || BrainBackButton == null) return;
+        BrainBackButton.Content = ByCategory ? "Zurück zu Kategorien" : "Zurück zu Themen";
+        if (!IsLoaded) return;
+        SaveBrainSettings();
+        // Topics and categories group differently, so the layout starts fresh.
+        RebuildBrain(keepLayout: false);
     }
 
     private BrainGraph? _brain;
@@ -34,6 +51,23 @@ public partial class KnowledgeBaseWindow
     private bool _brainLayoutRunning;
     private bool _brainListUpdating;
     private bool _brainBuilding;
+    private bool _brainPreviewExpanded;
+    private GridLength _libraryWidth = new(400);
+    private bool _libraryCollapsed;
+
+    private void UpdateBrainLibrary()
+    {
+        var collapsed = _view == KbView.Brain && BrainLibraryToggle.IsChecked != true;
+        BrainLibraryToggle.Visibility = _view == KbView.Brain ? Visibility.Visible : Visibility.Collapsed;
+        if (collapsed && !_libraryCollapsed) _libraryWidth = LibraryColumn.Width;
+        LibraryColumn.MinWidth = collapsed ? 210 : 380;
+        if (collapsed) LibraryColumn.Width = new GridLength(210);
+        else if (_libraryCollapsed) LibraryColumn.Width = _libraryWidth;
+        LibraryPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        _libraryCollapsed = collapsed;
+    }
+
+    private void BrainLibrary_Click(object sender, RoutedEventArgs e) => UpdateBrainLibrary();
 
     private void InitBrain()
     {
@@ -69,7 +103,14 @@ public partial class KnowledgeBaseWindow
         BrainEdgeTime.IsChecked = s.BrainEdgeTime;
         BrainEdgeSession.IsChecked = s.BrainEdgeSession;
         BrainEdgeDomain.IsChecked = s.BrainEdgeDomain;
+        BrainEdgeSummary.IsChecked = s.BrainEdgeSummary;
+        BrainEdgeManual.IsChecked = s.BrainEdgeManual;
+        BrainEdgeCategory.IsChecked = s.BrainEdgeCategory;
         BrainFocus.IsChecked = s.BrainFocus;
+        _brainGroupingLoading = true;
+        (s.BrainGroupByCategory ? BrainGroupCategories : BrainGroupTopics).IsChecked = true;
+        _brainGroupingLoading = false;
+        BrainBackButton.Content = ByCategory ? "Zurück zu Kategorien" : "Zurück zu Themen";
         ApplyBrainEdgeFilter();
     }
 
@@ -84,6 +125,10 @@ public partial class KnowledgeBaseWindow
         s.BrainEdgeTime = BrainEdgeTime.IsChecked == true;
         s.BrainEdgeSession = BrainEdgeSession.IsChecked == true;
         s.BrainEdgeDomain = BrainEdgeDomain.IsChecked == true;
+        s.BrainEdgeSummary = BrainEdgeSummary.IsChecked == true;
+        s.BrainEdgeManual = BrainEdgeManual.IsChecked == true;
+        s.BrainEdgeCategory = BrainEdgeCategory.IsChecked == true;
+        s.BrainGroupByCategory = BrainGroupCategories.IsChecked == true;
         s.BrainFocus = BrainFocus.IsChecked == true;
         try { _app.SaveSettings(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { App.LogCrash(ex); }
@@ -135,7 +180,15 @@ public partial class KnowledgeBaseWindow
         if (BrainSrcClipboard.IsChecked == true) sources.Add(SemanticSource.Clipboard);
         if (BrainSrcNotes.IsChecked == true) sources.Add(SemanticSource.Note);
         if (BrainSrcRecordings.IsChecked == true) sources.Add(SemanticSource.Recording);
-        return new BrainOptions { SemanticThreshold = (float)Math.Round(BrainThreshold.Value, 2), Sources = sources };
+        return new BrainOptions
+        {
+            SemanticThreshold = (float)Math.Round(BrainThreshold.Value, 2), Sources = sources,
+            Annotations = new Dictionary<string, BrainAnnotation>(_app.CurrentSettings.BrainAnnotations ?? []),
+            Relations = (_app.CurrentSettings.BrainRelations ?? []).ToArray(),
+            SummarySources = (_app.CurrentSettings.BrainSummaries ?? []).GroupBy(s => "n:" + s.NoteId + ".md")
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Last().SourceKeys.ToArray()),
+            GroupByCategory = BrainGroupCategories.IsChecked == true,
+        };
     }
 
     // ---- Build and layout ------------------------------------------------------------------------------------
@@ -182,9 +235,11 @@ public partial class KnowledgeBaseWindow
         _brainBuilding = false;
 
         _brain = graph;
+        BrainRelationsButton.IsEnabled = graph.Nodes.Count > 0;
         _brainSearchHits = null;
         _brainSearchInfo = null;
         _brainCluster = -1;
+        _brainSubMembers = null;
         var warm = previous != null && previous.Count > 0;
         BrainCanvasView.SetGraph(graph, layout.X, layout.Y, keepView: warm);
         BrainEmpty.Visibility = graph.Nodes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -236,6 +291,9 @@ public partial class KnowledgeBaseWindow
 
     private void UpdateBrainStatus()
     {
+        var sourceCount = new[] { BrainSrcClipboard, BrainSrcNotes, BrainSrcRecordings }.Count(c => c.IsChecked == true);
+        var edgeCount = new[] { BrainEdgeSemantic, BrainEdgeTime, BrainEdgeSession, BrainEdgeDomain, BrainEdgeSummary, BrainEdgeManual, BrainEdgeCategory }.Count(c => c.IsChecked == true);
+        BrainFilters.Header = $"Filter · {sourceCount} Quellen · {edgeCount} Bezugsarten · ab {BrainThreshold.Value * 100:0} %";
         if (_view != KbView.Brain) return;
         if (!_semanticModelInstalled)
         {
@@ -246,8 +304,11 @@ public partial class KnowledgeBaseWindow
         if (_brain != null)
         {
             parts.Add($"{_brain.Nodes.Count:N0} Einträge");
-            parts.Add($"{_brain.Edges.Count:N0} Verknüpfungen");
-            parts.Add($"{_brain.Clusters.Count:N0} Themen");
+            parts.Add($"{_brain.Edges.Count(e => BrainCanvasView.VisibleEdgeKinds.Contains(e.Kind)):N0} sichtbare Verknüpfungen");
+            var manualCount = BrainCanvasView.VisibleEdgeKinds.Contains(GraphEdgeKind.Manual)
+                ? _brain.Edges.Count(e => e.Kind == GraphEdgeKind.Manual) : 0;
+            if (manualCount > 0) parts.Add($"davon {manualCount} manuell (gerichtet)");
+            parts.Add(ByCategory ? $"{_brain.Clusters.Count:N0} Kategorien" : $"{_brain.Clusters.Count:N0} Themen");
         }
         if (_brainSearchInfo != null) parts.Add(_brainSearchInfo);
         if (_brainBuilding) parts.Add("baue Netz ...");
@@ -273,21 +334,29 @@ public partial class KnowledgeBaseWindow
     {
         if (_brain == null || node < 0 || node >= _brain.Nodes.Count) return;
         _brainCluster = -1;
+        _brainSubMembers = null;
         BrainCanvasView.Select(node);
         var n = _brain.Nodes[node];
-        var cluster = _brain.ClusterOf(node);
-
         BrainDetail.Visibility = Visibility.Visible;
+        BrainDetailRow.Height = new GridLength(2, GridUnitType.Star);
+        BrainManageButton.IsEnabled = true;
         BrainDetailTitle.Text = n.Item.Title;
+        BrainActionHint.Text = "Ausgewählter Eintrag und seine Verbindungen";
         BrainDetailMeta.Text = $"{SemanticChunk.SourceName(n.Source)} · {n.Item.Date.ToString("dd.MM.yyyy HH:mm", De)}"
-            + (cluster != null ? $" · Thema: {cluster.Label}" : " · ohne Thema")
-            + $" · {n.Degree} Verknüpfungen";
-        var text = n.Source == SemanticSource.Recording ? StripRecordingTitles(n) : n.Text;
-        BrainDetailText.Text = text.Length > 2000 ? text[..2000] + " …" : text;
+            + (KnowledgeCategories.Effective(_app.CurrentSettings.BrainAnnotations, n.ItemKey) is { IsEmpty: false } path
+                ? $" · Kategorie: {path}" : "")
+            + $" · {n.Degree} Verknüpfungen insgesamt";
+        _brainPreviewExpanded = false;
+        BrainDetailText.MaxLines = 6;
+        BrainDetailText.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        BrainDetailText.Text = ReadBrainPreview(n);
         BrainDetailText.ScrollToHome();
+        Dispatcher.BeginInvoke(UpdateBrainPreviewButton, DispatcherPriority.Loaded);
 
-        var neighbors = _brain.Neighbors(node);
-        BrainLinksHeader.Text = $"VERKNÜPFUNGEN ({neighbors.Count})";
+        var neighbors = _brain.Neighbors(node)
+            .Select(x => (x.Node, Edges: x.Edges.Where(e => BrainCanvasView.VisibleEdgeKinds.Contains(e.Kind)).ToList()))
+            .Where(x => x.Edges.Count > 0).ToList();
+        BrainLinksHeader.Text = $"SICHTBARE VERKNÜPFUNGEN ({neighbors.Count})";
         SetBrainList(neighbors.Select(x =>
         {
             var other = _brain.Nodes[x.Node];
@@ -313,10 +382,51 @@ public partial class KnowledgeBaseWindow
         return label + "\n\n" + string.Join("\n", lines);
     }
 
+    private string ReadBrainPreview(GraphNode node)
+    {
+        try
+        {
+            if (node.Source == SemanticSource.Note && node.Item.FilePath is { } path && File.Exists(path))
+                return NoteStore.KbBody(File.ReadAllText(path));
+            if (node.Source == SemanticSource.Clipboard)
+            {
+                var entry = _app.SnapshotEntries().FirstOrDefault(e => e.Id == node.Item.EntryId);
+                if (entry != null) return entry.Type == EntryType.Image ? entry.OcrText ?? "" : entry.Content ?? "";
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { App.LogCrash(ex); }
+        return node.Source == SemanticSource.Recording ? StripRecordingTitles(node) : node.Text;
+    }
+
+    private void BrainPreview_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (BrainPreviewMore != null) Dispatcher.BeginInvoke(UpdateBrainPreviewButton, DispatcherPriority.Loaded);
+    }
+
+    private void UpdateBrainPreviewButton()
+    {
+        BrainPreviewMore.Visibility = _brainPreviewExpanded || BrainDetailText.LineCount > 6 ? Visibility.Visible : Visibility.Collapsed;
+        BrainPreviewMore.Content = _brainPreviewExpanded ? "Weniger anzeigen" : "Mehr anzeigen";
+    }
+
+    private void BrainPreviewMore_Click(object sender, RoutedEventArgs e)
+    {
+        _brainPreviewExpanded = !_brainPreviewExpanded;
+        BrainDetailText.MaxLines = _brainPreviewExpanded ? 14 : 6;
+        BrainDetailText.VerticalScrollBarVisibility = _brainPreviewExpanded ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        if (!_brainPreviewExpanded) BrainDetailText.ScrollToHome();
+        UpdateBrainPreviewButton();
+    }
+
     private void ShowBrainOverview()
     {
+        _brainCluster = -1;
+        _brainSubMembers = null;
+        BrainManageButton.IsEnabled = false;
+        BrainActionHint.Text = ByCategory ? "Eine Kategorie oder einen Eintrag auswählen." : "Ein Thema oder einen Eintrag auswählen.";
         BrainCanvasView.Select(-1);
         BrainDetail.Visibility = Visibility.Collapsed;
+        BrainDetailRow.Height = new GridLength(0);
         if (_brain == null)
         {
             BrainLinksHeader.Text = "THEMEN";
@@ -324,12 +434,17 @@ public partial class KnowledgeBaseWindow
             return;
         }
         var unassigned = _brain.Nodes.Count(n => n.Cluster < 0);
+        if (ByCategory)
+        {
+            ShowBrainCategories(unassigned);
+            return;
+        }
         BrainLinksHeader.Text = $"THEMEN ({_brain.Clusters.Count})" + (unassigned > 0 ? $" · {unassigned} Einträge ohne Thema" : "");
-        SetBrainList(_brain.Clusters.Select(c => new BrainListItem
+        SetBrainList(_brain.Clusters.OrderBy(c => c.Category).ThenByDescending(c => c.Members.Count).Select(c => new BrainListItem
         {
             Cluster = c.Id,
             Title = c.Label,
-            Meta = $"{c.Members.Count} Einträge · " + string.Join(", ", c.Members
+            Meta = (c.Category.Length > 0 ? $"{c.Category} · " : "") + $"{c.Members.Count} Einträge · " + string.Join(", ", c.Members
                 .GroupBy(m => _brain.Nodes[m].Source)
                 .OrderByDescending(g => g.Count())
                 .Select(g => $"{g.Count()} {SourcePlural(g.Key)}")),
@@ -337,6 +452,41 @@ public partial class KnowledgeBaseWindow
         }).ToList());
         ApplyBrainHighlight();
     }
+
+    /// <summary>Category view: main categories, each followed by its subcategories (which highlight their members).</summary>
+    private void ShowBrainCategories(int unassigned)
+    {
+        BrainLinksHeader.Text = $"KATEGORIEN ({_brain!.Clusters.Count})" + (unassigned > 0 ? $" · {unassigned} Einträge ohne Kategorie (grau)" : "");
+        var items = new List<BrainListItem>();
+        foreach (var c in _brain.Clusters)
+        {
+            var withSub = c.Subgroups.Sum(s => s.Members.Count);
+            items.Add(new BrainListItem
+            {
+                Cluster = c.Id,
+                Title = c.Label,
+                Meta = $"{c.Members.Count} Einträge" + (c.Subgroups.Count > 0 ? $" · {c.Subgroups.Count} Unterkategorien" : "")
+                    + (withSub < c.Members.Count && c.Subgroups.Count > 0 ? $" · {c.Members.Count - withSub} ohne Unterkategorie" : "")
+                    + " · " + SourceBreakdown(c.Members),
+                Brush = BrushFor(c.Id),
+            });
+            items.AddRange(c.Subgroups.Select(s => new BrainListItem
+            {
+                Cluster = c.Id,
+                Members = s.Members,
+                Title = "    › " + s.Name,
+                Meta = $"    {s.Members.Count} Einträge · " + SourceBreakdown(s.Members),
+                Brush = BrushFor(c.Id),
+            }));
+        }
+        if (items.Count == 0)
+            BrainLinksHeader.Text = "KATEGORIEN · noch keine Einträge mit Kategorie. In der Bibliothek Einträge auswählen und Kategorie festlegen (Strg+Umschalt+K).";
+        SetBrainList(items);
+        ApplyBrainHighlight();
+    }
+
+    private string SourceBreakdown(IEnumerable<int> members) => string.Join(", ", members
+        .GroupBy(m => _brain!.Nodes[m].Source).OrderByDescending(g => g.Count()).Select(g => $"{g.Count()} {SourcePlural(g.Key)}"));
 
     private static string SourcePlural(SemanticSource source) => source switch
     {
@@ -369,7 +519,21 @@ public partial class KnowledgeBaseWindow
             return;
         }
         if (item.Cluster < 0 || item.Cluster >= _brain.Clusters.Count) return;
+        if (item.Members != null)
+        {
+            // A subcategory: highlighted only; actions work on topics and main categories.
+            _brainCluster = -1;
+            _brainSubMembers = item.Members;
+            BrainManageButton.IsEnabled = false;
+            BrainActionHint.Text = $"Unterkategorie: {_brain.Clusters[item.Cluster].Label} › {item.Title.Trim().TrimStart('›').Trim()}";
+            ApplyBrainHighlight();
+            BrainCanvasView.CenterOn(item.Members);
+            return;
+        }
         _brainCluster = item.Cluster;
+        _brainSubMembers = null;
+        BrainManageButton.IsEnabled = true;
+        BrainActionHint.Text = (ByCategory ? "Kategorie: " : "Thema: ") + item.Title;
         ApplyBrainHighlight();
         BrainCanvasView.CenterOn(_brain.Clusters[item.Cluster].Members);
     }
@@ -389,6 +553,10 @@ public partial class KnowledgeBaseWindow
         {
             lit = _brain.Neighborhood(selected, 2);
         }
+        else if (_brainSubMembers != null)
+        {
+            lit = [.. _brainSubMembers];
+        }
         else if (_brainCluster >= 0 && _brainCluster < _brain.Clusters.Count)
         {
             lit = [.. _brain.Clusters[_brainCluster].Members];
@@ -398,6 +566,21 @@ public partial class KnowledgeBaseWindow
     }
 
     // ---- Toolbar ---------------------------------------------------------------------------------------------
+
+    private void BrainOverview_Click(object sender, RoutedEventArgs e) => ShowBrainOverview();
+
+    private void BrainMeaning_Click(object sender, RoutedEventArgs e)
+    {
+        _brainSearchDebounce?.Stop();
+        _ = ApplyBrainMeaningSearchAsync();
+    }
+
+    private void BrainClearSearch_Click(object sender, RoutedEventArgs e)
+    {
+        BrainQuery.Clear();
+        ApplyBrainWordSearch();
+        BrainQuery.Focus();
+    }
 
     private void BrainQuery_TextChanged(object sender, TextChangedEventArgs e)
     {
@@ -440,9 +623,19 @@ public partial class KnowledgeBaseWindow
     private async Task ApplyBrainMeaningSearchAsync()
     {
         var query = BrainQuery.Text.Trim();
-        if (_brain == null || query.Length == 0) return;
+        if (_brain == null) return;
+        if (query.Length == 0)
+        {
+            _brainSearchHits = null;
+            _brainSearchInfo = "Für die Suche nach Bedeutung zuerst einen Suchtext eingeben";
+            ApplyBrainHighlight();
+            BrainQuery.Focus();
+            return;
+        }
         var graph = _brain;
         var index = _app.Semantic;
+        _brainSearchInfo = "suche nach Bedeutung …";
+        UpdateBrainStatus();
         List<SemanticHit> hits;
         try
         {
@@ -451,16 +644,21 @@ public partial class KnowledgeBaseWindow
         catch (Exception ex)
         {
             App.LogCrash(ex);
-            StatusLabel.Text = $"Suche fehlgeschlagen: {ex.Message}";
+            if (BrainQuery.Text.Trim() != query) return;
+            _brainSearchHits = null;
+            _brainSearchInfo = $"Suche nach Bedeutung fehlgeschlagen: {ex.Message}";
+            ApplyBrainHighlight();
             return;
         }
-        if (graph != _brain) return;
+        if (graph != _brain || BrainQuery.Text.Trim() != query) return;
         var byKey = graph.Nodes.ToDictionary(n => n.ItemKey, n => n.Index);
-        _brainSearchHits = hits.SelectMany(h => h.Duplicates.Prepend(h.Chunk))
-            .Select(c => byKey.TryGetValue(c.ItemKey, out var i) ? i : -1)
-            .Where(i => i >= 0)
-            .ToHashSet();
-        _brainSearchInfo = $"{_brainSearchHits.Count} Treffer nach Bedeutung";
+        var keys = hits.SelectMany(h => h.Duplicates.Prepend(h.Chunk)).Select(c => c.ItemKey).Distinct().ToList();
+        _brainSearchHits = keys.Where(byKey.ContainsKey).Select(k => byKey[k]).ToHashSet();
+        var outside = keys.Count - _brainSearchHits.Count;
+        _brainSearchInfo = keys.Count == 0 ? "keine Treffer nach Bedeutung"
+            : _brainSearchHits.Count == 0 ? $"{keys.Count} Treffer nach Bedeutung, aber keiner im angezeigten Netz (Quellenfilter oder älter als die neuesten 1000)"
+            : outside > 0 ? $"{_brainSearchHits.Count} Treffer nach Bedeutung im Netz, {outside} außerhalb"
+            : $"{_brainSearchHits.Count} Treffer nach Bedeutung";
         ApplyBrainHighlight();
         if (_brainSearchHits.Count > 0) BrainCanvasView.CenterOn(_brainSearchHits);
     }
@@ -477,6 +675,8 @@ public partial class KnowledgeBaseWindow
     {
         ApplyBrainEdgeFilter();
         SaveBrainSettings();
+        if (SelectedBrainNode is { } node) SelectBrainNode(node.Index, center: false);
+        UpdateBrainStatus();
     }
 
     private void ApplyBrainEdgeFilter()
@@ -490,6 +690,9 @@ public partial class KnowledgeBaseWindow
         Set(GraphEdgeKind.Time, BrainEdgeTime.IsChecked);
         Set(GraphEdgeKind.Session, BrainEdgeSession.IsChecked);
         Set(GraphEdgeKind.Domain, BrainEdgeDomain.IsChecked);
+        Set(GraphEdgeKind.Summary, BrainEdgeSummary.IsChecked);
+        Set(GraphEdgeKind.Manual, BrainEdgeManual.IsChecked);
+        Set(GraphEdgeKind.Category, BrainEdgeCategory.IsChecked);
         BrainCanvasView.InvalidateVisual();
     }
 
