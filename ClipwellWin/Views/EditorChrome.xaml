@@ -58,47 +58,6 @@
         <Setter Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
     </Style>
 
-    <Style x:Key="IconEditorButtonStyle" TargetType="Button" BasedOn="{StaticResource EditorButtonStyle}">
-        <Setter Property="Padding" Value="0" />
-        <Setter Property="Width" Value="32" />
-    </Style>
-
-    <!-- Chip-style toggle for filters and navigation entries. -->
-    <Style x:Key="ChipRadioStyle" TargetType="RadioButton">
-        <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource EditorPanelAltBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource EditorBorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="10,4" />
-        <Setter Property="Margin" Value="0,0,6,0" />
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="Bd"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditorHoverBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource OnboardingAccentBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource OnboardingAccentBrush}" />
-                            <Setter Property="Foreground" Value="#111418" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
     <!-- Left-aligned navigation entry (Dashboard, Gesamtübersicht). -->
     <Style x:Key="NavRadioStyle" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource OnboardingTextPrimaryBrush}" />

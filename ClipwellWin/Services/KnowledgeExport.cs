@@ -9,26 +9,18 @@ namespace ClipwellWin.Services;
 public enum KbArticleKind { Note, Recording, Clipboard }
 
 /// <summary>A KB article (exported note, recording or clipboard entry) prepared for export.</summary>
-public sealed record KbArticle(KbArticleKind Kind, string Title, DateTime Date, string FileName, string Content);
+public sealed record KbArticle(KbArticleKind Kind, string Title, DateTime Date, string FileName, string Content,
+    CategoryPath Category = default)
+{
+    /// <summary>Content with the category line; unchanged without category.</summary>
+    public string ExportContent => KnowledgeExport.WithCategoryLine(Content, Category);
+}
 
 public static class KnowledgeExport
 {
     public const string OverviewFileName = "uebersicht.md";
     private static readonly CultureInfo De = CultureInfo.GetCultureInfo("de-DE");
     private static readonly UTF8Encoding Utf8NoBom = new(false);
-
-    public static readonly string[] DateGroupOrder = ["Heute", "Gestern", "Diese Woche", "Diesen Monat", "Früher"];
-
-    public static string DateGroup(DateTime date, DateTime today)
-    {
-        var d = date.Date;
-        today = today.Date;
-        if (d >= today) return "Heute";
-        if (d == today.AddDays(-1)) return "Gestern";
-        if (d > today.AddDays(-7)) return "Diese Woche";
-        if (d.Year == today.Year && d.Month == today.Month) return "Diesen Monat";
-        return "Früher";
-    }
 
     public static string KindLabel(KbArticleKind kind) => kind switch
     {
@@ -124,7 +116,9 @@ public static class KnowledgeExport
             {
                 var a = articles[i];
                 sb.Append(i + 1).Append(". ").Append(KindName(a.Kind))
-                  .Append(": ").Append(a.Title).Append(" (").Append(a.Date.ToString("dd.MM.yyyy HH:mm", De)).Append(")\n");
+                  .Append(": ").Append(a.Title).Append(" (").Append(a.Date.ToString("dd.MM.yyyy HH:mm", De)).Append(')');
+                if (!a.Category.IsEmpty) sb.Append(" · ").Append(a.Category.ToString());
+                sb.Append('\n');
             }
             sb.Append('\n');
         }
@@ -133,14 +127,67 @@ public static class KnowledgeExport
             sb.Append("---\n\n").Append(DemoteHeadings(overview.Trim())).Append("\n\n");
 
         foreach (var a in articles)
-            sb.Append("---\n\n").Append(DemoteHeadings(a.Content.Trim())).Append("\n\n");
+            sb.Append("---\n\n").Append(DemoteHeadings(a.ExportContent.Trim())).Append("\n\n");
 
         return sb.ToString().TrimEnd() + "\n";
     }
 
+    public const string CategoryLinePrefix = "Kategorie: ";
+    public const string UncategorizedFolder = "ohne kategorie";
+
+    /// <summary>Inserts "Kategorie: Haupt › Unter" after the leading heading, or at the top without one.</summary>
+    public static string WithCategoryLine(string content, CategoryPath category)
+    {
+        if (category.IsEmpty) return content;
+        var line = CategoryLinePrefix + category;
+        var text = content.Replace("\r\n", "\n");
+        var start = 0;
+        while (start < text.Length && text[start] == '\n') start++;
+        if (start < text.Length && text[start] == '#')
+        {
+            var end = text.IndexOf('\n', start);
+            var heading = end < 0 ? text[start..] : text[start..end];
+            if (heading.TrimStart('#').StartsWith(' '))
+            {
+                var rest = end < 0 ? "" : text[(end + 1)..].TrimStart('\n');
+                return text[..start] + heading + "\n\n" + line + "\n\n" + rest;
+            }
+        }
+        return line + "\n\n" + text[start..];
+    }
+
     /// <summary>
-    /// Writes each article as its own file into sprachnotizen/, bildschirmaufnahmen/ and zwischenablage/, plus an
-    /// optional overview.
+    /// ZIP folder of an article. Without any category in the export the layout stays by kind (sprechwerk/,
+    /// bildschirmaufnahmen/, zwischenablage/); otherwise main category, optional subcategory, then kind.
+    /// </summary>
+    public static string ZipFolder(KbArticle article, bool byCategory)
+    {
+        var kind = KindLabel(article.Kind).ToLowerInvariant();
+        if (!byCategory) return kind;
+        if (article.Category.IsEmpty) return UncategorizedFolder + "/" + kind;
+        var folder = SafeFolderName(article.Category.Main);
+        if (article.Category.HasSub) folder += "/" + SafeFolderName(article.Category.Sub);
+        return folder + "/" + kind;
+    }
+
+    private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
+
+    public static string SafeFolderName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(name.Select(c => invalid.Contains(c) || c is '/' or '\\' ? '_' : c).ToArray())
+            .Trim().TrimEnd('.', ' ');
+        if (cleaned.Length == 0 || cleaned is "." or "..") return "_";
+        return ReservedNames.Contains(cleaned) ? "_" + cleaned : cleaned;
+    }
+
+    /// <summary>
+    /// Writes each article as its own file, grouped by category when any article has one (see <see cref="ZipFolder"/>),
+    /// plus an optional overview.
     /// </summary>
     public static void WriteZip(string zipPath, IReadOnlyList<KbArticle> articles, string? overview = null)
     {
@@ -153,11 +200,9 @@ public static class KnowledgeExport
                 var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 if (!string.IsNullOrWhiteSpace(overview))
                     AddEntry(zip, used, OverviewFileName, overview);
+                var byCategory = articles.Any(a => !a.Category.IsEmpty);
                 foreach (var a in articles)
-                {
-                    var folder = KindLabel(a.Kind).ToLowerInvariant();
-                    AddEntry(zip, used, folder + "/" + SafeFileName(a.FileName), a.Content);
-                }
+                    AddEntry(zip, used, ZipFolder(a, byCategory) + "/" + SafeFileName(a.FileName), a.ExportContent);
             }
             File.Move(tmp, zipPath, overwrite: true);
         }

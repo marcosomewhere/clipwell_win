@@ -27,7 +27,6 @@ public sealed class MicrophoneRecorder : IDisposable
     private AutoResetEvent? _dataReady;
     private Thread? _thread;
     private volatile bool _recording;
-    private float _peak;
 
     public bool IsRecording => _recording;
 
@@ -36,18 +35,12 @@ public sealed class MicrophoneRecorder : IDisposable
         get { lock (_lock) return TimeSpan.FromSeconds((double)_samples.Count / SampleRate); }
     }
 
-    /// <summary>Peak level (0..1) since the last call; used for the input level indicator.</summary>
-    public float TakePeak()
-    {
-        lock (_lock) { var p = _peak; _peak = 0; return p; }
-    }
-
     public static bool HasInputDevice() => waveInGetNumDevs() > 0;
 
     public void Start()
     {
         if (_recording) return;
-        lock (_lock) { _samples.Clear(); _peak = 0; }
+        lock (_lock) _samples.Clear();
 
         var format = new WaveFormatEx
         {
@@ -152,13 +145,7 @@ public sealed class MicrophoneRecorder : IDisposable
         lock (_lock)
         {
             if (_samples.Count >= SampleRate * MaxSeconds) return;
-            foreach (var s in raw)
-            {
-                var f = s / 32768f;
-                _samples.Add(f);
-                var abs = Math.Abs(f);
-                if (abs > _peak) _peak = abs;
-            }
+            foreach (var s in raw) _samples.Add(s / 32768f);
         }
     }
 

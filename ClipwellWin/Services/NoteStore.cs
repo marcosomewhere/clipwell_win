@@ -14,8 +14,6 @@ public sealed class Note
     public DateTime? KbExportedAt { get; set; }
 
     public string Title => NoteStore.TitleOf(Text);
-    public bool IsInKb => KbExportedAt != null;
-    public bool KbOutdated => KbExportedAt is { } exported && Modified > exported.AddSeconds(1);
 }
 
 /// <summary>A note exported into the knowledge base; a snapshot that stays independent of later edits to the note.</summary>
@@ -183,6 +181,17 @@ public static class NoteStore
                || lines[i].StartsWith(KbExportedPrefix, StringComparison.Ordinal)))
             i++;
         return string.Join("\n", lines.Skip(i)).Trim();
+    }
+
+    /// <summary>Includes legacy notes without an export while keeping existing KB snapshots authoritative.</summary>
+    public static List<KbNote> LoadKnowledgeNotes(string notesDir, string kbNotesDir)
+    {
+        var notes = LoadKbNotes(kbNotesDir);
+        var exportedIds = notes.Select(n => n.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        notes.AddRange(Load(notesDir, kbNotesDir)
+            .Where(n => !exportedIds.Contains(n.Id))
+            .Select(n => new KbNote(n.Id, n.Path, n.Title, n.Created, n.Modified)));
+        return notes.OrderByDescending(n => n.Created).ToList();
     }
 
     public static List<KbNote> LoadKbNotes(string kbNotesDir)

@@ -1,8 +1,6 @@
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ClipwellWin.Models;
 using ClipwellWin.Services;
-using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace ClipwellWin.ViewModels;
@@ -78,6 +76,14 @@ public class EntryViewModel : ViewModelBase
         set { if (_isHovered != value) { _isHovered = value; OnPropertyChanged(); } }
     }
 
+    private string? _hotkeyText;
+    /// <summary>Assigned global hotkey, e.g. "Ctrl+Alt+1"; null without one.</summary>
+    public string? HotkeyText
+    {
+        get => _hotkeyText;
+        set { if (_hotkeyText != value) { _hotkeyText = value; OnPropertyChanged(); } }
+    }
+
     private bool _isSelected;
     public bool IsSelected
     {
@@ -103,7 +109,7 @@ public class EntryViewModel : ViewModelBase
     {
         EntryType.Url => string.IsNullOrWhiteSpace(Entry.UrlTitle) ? null : Entry.UrlTitle,
         EntryType.Image => ImageHeadline(Entry.ImageSize),
-        _ => null,
+        _ => FileContentReader.Headline(Entry.SourceUrl),
     };
 
     public static string ImageHeadline((int Width, int Height) size)
@@ -197,6 +203,8 @@ public class EntryViewModel : ViewModelBase
             if (Entry.Type == EntryType.Image)
                 return Entry.ContentKind; // BadgeText ist immer "IMG"; nur zeigen wenn ContentKind gesetzt
             if (Entry.Type == EntryType.Code)
+                return null;
+            if (BadgeText == "MD")
                 return null;
             // Nur anzeigen wenn es sich von BadgeText unterscheidet (z.B. "TEXT" + "Python", nicht "MARKDOWN" + "MARKDOWN")
             var detail = Entry.ContentKind ?? Entry.Language;

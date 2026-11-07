@@ -133,19 +133,6 @@ public static class ImageUtils
         return repaired;
     }
 
-    public static System.Windows.DataObject CreateClipboardImageDataObject(BitmapSource src)
-    {
-        var opaque = BlendOnWhite(src);
-        var bitmap = ToBgr24(opaque);
-        var data = new System.Windows.DataObject();
-        data.SetImage(bitmap);
-        data.SetData(System.Windows.DataFormats.Dib, new MemoryStream(EncodeDib24(opaque)), autoConvert: false);
-        data.SetData("PNG", new MemoryStream(EncodePng(opaque)), autoConvert: false);
-        data.SetData("Portable Network Graphics", new MemoryStream(EncodePng(opaque)), autoConvert: false);
-        data.SetData("image/png", new MemoryStream(EncodePng(opaque)), autoConvert: false);
-        return data;
-    }
-
     public static System.Drawing.Bitmap CreateOpaqueDrawingBitmap(BitmapSource src)
     {
         var bgra32 = BlendOnWhite(src);
@@ -187,71 +174,5 @@ public static class ImageUtils
         }
 
         return bitmap;
-    }
-
-    internal static byte[] EncodeDib24(BitmapSource src)
-    {
-        var bgr24 = ToBgr24(src);
-
-        var width = bgr24.PixelWidth;
-        var height = bgr24.PixelHeight;
-        var sourceStride = checked((width * 24 + 7) / 8);
-        var sourcePixels = new byte[checked(sourceStride * height)];
-        bgr24.CopyPixels(sourcePixels, sourceStride, 0);
-
-        var dibStride = checked(((width * 24 + 31) / 32) * 4);
-        var imageSize = checked(dibStride * height);
-        var bytes = new byte[checked(40 + imageSize)];
-
-        WriteInt32(bytes, 0, 40);
-        WriteInt32(bytes, 4, width);
-        WriteInt32(bytes, 8, height);
-        WriteUInt16(bytes, 12, 1);
-        WriteUInt16(bytes, 14, 24);
-        WriteInt32(bytes, 16, 0);
-        WriteInt32(bytes, 20, imageSize);
-        WriteInt32(bytes, 24, (int)Math.Round(bgr24.DpiX * 39.37007874015748));
-        WriteInt32(bytes, 28, (int)Math.Round(bgr24.DpiY * 39.37007874015748));
-
-        for (var y = 0; y < height; y++)
-        {
-            var sourceOffset = y * sourceStride;
-            var targetOffset = 40 + (height - 1 - y) * dibStride;
-            Buffer.BlockCopy(sourcePixels, sourceOffset, bytes, targetOffset, sourceStride);
-        }
-
-        return bytes;
-    }
-
-    private static BitmapSource ToBgr24(BitmapSource src)
-    {
-        if (src.Format == PixelFormats.Bgr24) return src;
-
-        var converted = new FormatConvertedBitmap(src, PixelFormats.Bgr24, null, 0);
-        converted.Freeze();
-        return converted;
-    }
-
-    private static byte[] EncodePng(BitmapSource src)
-    {
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(src));
-        using var stream = new MemoryStream();
-        encoder.Save(stream);
-        return stream.ToArray();
-    }
-
-    private static void WriteInt32(byte[] bytes, int offset, int value)
-    {
-        bytes[offset] = (byte)value;
-        bytes[offset + 1] = (byte)(value >> 8);
-        bytes[offset + 2] = (byte)(value >> 16);
-        bytes[offset + 3] = (byte)(value >> 24);
-    }
-
-    private static void WriteUInt16(byte[] bytes, int offset, ushort value)
-    {
-        bytes[offset] = (byte)value;
-        bytes[offset + 1] = (byte)(value >> 8);
     }
 }

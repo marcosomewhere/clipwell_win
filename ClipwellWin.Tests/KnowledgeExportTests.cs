@@ -10,20 +10,6 @@ public class KnowledgeExportTests
 {
     private static readonly DateTime Today = new(2026, 11, 5);
 
-    [Theory]
-    [InlineData(2026, 11, 5, "Heute")]
-    [InlineData(2026, 11, 4, "Gestern")]
-    [InlineData(2026, 11, 1, "Diese Woche")]
-    [InlineData(2026, 10, 30, "Diese Woche")]
-    [InlineData(2026, 10, 29, "Früher")]
-    [InlineData(2025, 11, 3, "Früher")]
-    public void DateGroup_UsesRelativeBuckets(int y, int m, int d, string expected)
-        => Assert.Equal(expected, KnowledgeExport.DateGroup(new DateTime(y, m, d, 13, 0, 0), Today));
-
-    [Fact]
-    public void DateGroup_SameMonthOlderThanWeek_IsThisMonth()
-        => Assert.Equal("Diesen Monat", KnowledgeExport.DateGroup(new DateTime(2026, 11, 20), new DateTime(2026, 11, 30)));
-
     [Fact]
     public void DemoteHeadings_ShiftsHeadingsButNotCodeOrHashtags()
     {
@@ -84,6 +70,74 @@ public class KnowledgeExportTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void WithCategoryLine_InsertsAfterHeadingOrAtTop()
+    {
+        var path = new CategoryPath("Reisen", "Planung");
+        Assert.Equal("# Notiz\n\nKategorie: Reisen › Planung\n\nText", KnowledgeExport.WithCategoryLine("# Notiz\r\n\r\nText", path));
+        Assert.Equal("Kategorie: Reisen\n\nnur Text", KnowledgeExport.WithCategoryLine("nur Text", new CategoryPath("Reisen", "")));
+        Assert.Equal("Kategorie: Reisen\n\n#tag Text", KnowledgeExport.WithCategoryLine("#tag Text", new CategoryPath("Reisen", "")));
+        Assert.Equal("# Titel\n\nKategorie: Reisen\n\n", KnowledgeExport.WithCategoryLine("# Titel", new CategoryPath("Reisen", "")));
+        Assert.Equal("# Notiz\r\nText", KnowledgeExport.WithCategoryLine("# Notiz\r\nText", default));
+    }
+
+    [Fact]
+    public void BuildCombined_ShowsCategoryInTocAndArticle()
+    {
+        var articles = new List<KbArticle>
+        {
+            new(KbArticleKind.Note, "Einkauf", new DateTime(2026, 11, 5, 9, 0, 0), "n1.md", "# Notiz: Einkauf\n\nMilch",
+                new CategoryPath("Haushalt", "Einkauf")),
+            new(KbArticleKind.Note, "Ohne", new DateTime(2026, 11, 5, 9, 0, 0), "n2.md", "# Notiz: Ohne\n\nText"),
+        };
+
+        var md = KnowledgeExport.BuildCombined(articles, new DateTime(2026, 11, 5, 12, 0, 0));
+
+        Assert.Contains("1. Sprachnotiz: Einkauf (05.11.2026 09:00) · Haushalt › Einkauf\n", md);
+        Assert.Contains("2. Sprachnotiz: Ohne (05.11.2026 09:00)\n", md);
+        Assert.Contains("## Notiz: Einkauf\n\nKategorie: Haushalt › Einkauf\n\nMilch", md);
+        Assert.Equal(1, md.Split("Kategorie: ").Length - 1);
+    }
+
+    [Fact]
+    public void WriteZip_GroupsByCategoryWhenAnyArticleHasOne()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "clipwell-kbexport-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var zipPath = Path.Combine(dir, "export.zip");
+            var articles = new List<KbArticle>
+            {
+                new(KbArticleKind.Note, "A", Today, "a.md", "# A\n\nText", new CategoryPath("Reisen", "Planung")),
+                new(KbArticleKind.Clipboard, "B", Today, "b.md", "# B", new CategoryPath("Reisen", "")),
+                new(KbArticleKind.Recording, "C", Today, "c.md", "# C", new CategoryPath("A/B: C?", "")),
+                new(KbArticleKind.Note, "D", Today, "d.md", "# D"),
+            };
+
+            KnowledgeExport.WriteZip(zipPath, articles);
+
+            using var zip = ZipFile.OpenRead(zipPath);
+            var names = zip.Entries.Select(e => e.FullName).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            Assert.Equal(["A_B_ C_/bildschirmaufnahmen/c.md", "Reisen/Planung/sprechwerk/a.md", "Reisen/zwischenablage/b.md",
+                "ohne kategorie/sprechwerk/d.md"], names);
+            using var reader = new StreamReader(zip.GetEntry("Reisen/Planung/sprechwerk/a.md")!.Open());
+            Assert.Equal("# A\n\nKategorie: Reisen › Planung\n\nText", reader.ReadToEnd());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("CON", "_CON")]
+    [InlineData("Projekt.", "Projekt")]
+    [InlineData("..", "_")]
+    [InlineData("  ", "_")]
+    public void SafeFolderName_AvoidsInvalidWindowsNames(string name, string expected)
+        => Assert.Equal(expected, KnowledgeExport.SafeFolderName(name));
 
     [Fact]
     public void ClipboardMarkdown_RendersHeaderAndContentPerType()

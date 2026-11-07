@@ -152,6 +152,18 @@ public class PopupViewModel : ViewModelBase
         }
     }
 
+    private bool _showMarkdownOnly;
+    /// <summary>Chip "MD": only Markdown entries (badge MD); they stay visible under "Text" as well.</summary>
+    public bool ShowMarkdownOnly
+    {
+        get => _showMarkdownOnly;
+        set
+        {
+            if (Set(ref _showMarkdownOnly, value))
+                _view.Refresh();
+        }
+    }
+
 
     private bool _isBulkMode;
     public bool IsBulkMode
@@ -477,17 +489,48 @@ public class PopupViewModel : ViewModelBase
     public EntryViewModel? LatestEntry()
         => Entries.OrderByDescending(e => e.Timestamp).FirstOrDefault();
 
-    public void SetType(EntryViewModel vm, EntryType type)
+    public void SetType(EntryViewModel vm, EntryType type, string? kind = null)
     {
         string? language = type == EntryType.Code
             ? SyntaxService.DetectLanguage(vm.Content ?? "", CodeDetectionMode.Aggressive) ?? "Code"
             : null;
         // ContentKind ist ein Badge, nicht der Sprachname – separat ableiten.
-        string? kind = type == EntryType.Code ? "CODE" : null;
-        var reason = $"Manuell als {type} behandelt.";
+        kind ??= type == EntryType.Code ? "CODE" : null;
+        var reason = kind == "MARKDOWN" ? "Manuell als Markdown behandelt." : $"Manuell als {type} behandelt.";
         vm.SetType(type, language, kind, reason);
         _db.SetType(vm.Id, type, language, kind, reason);
         _view.Refresh();
+    }
+
+    public const string MarkdownRecheckReason = "Als Markdown erkannt (nachträglich geprüft).";
+
+    /// <summary>
+    /// Older text or script entries whose content is Markdown prose. Manual choices ("Manuell als ...",
+    /// "... manuell bearbeitet.") and notes stay as they are. Safe to call off the UI thread.
+    /// </summary>
+    public static List<long> FindMarkdownCandidates(IEnumerable<ClipboardEntry> entries)
+        => entries
+            .Where(e => e.Type is EntryType.Text or EntryType.Code
+                && !string.Equals(e.ContentKind, ContentKindService.MarkdownKind, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(e.ContentKind, "NOTE", StringComparison.OrdinalIgnoreCase)
+                && e.DetectionReason?.Contains("anuell", StringComparison.Ordinal) != true
+                && ContentKindService.LooksLikeMarkdownDocument(e.Content ?? ""))
+            .Select(e => e.Id)
+            .ToList();
+
+    /// <summary>Stores the entries as Markdown text; returns how many changed.</summary>
+    public int MarkAsMarkdown(IEnumerable<long> ids, string reason = MarkdownRecheckReason)
+    {
+        var wanted = ids.ToHashSet();
+        var changed = 0;
+        foreach (var vm in Entries.Where(e => wanted.Contains(e.Id)).ToList())
+        {
+            _db.SetType(vm.Id, EntryType.Text, null, ContentKindService.MarkdownKind, reason);
+            vm.SetType(EntryType.Text, null, ContentKindService.MarkdownKind, reason);
+            changed++;
+        }
+        if (changed > 0) _view.Refresh();
+        return changed;
     }
 
     public void UpdateOcr(long id, string ocrText)
@@ -533,6 +576,8 @@ public class PopupViewModel : ViewModelBase
 
         if (_showPinnedOnly && !vm.IsPinned) return false;
 
+        if (_showMarkdownOnly && vm.BadgeText != "MD") return false;
+
 
         var q = _searchText.Trim();
         if (string.IsNullOrWhiteSpace(q)) return true;
@@ -545,7 +590,8 @@ public class PopupViewModel : ViewModelBase
         if (q.StartsWith("kind:", StringComparison.OrdinalIgnoreCase))
         {
             var kindStr = q[5..];
-            return vm.ContentKind?.Contains(kindStr, StringComparison.OrdinalIgnoreCase) ?? false;
+            return (vm.ContentKind?.Contains(kindStr, StringComparison.OrdinalIgnoreCase) ?? false)
+                || vm.BadgeText.Equals(kindStr, StringComparison.OrdinalIgnoreCase);
         }
         if (q.StartsWith("domain:", StringComparison.OrdinalIgnoreCase))
         {

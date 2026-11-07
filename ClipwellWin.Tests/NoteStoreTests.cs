@@ -47,12 +47,43 @@ public sealed class NoteStoreTests : IDisposable
         var notes = NoteStore.Load(NotesDir, KbDir);
 
         Assert.Equal(["neu", "alt"], notes.Select(n => n.Text));
-        Assert.All(notes, n => Assert.False(n.IsInKb));
+        Assert.All(notes, n => Assert.Null(n.KbExportedAt));
     }
 
     [Fact]
     public void Load_HandlesMissingDirectory()
         => Assert.Empty(NoteStore.Load(NotesDir, KbDir));
+
+    [Fact]
+    public void LoadKnowledgeNotes_IncludesLegacyNotesAndKeepsExportedSnapshots()
+    {
+        var legacy = NoteStore.Create(NotesDir, "Alte Sprachnotiz", Now.AddDays(-1));
+        var exported = NoteStore.Create(NotesDir, "Exportierter Stand", Now);
+        var kbPath = NoteStore.ExportToKb(exported, KbDir, Now);
+        NoteStore.Save(exported, "Spaetere Aenderung");
+
+        var notes = NoteStore.LoadKnowledgeNotes(NotesDir, KbDir);
+
+        Assert.Equal(2, notes.Count);
+        Assert.Equal(kbPath, notes[0].Path);
+        Assert.Equal("Exportierter Stand", notes[0].Title);
+        Assert.Equal(legacy.Path, notes[1].Path);
+        Assert.Equal("Alte Sprachnotiz", notes[1].Title);
+        Assert.Equal("Spaetere Aenderung", File.ReadAllText(exported.Path));
+        Assert.False(File.Exists(NoteStore.KbPathFor(KbDir, legacy.Id)));
+    }
+
+    [Fact]
+    public void LoadKnowledgeNotes_KeepsSnapshotWithoutOriginalNote()
+    {
+        var note = NoteStore.Create(NotesDir, "Nur im Ideenkombinat", Now);
+        var kbPath = NoteStore.ExportToKb(note, KbDir, Now);
+        NoteStore.Delete(note);
+
+        var loaded = Assert.Single(NoteStore.LoadKnowledgeNotes(NotesDir, KbDir));
+
+        Assert.Equal(kbPath, loaded.Path);
+    }
 
     [Fact]
     public void ExportToKb_WritesSnapshotThatSurvivesEditsAndDeletion()
@@ -65,7 +96,6 @@ public sealed class NoteStoreTests : IDisposable
             File.ReadAllText(path));
 
         var loaded = NoteStore.Load(NotesDir, KbDir).Single();
-        Assert.True(loaded.IsInKb);
         Assert.Equal(Now.AddMinutes(5), loaded.KbExportedAt);
 
         NoteStore.Save(loaded, "# Meeting\n\nPunkt 1\nPunkt 2");
@@ -85,20 +115,10 @@ public sealed class NoteStoreTests : IDisposable
 
         Assert.True(File.Exists(note.Path));
         Assert.Equal(NoteStore.KbPathFor(KbDir, note.Id), kbPath);
-        Assert.True(note.IsInKb);
-        Assert.False(note.KbOutdated);
+        Assert.NotNull(note.KbExportedAt);
         var kb = Assert.Single(NoteStore.LoadKbNotes(KbDir));
         Assert.Equal("Diktat aus dem Popup", kb.Title);
-        Assert.True(Assert.Single(NoteStore.Load(NotesDir, KbDir)).IsInKb);
-    }
-
-    [Fact]
-    public void KbOutdated_WhenModifiedAfterExport()
-    {
-        var note = new Note { Modified = Now.AddMinutes(10), KbExportedAt = Now };
-        Assert.True(note.KbOutdated);
-        note.KbExportedAt = Now.AddMinutes(10);
-        Assert.False(note.KbOutdated);
+        Assert.NotNull(Assert.Single(NoteStore.Load(NotesDir, KbDir)).KbExportedAt);
     }
 
     [Fact]

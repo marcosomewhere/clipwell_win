@@ -149,8 +149,7 @@ public class ImageUtilsTests
         });
     }
 
-    // Verifies the BMP encoding path used by SetClipboardImageViaGdi:
-    // output must be 24-bit (no alpha channel) and transparent pixels must be white.
+    // A blended image encoded as 24-bit BMP has no alpha channel and transparent pixels are white.
     [Fact]
     public void BlendOnWhite_BmpEncoding_Is24Bit_AndTransparentBecomesWhite()
     {
@@ -191,49 +190,6 @@ public class ImageUtilsTests
             Assert.Equal(0,   bmp[pixelOffset + 3]); // B
             Assert.Equal(0,   bmp[pixelOffset + 4]); // G
             Assert.Equal(255, bmp[pixelOffset + 5]); // R
-        });
-    }
-
-    [Fact]
-    public void CreateClipboardImageDataObject_DibIs24Bit_AndTransparentBecomesWhite()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var src = BitmapSource.Create(2, 1, 96, 96, PixelFormats.Bgra32, null,
-                new byte[] { 0, 0, 0, 0, 0, 0, 255, 255 }, 8);
-
-            var data = ImageUtils.CreateClipboardImageDataObject(src);
-            var stream = Assert.IsType<System.IO.MemoryStream>(
-                data.GetData(System.Windows.DataFormats.Dib, autoConvert: false));
-            var dib = stream.ToArray();
-
-            Assert.Equal(40, BitConverter.ToInt32(dib, 0));
-            Assert.Equal(2, BitConverter.ToInt32(dib, 4));
-            Assert.Equal(1, BitConverter.ToInt32(dib, 8));
-            Assert.Equal(24, BitConverter.ToUInt16(dib, 14));
-
-            Assert.Equal(255, dib[40]);
-            Assert.Equal(255, dib[41]);
-            Assert.Equal(255, dib[42]);
-            Assert.Equal(0, dib[43]);
-            Assert.Equal(0, dib[44]);
-            Assert.Equal(255, dib[45]);
-        });
-    }
-
-    [Fact]
-    public void CreateClipboardImageDataObject_ProvidesOpaqueBitmapDibAndPng()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var data = ImageUtils.CreateClipboardImageDataObject(Pixel(0, 0, 0, 0));
-
-            Assert.True(data.GetDataPresent(System.Windows.DataFormats.Bitmap, autoConvert: false));
-            Assert.True(data.GetDataPresent(System.Windows.DataFormats.Dib, autoConvert: false));
-            Assert.True(data.GetDataPresent("PNG", autoConvert: false));
-            var bitmap = Assert.IsAssignableFrom<BitmapSource>(
-                data.GetData(System.Windows.DataFormats.Bitmap, autoConvert: false));
-            Assert.Equal(PixelFormats.Bgr24, bitmap.Format);
         });
     }
 
