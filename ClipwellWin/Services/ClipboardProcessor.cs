@@ -6,25 +6,41 @@ using ClipwellWin.Models;
 
 namespace ClipwellWin.Services;
 
+public sealed record FileContentOptions(IReadOnlyCollection<string> Extensions, long MaxBytes)
+{
+    /// <summary>Options for clipboard capture; null when switched off. Explicit drops pass <paramref name="always"/>.</summary>
+    public static FileContentOptions? From(AppSettings s, bool always = false)
+        => s.FileContentEnabled || always
+            ? new(FileContentReader.ParseExtensions(s.FileContentExtensions).ToHashSet(),
+                  Math.Clamp(s.FileContentMaxKb, FileContentReader.MinMaxKb, FileContentReader.MaxMaxKb) * 1024L)
+            : null;
+}
+
 // Must be called on the UI thread (Clipboard API requires it).
 public static class ClipboardProcessor
 {
     private static readonly Regex HexColorRx = new(@"#(?:[0-9A-Fa-f]{3,4}){1,2}\b");
 
-    public static ClipboardEntry? BuildEntry(CodeDetectionMode codeDetectionMode = CodeDetectionMode.Normal)
+    public static ClipboardEntry? BuildEntry(CodeDetectionMode codeDetectionMode = CodeDetectionMode.Normal,
+        FileContentOptions? fileContent = null)
     {
         try
         {
-            return BuildEntry(System.Windows.Clipboard.GetDataObject(), codeDetectionMode);
+            return BuildEntry(System.Windows.Clipboard.GetDataObject(), codeDetectionMode, fileContent);
         }
         catch { return null; }
     }
 
-    public static ClipboardEntry? BuildEntry(System.Windows.IDataObject? data, CodeDetectionMode codeDetectionMode = CodeDetectionMode.Normal)
+    public static ClipboardEntry? BuildEntry(System.Windows.IDataObject? data,
+        CodeDetectionMode codeDetectionMode = CodeDetectionMode.Normal, FileContentOptions? fileContent = null)
     {
         try
         {
             if (data == null) return null;
+            if (IsExcludedFromHistory(data)) return null;
+
+            if (fileContent != null && TryBuildFileEntry(data, codeDetectionMode, fileContent) is { } fileEntry)
+                return fileEntry;
 
             var imageBytes = ExtractImageBytes(data);
             if (imageBytes != null)
@@ -74,6 +90,12 @@ public static class ClipboardProcessor
                 hexColor = null;
                 contentKind = ContentKindService.DetectUrlKind(text);
             }
+            else if (ContentKindService.LooksLikeMarkdownDocument(text))
+            {
+                // Code samples inside Markdown would otherwise make the whole text a script.
+                contentKind = "MARKDOWN";
+                codeReason = "Als Markdown erkannt: Überschriften, Listen, Links oder Codeblöcke in Fließtext.";
+            }
             else
             {
                 var analysis = SyntaxService.Analyze(text, codeDetectionMode);
@@ -98,6 +120,7 @@ public static class ClipboardProcessor
                 EntryType.Code when language == null && contentKind != null => "Als Code erkannt: typische Konfigurations- oder Dateistruktur.",
                 EntryType.Code => codeReason ?? "",
                 EntryType.Color => $"Farbwert erkannt: {hexColor}.",
+                EntryType.Text when contentKind == "MARKDOWN" && codeReason != null => codeReason,
                 _ => "Als Text behandelt: keine URL-, Farb- oder Code-Regel passte.",
             };
 
@@ -116,6 +139,89 @@ public static class ClipboardProcessor
             };
         }
         catch { return null; }
+    }
+
+    public const string ExcludeFromMonitorFormat = "ExcludeClipboardContentFromMonitorProcessing";
+    public const string ViewerIgnoreFormat = "Clipboard Viewer Ignore";
+    public const string CanIncludeInHistoryFormat = "CanIncludeInClipboardHistory";
+
+    /// <summary>
+    /// True when the source marked the content as private, as password managers do: either an exclusion
+    /// format is present or CanIncludeInClipboardHistory holds a DWORD 0.
+    /// </summary>
+    public static bool IsExcludedFromHistory(System.Windows.IDataObject data)
+    {
+        try
+        {
+            if (data.GetDataPresent(ExcludeFromMonitorFormat, false)) return true;
+            if (data.GetDataPresent(ViewerIgnoreFormat, false)) return true;
+            if (!data.GetDataPresent(CanIncludeInHistoryFormat, false)) return false;
+            return ReadDword(data.GetData(CanIncludeInHistoryFormat, false)) == 0;
+        }
+        catch
+        {
+            // Unreadable markers are treated as private: losing one entry is better than storing a password.
+            return true;
+        }
+    }
+
+    private static uint? ReadDword(object? value)
+    {
+        byte[]? bytes = value switch
+        {
+            byte[] b => b,
+            MemoryStream ms => ms.ToArray(),
+            Stream s => ReadAll(s),
+            int i => BitConverter.GetBytes(i),
+            uint u => BitConverter.GetBytes(u),
+            _ => null,
+        };
+        return bytes is { Length: >= 4 } ? BitConverter.ToUInt32(bytes, 0) : null;
+
+        static byte[] ReadAll(Stream s)
+        {
+            using var copy = new MemoryStream();
+            s.CopyTo(copy);
+            return copy.ToArray();
+        }
+    }
+
+    private static ClipboardEntry? TryBuildFileEntry(System.Windows.IDataObject data, CodeDetectionMode mode,
+        FileContentOptions options)
+    {
+        string[]? paths;
+        try
+        {
+            if (!data.GetDataPresent(System.Windows.DataFormats.FileDrop, autoConvert: false)) return null;
+            paths = data.GetData(System.Windows.DataFormats.FileDrop, autoConvert: false) as string[];
+        }
+        catch { return null; }
+        if (paths is not { Length: > 0 }) return null;
+
+        var files = FileContentReader.Read(paths, options.Extensions, options.MaxBytes);
+        if (files.Count == 0) return null;
+
+        var text = FileContentReader.Combine(files);
+        var entry = BuildEntry(new System.Windows.DataObject(System.Windows.DataFormats.UnicodeText, text), mode);
+        if (entry == null) return null;
+
+        // A file holding only a URL or a color value stays the file's text, not a link or color swatch.
+        if (entry.Type is EntryType.Url or EntryType.Color)
+        {
+            entry.Type = EntryType.Text;
+            entry.HexColor = null;
+            entry.DetectionReason = "";
+            entry.ContentKind = ContentKindService.DetectTextKind(entry.Content ?? text, null);
+        }
+        entry.SourceUrl = FileContentReader.SourceOf(files);
+        var names = string.Join(", ", files.Select(f => Path.GetFileName(f.Path)));
+        var skipped = paths.Length - files.Count;
+        entry.DetectionReason = (files.Count == 1
+                ? $"Als Datei kopiert ({names}), Inhalt übernommen."
+                : $"Als {files.Count} Dateien kopiert ({names}), Inhalte übernommen.")
+            + (skipped > 0 ? $" {skipped} weitere Datei(en) nicht lesbar oder zu groß." : "")
+            + (string.IsNullOrEmpty(entry.DetectionReason) ? "" : " " + entry.DetectionReason);
+        return entry;
     }
 
     // Large pages copied with Ctrl+A can carry megabytes of markup; beyond this only plain text is kept.

@@ -6,11 +6,15 @@ namespace ClipwellWin.Services;
 public sealed class MessageWindowService : IDisposable
 {
     private const int HotkeyId = 9001;
+    // Entry hotkeys use their own id range so they never collide with the popup hotkey.
+    public const int EntryHotkeyBaseId = 9100;
+    private readonly HashSet<int> _entryHotkeyIds = [];
 
     private HwndSource? _source;
 
     public event EventHandler? ClipboardChanged;
     public event EventHandler? HotkeyPressed;
+    public event EventHandler<int>? EntryHotkeyPressed;
 
     public bool IsHotkeyRegistered { get; private set; }
     public int LastHotkeyError { get; private set; }
@@ -50,6 +54,26 @@ public sealed class MessageWindowService : IDisposable
         IsHotkeyRegistered = false;
     }
 
+    /// <summary>Registers an entry hotkey under <paramref name="id"/>; returns the Win32 error code, 0 on success.</summary>
+    public int RegisterEntryHotkey(int id, uint modifiers, uint vk)
+    {
+        if (_source == null) return -1;
+        if (NativeMethods.RegisterHotKey(_source.Handle, id, modifiers, vk))
+        {
+            _entryHotkeyIds.Add(id);
+            return 0;
+        }
+        var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+        return error == 0 ? -1 : error;
+    }
+
+    public void UnregisterEntryHotkeys()
+    {
+        if (_source == null) return;
+        foreach (var id in _entryHotkeyIds) NativeMethods.UnregisterHotKey(_source.Handle, id);
+        _entryHotkeyIds.Clear();
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         switch (msg)
@@ -63,6 +87,11 @@ public sealed class MessageWindowService : IDisposable
                 HotkeyPressed?.Invoke(this, EventArgs.Empty);
                 handled = true;
                 break;
+
+            case NativeMethods.WM_HOTKEY when _entryHotkeyIds.Contains(wParam.ToInt32()):
+                EntryHotkeyPressed?.Invoke(this, wParam.ToInt32());
+                handled = true;
+                break;
         }
         return IntPtr.Zero;
     }
@@ -72,6 +101,7 @@ public sealed class MessageWindowService : IDisposable
         if (_source == null) return;
         NativeMethods.RemoveClipboardFormatListener(_source.Handle);
         UnregisterHotkey();
+        UnregisterEntryHotkeys();
         _source.RemoveHook(WndProc);
         _source.Dispose();
         _source = null;
