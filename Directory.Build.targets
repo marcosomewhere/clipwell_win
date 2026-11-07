@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- The app runs on Windows only; ONNX Runtime and SQLite would otherwise copy native libraries for
+       Android, iOS, Linux, macOS and WebAssembly into every RID-less build output. -->
+  <Target Name="RemoveNonWindowsRuntimes" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)"
+                                    Condition="!$([System.String]::Copy('%(RuntimeTargetsCopyLocalItems.RuntimeIdentifier)').StartsWith('win'))" />
+    </ItemGroup>
+  </Target>
+
+</Project>
