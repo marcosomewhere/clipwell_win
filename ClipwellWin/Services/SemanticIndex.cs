@@ -313,6 +313,35 @@ public sealed class SemanticIndex : IDisposable
 
     // ---- Queries ---------------------------------------------------------------------------------------------
 
+    public Task<float[][]> EmbedForCategorizationAsync(IReadOnlyList<string> texts, CancellationToken ct = default)
+        => Task.Run(() =>
+        {
+            var vectors = new float[texts.Count][];
+            for (var i = 0; i < texts.Count; i++)
+            {
+                _modelLock.Wait(ct);
+                try
+                {
+                    ct.ThrowIfCancellationRequested();
+                    // Classification uses query prefixes on both sides, unlike the passage search index.
+                    vectors[i] = (_embedder ??= _createEmbedder()).EmbedQuery(texts[i]);
+                }
+                finally { _modelLock.Release(); }
+            }
+            ct.ThrowIfCancellationRequested();
+            return vectors;
+        }, ct);
+
+    /// <summary>Indexed text per item in chunk order, for the given item keys that are still indexed.</summary>
+    public Dictionary<string, (string Text, DateTime Date)> ItemTexts(IReadOnlyCollection<string> itemKeys)
+    {
+        var wanted = itemKeys.ToHashSet(StringComparer.Ordinal);
+        return Snapshot().Where(c => wanted.Contains(c.Chunk.ItemKey)).GroupBy(c => c.Chunk.ItemKey)
+            .ToDictionary(g => g.Key, g => (string.Join("\n", g
+                .OrderBy(c => int.TryParse(c.Chunk.Key.AsSpan(c.Chunk.Key.LastIndexOf(':') + 1), out var ordinal) ? ordinal : 0)
+                .Select(c => c.Chunk.Text)), g.Max(c => c.Chunk.Date)));
+    }
+
     public List<SemanticHit> Search(string query, SemanticSource? source, int limit = 40)
     {
         var chunks = Filter(source);
@@ -327,7 +356,19 @@ public sealed class SemanticIndex : IDisposable
         return origin == null ? [] : SemanticRanking.Similar(origin, Filter(source), limit);
     }
 
-    public List<SemanticHit> Duplicates(SemanticSource? source) => SemanticRanking.DuplicateGroups(Filter(source));
+    /// <summary>Rocchio relevance feedback over the marked items, combined with the query when one is entered.</summary>
+    public List<SemanticHit> SimilarToMarked(IReadOnlyCollection<string> markedKeys, string? query, SemanticSource? source, int limit = 40)
+    {
+        var chunks = Filter(source);
+        if (chunks.Count == 0 || markedKeys.Count == 0) return [];
+        var text = query?.Trim() ?? "";
+        var vector = text.Length > 0 ? WithModel(m => m.EmbedQuery(text)) : null;
+        return SemanticRanking.SimilarToMarked(Snapshot(), chunks, markedKeys, vector, text, limit);
+    }
+
+    public List<SemanticHit> Duplicates(SemanticSource? source, DuplicateView view = DuplicateView.Groups,
+        float threshold = SemanticRanking.DuplicateSimilarity, bool exactOnly = false, string? query = null)
+        => SemanticRanking.FilterDuplicates(Filter(source), view, threshold, exactOnly, query);
 
     public List<SemanticHit> Browse(SemanticSource? source) => SemanticRanking.Browse(Filter(source));
 

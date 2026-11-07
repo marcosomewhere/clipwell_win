@@ -9,6 +9,7 @@ using ClipwellWin.Models;
 namespace ClipwellWin.Services;
 
 public enum SemanticSource { Clipboard, Note, Recording }
+public enum DuplicateView { Groups, AllDuplicates, OnePerGroup }
 
 /// <summary>
 /// One embedded piece of text. <see cref="ItemKey"/> groups the chunks of one hit: a clipboard entry, a KB note or
@@ -238,26 +239,48 @@ public static class SemanticRanking
         return terms.Distinct().ToList();
     }
 
-    /// <summary>Distinct terms found plus a small bonus for repetitions (0 when no term occurs), and the distinct count.</summary>
-    private static (double Score, int Distinct) Lexical(IReadOnlyList<string> terms, string text)
+    /// <summary>Terms up to this length only match at a word start ("art" not in "Wart"); longer terms also match inside compounds ("rechnung" in "Stromrechnung").</summary>
+    public const int WordStartMaxLength = 3;
+
+    /// <summary>Occurrences of a term in the text, at most five.</summary>
+    public static int Occurrences(string term, string text, int max = 5)
+    {
+        var count = 0;
+        var at = 0;
+        while (count < max && (at = text.IndexOf(term, at, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            if (term.Length > WordStartMaxLength || at == 0 || !char.IsLetterOrDigit(text[at - 1])) count++;
+            at += term.Length;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Distinct terms found, each weighted by its inverse document frequency (rare words count more than words that
+    /// occur nearly everywhere), plus a small bonus for repetitions; 0 when no term occurs. Also the distinct count.
+    /// </summary>
+    private static (double Score, int Distinct) Lexical(IReadOnlyList<string> terms, IReadOnlyList<double> weights, string text)
     {
         double score = 0;
         var distinct = 0;
-        foreach (var term in terms)
+        for (var t = 0; t < terms.Count; t++)
         {
-            var count = 0;
-            var at = 0;
-            while (count < 5 && (at = text.IndexOf(term, at, StringComparison.OrdinalIgnoreCase)) >= 0)
-            {
-                count++;
-                at += term.Length;
-            }
+            var count = Occurrences(terms[t], text);
             if (count == 0) continue;
             distinct++;
-            score += 1 + 0.1 * (count - 1);
+            score += weights[t] * (1 + 0.1 * (count - 1));
         }
         return (score, distinct);
     }
+
+    /// <summary>Smoothed IDF per term over the chunks: ln(1 + N / df).</summary>
+    private static double[] TermWeights(IReadOnlyList<string> terms, IReadOnlyList<IndexedChunk> chunks)
+        => terms.Select(term =>
+        {
+            var df = 0;
+            foreach (var c in chunks) if (Occurrences(term, c.Chunk.Text, max: 1) > 0) df++;
+            return Math.Log(1 + (double)chunks.Count / Math.Max(1, df));
+        }).ToArray();
 
     public static List<SemanticHit> Search(float[] queryVector, string query, IReadOnlyList<IndexedChunk> chunks, int limit)
     {
@@ -273,11 +296,12 @@ public static class SemanticRanking
         for (var r = 0; r < semanticOrder.Count; r++) fused[semanticOrder[r]] = 1.0 / (RrfK + r + 1);
 
         var terms = Terms(query);
+        var weights = TermWeights(terms, chunks);
         // Without semantic support a hit has to contain most query words, not just one of them.
         var requiredWords = terms.Count <= 2 ? 1 : (terms.Count + 1) / 2;
         var lexical = new HashSet<int>();
         var lexicalOrder = Enumerable.Range(0, chunks.Count)
-            .Select(i => (Index: i, Match: Lexical(terms, chunks[i].Chunk.Text)))
+            .Select(i => (Index: i, Match: Lexical(terms, weights, chunks[i].Chunk.Text)))
             .Where(x => x.Match.Score > 0 && (sims[x.Index] >= MinSemanticSimilarity || x.Match.Distinct >= requiredWords))
             .Select(x => (x.Index, x.Match.Score))
             .OrderByDescending(x => x.Score).ThenByDescending(x => sims[x.Index])
@@ -318,28 +342,130 @@ public static class SemanticRanking
         return Collapse(hits, limit);
     }
 
+    private static readonly Regex UrlPattern = new(@"https?://[^\s<>""']+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
+
+    /// <summary>Query parameters that only track where a link was clicked; they do not change the page.</summary>
+    private static bool IsTrackingParameter(string name)
+        => name.StartsWith("utm_", StringComparison.OrdinalIgnoreCase)
+           || name is "fbclid" or "gclid" or "dclid" or "msclkid" or "mc_cid" or "mc_eid" or "igshid" or "yclid" or "_hsenc" or "_hsmi";
+
+    /// <summary>
+    /// Text key for "gleicher Text": unified whitespace, and links in a canonical form (lower-case scheme and host,
+    /// no default port, no tracking parameters, no trailing slash), so the same page copied from a newsletter and from
+    /// the address bar counts as the same text. Fragments stay, because single-page apps route with them.
+    /// </summary>
+    public static string DuplicateKey(string text)
+        => Whitespace.Replace(UrlPattern.Replace(text, m => CanonicalUrl(m.Value)), " ").Trim();
+
+    public static string CanonicalUrl(string url)
+    {
+        var trimmed = url.TrimEnd('.', ',', ';', ':', ')', ']', '!', '?');
+        var tail = url[trimmed.Length..];
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return url;
+        var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => !IsTrackingParameter(Uri.UnescapeDataString(p.Split('=')[0]))).ToList();
+        var path = uri.AbsolutePath.Length > 1 ? uri.AbsolutePath.TrimEnd('/') : "";
+        var port = uri.IsDefaultPort ? "" : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
+        return $"{uri.Scheme}://{uri.Host.ToLowerInvariant()}{port}{path}"
+               + (query.Count > 0 ? "?" + string.Join("&", query) : "") + uri.Fragment + tail;
+    }
+
+    /// <summary>Classic Rocchio weights for the query and the marked (relevant) items.</summary>
+    public const float RocchioAlpha = 1f;
+    public const float RocchioBeta = 0.75f;
+
+    /// <summary>
+    /// Rocchio relevance feedback: q' = norm(alpha * q + beta * mean(marked)); without a query the normalized mean of the
+    /// marked items. Each marked item counts once (mean of its chunks), so long items do not outweigh short ones.
+    /// </summary>
+    public static float[]? RocchioQuery(float[]? queryVector, IReadOnlyList<float[]> markedItems)
+    {
+        if (markedItems.Count == 0) return queryVector == null ? null : (float[])queryVector.Clone();
+        var dimension = markedItems[0].Length;
+        var mean = new float[dimension];
+        foreach (var v in markedItems)
+            for (var d = 0; d < dimension && d < v.Length; d++) mean[d] += v[d];
+        Normalize(mean);
+        if (queryVector == null) return mean;
+        var q = new float[dimension];
+        for (var d = 0; d < dimension && d < queryVector.Length; d++) q[d] = RocchioAlpha * queryVector[d] + RocchioBeta * mean[d];
+        Normalize(q);
+        return q;
+    }
+
+    /// <summary>Mean vector per item over its chunks, normalized.</summary>
+    public static Dictionary<string, float[]> ItemVectors(IReadOnlyList<IndexedChunk> chunks, IReadOnlySet<string> itemKeys)
+    {
+        var result = new Dictionary<string, float[]>(StringComparer.Ordinal);
+        foreach (var group in chunks.Where(c => itemKeys.Contains(c.Chunk.ItemKey)).GroupBy(c => c.Chunk.ItemKey))
+        {
+            var sum = new float[group.First().Vector.Length];
+            foreach (var c in group)
+                for (var d = 0; d < sum.Length && d < c.Vector.Length; d++) sum[d] += c.Vector[d];
+            Normalize(sum);
+            result[group.Key] = sum;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// "Ähnliche zu Markierten": ranks by the Rocchio vector of the marked items, together with the query when one is
+    /// entered (then the word matches of the hybrid search still count). The marked items themselves stay in the list,
+    /// so marking more and asking again refines the result step by step.
+    /// </summary>
+    public static List<SemanticHit> SimilarToMarked(IReadOnlyList<IndexedChunk> all, IReadOnlyList<IndexedChunk> chunks,
+        IReadOnlyCollection<string> markedKeys, float[]? queryVector, string? query, int limit)
+    {
+        var vectors = ItemVectors(all, markedKeys.ToHashSet(StringComparer.Ordinal));
+        var target = RocchioQuery(queryVector, vectors.Values.ToList());
+        if (target == null || chunks.Count == 0) return [];
+        if (queryVector != null && !string.IsNullOrWhiteSpace(query)) return Search(target, query, chunks, limit);
+        var hits = chunks
+            .Select(c => (Chunk: c, Sim: Dot(target, c.Vector)))
+            .Where(x => x.Sim >= MinSimilarSimilarity || vectors.ContainsKey(x.Chunk.Chunk.ItemKey))
+            .GroupBy(x => x.Chunk.Chunk.ItemKey)
+            .Select(g => g.OrderByDescending(x => x.Sim).First())
+            .OrderByDescending(x => x.Sim)
+            .Select(x => (Hit: new SemanticHit { Chunk = x.Chunk.Chunk, Similarity = x.Sim, Score = x.Sim }, x.Chunk.Vector));
+        return Collapse(hits, limit + vectors.Count);
+    }
+
     /// <summary>
     /// Groups of nearly identical items (first chunk per item), largest groups first. Quadratic in the worst case,
     /// so only the newest <see cref="MaxDuplicateItems"/> items take part.
     /// </summary>
-    public static List<SemanticHit> DuplicateGroups(IReadOnlyList<IndexedChunk> chunks)
+    public static List<SemanticHit> DuplicateGroups(IReadOnlyList<IndexedChunk> chunks, float threshold = DuplicateSimilarity, bool exactOnly = false)
     {
+        if (!float.IsFinite(threshold) || threshold < 0.9f || threshold > 1f) throw new ArgumentOutOfRangeException(nameof(threshold));
         var items = chunks
             .GroupBy(c => c.Chunk.ItemKey)
-            .Select(g => g.First())
+            .Select(g =>
+            {
+                var parts = g.OrderBy(c => int.TryParse(c.Chunk.Key.AsSpan(c.Chunk.Key.LastIndexOf(':') + 1), out var ordinal) ? ordinal : 0).ToList();
+                var vector = new float[parts[0].Vector.Length];
+                foreach (var part in parts)
+                    for (var d = 0; d < vector.Length && d < part.Vector.Length; d++) vector[d] += part.Vector[d];
+                Normalize(vector);
+                return new IndexedChunk(parts[0].Chunk with { Text = string.Join("\n", parts.Select(c => c.Chunk.Text)) }, vector);
+            })
             .OrderByDescending(c => c.Chunk.Date)
             .Take(MaxDuplicateItems)
             .ToList();
         var groups = new List<(IndexedChunk Representative, List<SemanticChunk> Members)>();
+        var exact = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var item in items)
         {
             var match = -1;
-            for (var g = 0; g < groups.Count; g++)
+            var textKey = DuplicateKey(item.Chunk.Text);
+            if (textKey.Length > 0 && exact.TryGetValue(textKey, out var same)) match = same;
+            for (var g = 0; !exactOnly && match < 0 && g < groups.Count; g++)
             {
-                if (Dot(groups[g].Representative.Vector, item.Vector) >= DuplicateSimilarity) { match = g; break; }
+                if (Dot(groups[g].Representative.Vector, item.Vector) >= threshold) { match = g; break; }
             }
             if (match >= 0) groups[match].Members.Add(item.Chunk);
-            else groups.Add((item, []));
+            else { match = groups.Count; groups.Add((item, [])); }
+            if (textKey.Length > 0) exact.TryAdd(textKey, match);
         }
 
         return groups
@@ -352,6 +478,24 @@ public static class SemanticRanking
                 return hit;
             })
             .ToList();
+    }
+
+    public static List<SemanticHit> FilterDuplicates(IReadOnlyList<IndexedChunk> chunks, DuplicateView view,
+        float threshold = DuplicateSimilarity, bool exactOnly = false, string? query = null)
+    {
+        var groups = DuplicateGroups(chunks, threshold, exactOnly);
+        var words = (query ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        bool Matches(SemanticChunk c) => words.All(word => (c.Title + "\n" + c.Text).Contains(word, StringComparison.OrdinalIgnoreCase));
+        if (view == DuplicateView.Groups)
+            return groups.Where(g => Matches(g.Chunk) || g.Duplicates.Any(Matches)).ToList();
+        if (view == DuplicateView.AllDuplicates)
+            return groups.SelectMany(g => new[] { g.Chunk }.Concat(g.Duplicates))
+                .Where(Matches).OrderByDescending(c => c.Date).Select(c => new SemanticHit { Chunk = c, Similarity = 1 }).ToList();
+        var redundant = groups.SelectMany(g => g.Duplicates).Select(c => c.ItemKey).ToHashSet();
+        var merged = chunks.GroupBy(c => c.Chunk.ItemKey).OrderByDescending(g => g.First().Chunk.Date).Take(MaxDuplicateItems)
+            .Select(g => g.First().Chunk with { Text = string.Join("\n", g.Select(c => c.Chunk.Text)) });
+        return merged.Where(c => !redundant.Contains(c.ItemKey) && Matches(c)).OrderByDescending(c => c.Date)
+            .Select(c => new SemanticHit { Chunk = c, Similarity = 1 }).ToList();
     }
 
     /// <summary>Every indexed item once (its first chunk), newest first; used when no query is entered.</summary>

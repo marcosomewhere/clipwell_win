@@ -9,7 +9,7 @@ using System.Windows.Threading;
 using ClipwellWin.Models;
 using ClipwellWin.Services;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
-using MessageBox = System.Windows.MessageBox;
+using MessageBox = ClipwellWin.Views.AppMessageBox;
 
 namespace ClipwellWin.Views;
 
@@ -18,12 +18,29 @@ public partial class KnowledgeBaseWindow
 {
     private enum SemanticMode { Browse, Search, Similar, Duplicates }
 
-    public sealed class SemanticResultItem
+    public sealed class SemanticResultItem : System.ComponentModel.INotifyPropertyChanged
     {
+        private bool _marked;
+        public bool Marked
+        {
+            get => _marked;
+            set { if (_marked == value) return; _marked = value; PropertyChanged?.Invoke(this, new(nameof(Marked))); }
+        }
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
         public required SemanticHit Hit { get; init; }
         public required string Title { get; init; }
         public required string Meta { get; init; }
         public required string Snippet { get; init; }
+        public bool ShowTitle
+        {
+            get
+            {
+                var title = Regex.Replace(Title, @"\s+", " ").Trim().TrimStart('#', ' ').TrimEnd('…', '.');
+                var snippet = Regex.Replace(Snippet, @"\s+", " ").Trim().TrimStart('#', ' ', '…');
+                return title.Length > 0 && Title != "(ohne Titel)"
+                    && !snippet.StartsWith(title, StringComparison.OrdinalIgnoreCase);
+            }
+        }
     }
 
     private DispatcherTimer? _semanticDebounce;
@@ -34,6 +51,9 @@ public partial class KnowledgeBaseWindow
     private int _semanticVersion;
     private SemanticMode _semanticMode = SemanticMode.Browse;
     private SemanticChunk? _similarOrigin;
+    // Rocchio feedback: marked items (and the query at that moment) that "Ähnliche zu Markierten" ranks by.
+    private IReadOnlyList<string>? _similarMarked;
+    private string _similarQuery = "";
     private string? _semanticError;
     private bool _semanticModelInstalled;
     private bool _semanticDownloading;
@@ -46,7 +66,8 @@ public partial class KnowledgeBaseWindow
         _semanticDebounce.Tick += (_, _) =>
         {
             _semanticDebounce.Stop();
-            RunSemanticSearch(keepSelection: false);
+            if (_semanticMode == SemanticMode.Duplicates) RunDuplicates();
+            else RunSemanticSearch(keepSelection: false);
         };
         _app.Semantic.Changed += Semantic_Changed;
     }
@@ -84,6 +105,7 @@ public partial class KnowledgeBaseWindow
         if (_semanticModelInstalled) StartSemanticSync();
         if (!_semanticModelInstalled) ShowSemanticResults([], null, keepSelection: false, EmptySearchText());
         else if (_semanticMode is SemanticMode.Browse or SemanticMode.Search) RunSemanticSearch(keepSelection: true);
+        else if (_semanticMode == SemanticMode.Duplicates) RunDuplicates(keepSelection: true);
         Dispatcher.BeginInvoke(FocusSemanticQuery, DispatcherPriority.Input);
     }
 
@@ -141,6 +163,9 @@ public partial class KnowledgeBaseWindow
         }
         if (_view == KbView.Brain && BrainIndexChanged()) RebuildBrain(keepLayout: _brain != null);
         if (_semanticMode is SemanticMode.Search or SemanticMode.Browse) RunSemanticSearch(keepSelection: true);
+        else if (_semanticMode == SemanticMode.Duplicates) RunDuplicates(keepSelection: true);
+        else if (_semanticMode == SemanticMode.Similar && _similarMarked != null) RunSimilarToMarked(_similarMarked, _similarQuery);
+        else if (_semanticMode == SemanticMode.Similar && _similarOrigin != null) RunSimilar(_similarOrigin);
     }
 
     private void UpdateSemanticStatus()
@@ -149,8 +174,19 @@ public partial class KnowledgeBaseWindow
         var syncing = _semanticSyncTask is { IsCompleted: false };
         SemanticQuery.IsEnabled = _semanticModelInstalled;
         SemanticSearchButton.IsEnabled = _semanticModelInstalled;
+        SemanticAskButton.IsEnabled = _semanticModelInstalled && !_askRunning;
         SemanticDuplicatesButton.IsEnabled = _semanticModelInstalled && !_semanticBusy;
         SemanticClearButton.IsEnabled = _semanticModelInstalled && !syncing;
+        var duplicates = _semanticMode == SemanticMode.Duplicates;
+        SemanticDuplicatePanel.Visibility = duplicates ? Visibility.Visible : Visibility.Collapsed;
+        SemanticDuplicateThreshold.IsEnabled = SemanticDuplicateKind.SelectedIndex == 0;
+        SemanticDuplicatePanel.Header = $"Dublettenfilter · {(SemanticDuplicateView.SelectedItem as ComboBoxItem)?.Content} · "
+            + (SemanticDuplicateKind.SelectedIndex == 1 ? "gleicher Text" : $"ab {SemanticDuplicateThreshold.Value * 100:0} % ähnlich");
+        SemanticQueryHint.Text = duplicates ? "Dubletten nach Text filtern" : "Frage oder Stichworte, z. B. wie habe ich das VPN-Zertifikat erneuert (Strg+Enter: Fragen)";
+        if (duplicates)
+            SemanticDuplicatesButton.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "OnboardingAccentBrush");
+        else SemanticDuplicatesButton.ClearValue(System.Windows.Controls.Control.BorderBrushProperty);
+        UpdateSemanticMarks();
         if (_view != KbView.Semantic) return;
 
         string status;
@@ -172,8 +208,10 @@ public partial class KnowledgeBaseWindow
         var mode = _semanticMode switch
         {
             SemanticMode.Browse => "Alle indizierten Einträge, neueste zuerst · ",
+            SemanticMode.Similar when _similarMarked != null => $"Ähnlich zu {_similarMarked.Count} markierten Einträgen"
+                + (_similarQuery.Length > 0 ? $" und \"{_similarQuery}\"" : "") + " (Rocchio) · ",
             SemanticMode.Similar when _similarOrigin != null => $"Ähnlich zu \"{_similarOrigin.Title}\" · ",
-            SemanticMode.Duplicates => "Dubletten · ",
+            SemanticMode.Duplicates => $"Dublettenfilter · {SemanticResults.Items.Count} Ergebnisse · neueste {SemanticRanking.MaxDuplicateItems:N0} Einträge maximal · ",
             _ => "",
         };
         ContentSubtitle.Text = mode + status;
@@ -185,7 +223,7 @@ public partial class KnowledgeBaseWindow
         SemanticDownloadButton.IsEnabled = !_semanticDownloading;
         if (!_semanticDownloading)
             SemanticModelText.Text =
-                $"Das mitgelieferte Modell multilingual-e5-small fehlt neben Clipwell.exe (models\\e5-small) oder ist beschädigt. " +
+                $"Das mitgelieferte Modell multilingual-e5-small fehlt neben Merkautomat.exe (models\\e5-small) oder ist beschädigt. " +
                 $"Es kann von Hugging Face neu geladen werden (ca. {EmbeddingModel.ApproxSizeMb} MB) und liegt dann unter {EmbeddingModel.DirectoryFor(AppPaths.ModelsDir)}. " +
                 "Indizierung und Suche laufen danach komplett lokal.";
     }
@@ -255,7 +293,12 @@ public partial class KnowledgeBaseWindow
 
     private void SemanticQuery_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter)
+        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            _ = AskAsync();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
         {
             SemanticSearchNow();
             e.Handled = true;
@@ -275,7 +318,8 @@ public partial class KnowledgeBaseWindow
     {
         _semanticDebounce?.Stop();
         StartSemanticSync();
-        RunSemanticSearch(keepSelection: false);
+        if (_semanticMode == SemanticMode.Duplicates) RunDuplicates();
+        else RunSemanticSearch(keepSelection: false);
     }
 
     private void SemanticScope_Checked(object sender, RoutedEventArgs e)
@@ -283,6 +327,9 @@ public partial class KnowledgeBaseWindow
         if (_semanticDebounce == null) return;
         switch (_semanticMode)
         {
+            case SemanticMode.Similar when _similarMarked != null:
+                RunSimilarToMarked(_similarMarked, _similarQuery);
+                break;
             case SemanticMode.Similar when _similarOrigin != null:
                 RunSimilar(_similarOrigin);
                 break;
@@ -300,6 +347,7 @@ public partial class KnowledgeBaseWindow
         if (!_semanticModelInstalled || _semanticClosed) return;
         _semanticMode = SemanticMode.Search;
         _similarOrigin = null;
+        _similarMarked = null;
         var query = SemanticQuery.Text.Trim();
         var source = SelectedScope();
         var index = _app.Semantic;
@@ -324,23 +372,86 @@ public partial class KnowledgeBaseWindow
     {
         _semanticMode = SemanticMode.Similar;
         _similarOrigin = origin;
+        _similarMarked = null;
         var source = SelectedScope();
         var index = _app.Semantic;
         await RunSemanticQuery(() => index.Similar(origin.ItemKey, source), null, keepSelection: false,
             "Keine inhaltlich ähnlichen Einträge gefunden.");
     }
 
-    private void SemanticDuplicates_Click(object sender, RoutedEventArgs e) => RunDuplicates();
+    private void SemanticSimilarMarked_Click(object sender, RoutedEventArgs e)
+    {
+        var marked = SemanticItems.Where(i => i.Marked).Select(i => i.Hit.Chunk.ItemKey).Distinct().ToList();
+        if (marked.Count == 0 || _semanticBusy) return;
+        // In the marked-similar view the query box keeps the text the search started with.
+        var query = _semanticMode == SemanticMode.Similar && _similarMarked != null ? _similarQuery : SemanticQuery.Text.Trim();
+        RunSimilarToMarked(marked, query);
+    }
 
-    private async void RunDuplicates()
+    private async void RunSimilarToMarked(IReadOnlyList<string> marked, string query)
+    {
+        if (!_semanticModelInstalled || _semanticClosed) return;
+        _semanticMode = SemanticMode.Similar;
+        _similarOrigin = null;
+        _similarMarked = marked;
+        _similarQuery = query;
+        var source = SelectedScope();
+        var index = _app.Semantic;
+        await RunSemanticQuery(() => index.SimilarToMarked(marked, query, source), query.Length > 0 ? query : null, keepSelection: true,
+            "Keine inhaltlich ähnlichen Einträge zu den Markierten gefunden.");
+    }
+
+    private void SemanticDuplicates_Click(object sender, RoutedEventArgs e)
+    {
+        _semanticDebounce?.Stop();
+        if (_semanticMode == SemanticMode.Duplicates) { ExitDuplicateFilter(); return; }
+        StartSemanticSync();
+        RunDuplicates();
+    }
+
+    private void SemanticDuplicateExit_Click(object sender, RoutedEventArgs e) => ExitDuplicateFilter();
+
+    private void ExitDuplicateFilter()
+    {
+        _semanticDebounce?.Stop();
+        _semanticMode = SemanticMode.Browse;
+        RunSemanticSearch(keepSelection: false);
+    }
+
+    private void SemanticDuplicateOptions_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_semanticDebounce == null || _semanticMode != SemanticMode.Duplicates) return;
+        foreach (var item in SemanticItems) item.Marked = false;
+        UpdateSemanticMarks();
+        _semanticDebounce.Stop();
+        _semanticDebounce.Start();
+    }
+
+    private void SemanticDuplicateThreshold_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (SemanticDuplicateThresholdLabel != null) SemanticDuplicateThresholdLabel.Text = $"{e.NewValue * 100:0} %";
+        if (_semanticDebounce == null || _semanticMode != SemanticMode.Duplicates) return;
+        foreach (var item in SemanticItems) item.Marked = false;
+        UpdateSemanticMarks();
+        _semanticDebounce.Stop();
+        _semanticDebounce.Start();
+    }
+
+    private async void RunDuplicates(bool keepSelection = false)
     {
         if (!_semanticModelInstalled) return;
         _semanticMode = SemanticMode.Duplicates;
         _similarOrigin = null;
+        _similarMarked = null;
         var source = SelectedScope();
         var index = _app.Semantic;
-        await RunSemanticQuery(() => index.Duplicates(source), null, keepSelection: false,
-            "Keine fast gleichen Abschnitte gefunden.");
+        var view = (DuplicateView)Math.Max(0, SemanticDuplicateView.SelectedIndex);
+        var threshold = (float)Math.Round(SemanticDuplicateThreshold.Value, 2);
+        var exact = SemanticDuplicateKind.SelectedIndex == 1;
+        var query = SemanticQuery.Text.Trim();
+        SemanticDuplicateThresholdLabel.Text = $"{threshold * 100:0} %";
+        await RunSemanticQuery(() => index.Duplicates(source, view, threshold, exact, query), query, keepSelection,
+            "Keine Einträge für diesen Dublettenfilter. Quelle, Textfilter oder Ähnlichkeit anpassen.");
     }
 
     private async Task RunSemanticQuery(Func<List<SemanticHit>> query, string? terms, bool keepSelection, string emptyText)
@@ -377,7 +488,13 @@ public partial class KnowledgeBaseWindow
     private void ShowSemanticResults(List<SemanticHit> hits, string? terms, bool keepSelection, string emptyText)
     {
         var previous = keepSelection ? (SemanticResults.SelectedItem as SemanticResultItem)?.Hit.Chunk.ItemKey : null;
+        var marked = keepSelection ? SemanticItems.Where(i => i.Marked).ToDictionary(i => i.Hit.Chunk.ItemKey,
+            i => (SemanticMarksGroups ? new[] { i.Hit.Chunk }.Concat(i.Hit.Duplicates) : [i.Hit.Chunk]).Select(c => c.ItemKey).ToHashSet()) : [];
         var items = hits.Select(h => ToResultItem(h, terms)).ToList();
+        foreach (var item in items)
+            if (marked.TryGetValue(item.Hit.Chunk.ItemKey, out var keys)
+                && keys.SetEquals((SemanticMarksGroups ? new[] { item.Hit.Chunk }.Concat(item.Hit.Duplicates) : [item.Hit.Chunk]).Select(c => c.ItemKey)))
+                item.Marked = true;
         SemanticResults.ItemsSource = items;
         SemanticEmpty.Text = emptyText;
         SemanticEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -386,13 +503,15 @@ public partial class KnowledgeBaseWindow
         if (select != null) SemanticResults.ScrollIntoView(select);
         UpdateSemanticStatus();
         UpdateSemanticPreview();
+        UpdateSemanticMarks();
     }
 
     private SemanticResultItem ToResultItem(SemanticHit hit, string? terms)
     {
         var c = hit.Chunk;
         var meta = new List<string>();
-        if (_semanticMode == SemanticMode.Duplicates) meta.Add($"{hit.Duplicates.Count + 1}x fast gleich");
+        if (_semanticMode == SemanticMode.Duplicates && SemanticDuplicateView.SelectedIndex == 0)
+            meta.Add($"{hit.Duplicates.Count + 1} Einträge in dieser Gruppe");
         meta.Add(SemanticChunk.SourceName(c.Source));
         meta.Add(FormatHitDate(c));
         if (_semanticMode is SemanticMode.Search or SemanticMode.Similar)
@@ -460,7 +579,7 @@ public partial class KnowledgeBaseWindow
         sb.Append(FullTextOf(c).TrimEnd()).Append('\n');
         if (item.Hit.Duplicates.Count > 0)
         {
-            sb.Append("\n---\n\nFast gleiche Abschnitte (").Append(item.Hit.Duplicates.Count).Append("):\n\n");
+            sb.Append("\n---\n\nWeitere Einträge dieser Gruppe (").Append(item.Hit.Duplicates.Count).Append("):\n\n");
             foreach (var d in item.Hit.Duplicates)
                 sb.Append("- ").Append(FormatHitDate(d)).Append(" · ").Append(SemanticChunk.SourceName(d.Source))
                   .Append(" · ").Append(d.Title).Append('\n');
@@ -496,9 +615,8 @@ public partial class KnowledgeBaseWindow
         if (item == null && c.Source == SemanticSource.Note && c.FilePath is { } notePath && File.Exists(notePath)
             && string.Equals(Path.GetDirectoryName(notePath), AppPaths.NotesDir, StringComparison.OrdinalIgnoreCase))
         {
-            // Notes that were never exported live only in the Sprechwerk.
-            _app.OpenNote(Path.GetFileNameWithoutExtension(notePath));
-            return;
+            Reload();
+            item = AllItems().FirstOrDefault(i => string.Equals(i.FilePath, key, StringComparison.OrdinalIgnoreCase));
         }
         if (item == null)
         {
@@ -532,6 +650,13 @@ public partial class KnowledgeBaseWindow
         if (at < 0) return;
         Dispatcher.BeginInvoke(() =>
         {
+            if (_formattedMarkdown)
+            {
+                var heading = FormattedMarkdownView.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                    .FirstOrDefault(p => p.Tag is string source && source.StartsWith(marker, StringComparison.Ordinal));
+                heading?.BringIntoView();
+                return;
+            }
             var line = MarkdownView.GetLineIndexFromCharacterIndex(at);
             if (line >= 0) MarkdownView.ScrollToLine(line);
             MarkdownView.Select(at, 0);
