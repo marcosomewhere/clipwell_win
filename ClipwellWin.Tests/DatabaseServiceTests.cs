@@ -345,7 +345,9 @@ public class DatabaseServiceTests
             db.AutoBackupIfNeeded(backupDir);
 
             var backup = Directory.GetFiles(backupDir, "clipwell-autobackup-*.json").Single();
-            Assert.Contains("auto backup value", File.ReadAllText(backup));
+            Assert.Contains("auto backup value", SecureFile.ReadAllText(backup));
+            Assert.True(SecureFile.IsEncryptedFile(backup));
+            Assert.DoesNotContain("auto backup value", File.ReadAllText(backup));
         }
         finally
         {

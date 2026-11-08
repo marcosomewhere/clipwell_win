@@ -23,7 +23,8 @@ public sealed class MailInboxTests : IDisposable
             "Hallo\r\n\tbitte prüfen: C:\\Pfad\\datei\u0001.txt", "00000000ABCDEF", "STORE1");
 
         var file = MailHandover.Write(_dir, mail, Now);
-        var parsed = MailInbox.Parse(File.ReadAllText(file));
+        Assert.DoesNotContain("Angebot", File.ReadAllText(file));
+        var parsed = MailInbox.Parse(MailInbox.Decode(File.ReadAllBytes(file)));
 
         Assert.Equal(file, Assert.Single(MailInbox.PendingFiles(_dir)));
         Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));

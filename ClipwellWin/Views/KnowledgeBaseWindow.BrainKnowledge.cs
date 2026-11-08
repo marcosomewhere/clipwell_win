@@ -49,7 +49,7 @@ public partial class KnowledgeBaseWindow
                 if (c.Source == SemanticSource.Note && c.FilePath is { } path)
                 {
                     if (!File.Exists(path)) throw new IOException($"Die Quelle ist nicht mehr vorhanden: {path}");
-                    text = NoteStore.KbBody(File.ReadAllText(path));
+                    text = NoteStore.KbBody(SecureFile.ReadAllText(path));
                 }
                 else if (c.Source == SemanticSource.Clipboard)
                 {
@@ -76,7 +76,7 @@ public partial class KnowledgeBaseWindow
             {
                 var path = NoteStore.KbPathFor(AppPaths.KbNotesDir, summary.NoteId);
                 summaries.Add(new($"Aktualisieren: {summary.Title}", summary.NoteId,
-                    File.Exists(path) ? NoteStore.KbBody(File.ReadAllText(path)) : "", summary.SourceKeys));
+                    File.Exists(path) ? NoteStore.KbBody(SecureFile.ReadAllText(path)) : "", summary.SourceKeys));
             }
             var dialog = new BrainKnowledgeDialog(title ?? "Zusammenfassung", category,
                 KnowledgeCategories.Paths(settings), sources, summaries, summarize, _app.LocalAi,

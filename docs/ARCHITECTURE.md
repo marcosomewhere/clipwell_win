@@ -7,7 +7,7 @@
 | Framework | .NET 10, WPF, `net10.0-windows10.0.19041.0` |
 | UI library | WPF-UI 4.3.0 |
 | Tray | WinForms `NotifyIcon` |
-| Database | `Microsoft.Data.Sqlite 10.0.14`, SQLite WAL with FTS5, `SQLitePCLRaw.bundle_e_sqlite3 3.0.5` override |
+| Database | `Microsoft.Data.Sqlite.Core 10.0.14`, SQLite WAL with FTS5, encrypted with SQLite3 Multiple Ciphers 2.6.1 (`SQLite3MC.PCLRaw.bundle`, ChaCha20-Poly1305) |
 | OCR | `Windows.Media.Ocr.OcrEngine` |
 | YAML | `YamlDotNet 18.1.0` (detection and validation) |
 | Dictation | `Whisper.net 1.9.1` with bundled `ggml-base.bin` |
@@ -26,6 +26,8 @@ Category hierarchy: `BrainAnnotation` carries `Category` (main) and optional `Su
 `CategorizeDialog` runs a categorization pass over a `CategorizationQueue` (items with saved category, state and last suggestion; `Version` grows with every saved assignment so E5 suggestions are recomputed with the new examples, Granite suggestions are kept). Entry points live in `KnowledgeBaseWindow.Categorize.cs`: Brain node (node plus visible neighbours, semantic/summary neighbours marked, strongest first) or topic (all members), all uncategorized indexed items, marked search results, and the library selection (recordings expand to their indexed snapshots). Texts come from `SemanticIndex.ItemTexts`; missing keys trigger one index sync first. A single semaphore serializes model calls; requests for entries the user already left are dropped instead of cancelled, so Granite is not restarted. Each confirmation goes through `PersistCategory` (keeps the annotation name, rolls back on save errors); the Brain is rebuilt after the dialog when anything changed. At least two and at most 200 categories are required. Every evaluated excerpt must agree on the best category with cosine >= 0.80 and a >= 0.025 margin. Otherwise the service abstains; these thresholds are heuristics, not probabilities. E5 suggestions leave the title empty so the dialog preserves the user's title. Selection uses `AppSettings.LocalAiModel = e5-categories`; `LocalAiService` routes to E5 before any Granite setup or inference.
 
 `LocalAiModel` downloads pinned files into `%APPDATA%\Clipwell\models\granite-4.2-3b`, verifies length/SHA256 and only publishes complete files. Model and archive are verified again before process start; runtime files are restored from the verified archive. `LocalAiService` owns one hidden llama-server process bound to 127.0.0.1 on an ephemeral port, authenticated with a random session key; its HTTP client bypasses proxies. No web UI or tools are enabled. Inherited LLAMA_* settings are removed. Requests are serialized, bounded to three minutes, cancellable and cached in memory (64 entries); idle model unload after 180 seconds, process stopped on disable/exit/cancellation.
+
+`ProcessLoad` sets the llama-server's priority and EcoQoS (`SetProcessInformation`, `ProcessPowerThrottling`) on the running process: direct calls use below-normal priority with EcoQoS explicitly off; background calls (`background: true`) use the load from `SetBackgroundLoad` (normal when the PC is idle, idle priority plus EcoQoS otherwise) and a ten-minute limit. A direct call cancels a running background call without restarting the server and records `LastInteractiveUse`. `App.Background.cs` runs a 10-second tick: `BackgroundWork.Decide` combines the mode (`AppSettings.BackgroundWorkMode`), input idle time (`GetLastInputInfo`), `SHQueryUserNotificationState` (full screen, D3D game, presentation), `GetSystemPowerStatus` and recent direct use into Paused/Eco/Fast; hard reasons (battery, game, presentation, off) cancel the running call, soft ones let the current group finish throttled. The background job syncs the search index only while idle, builds candidates with `CategoryDiscovery.Candidates`, and runs `CategoryDiscovery.RunAsync` with Granite in background mode, saving each named group to `BackgroundDiscoveryState` (`background-discovery.json`); an interrupted run over the same item keys resumes, reusing groups with identical keys. Finished proposals are announced in the tray and the KB and handed to `CategoryDiscoveryWindow` via `App.TakePreparedDiscovery`, filtered to items still uncategorized. Optional `SetThreadExecutionState` keeps the PC awake while the job runs.
 
 `LocalAiCategorization` limits source data to eight distinct excerpts of 700 characters and uses a non-thinking, schema-constrained JSON response. Source text is treated as data. Title/category/reason lengths and completion status are checked; uncertain responses cannot assign a category. `BrainKnowledgeDialog.LocalAi` invalidates outstanding suggestions when the selected item keys change; only the explicit apply action updates the editable fields. Existing annotation persistence remains unchanged. `SettingsWindow.LocalAi` handles model selection, installation progress, cancellation and a synthetic end-to-end test. `AppSettings.LocalAiModel` defaults to `off`; unknown values are treated as off.
 
@@ -61,7 +63,11 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 
 | Service | Responsibility |
 | --- | --- |
-| `DatabaseService` | SQLite schema, CRUD, export/import, URL cache, backups, purge and secure delete |
+| `DatabaseService` | SQLite schema, CRUD, export/import, URL cache, encrypted auto-backups, purge and secure delete |
+| `DataProtection`, `DataKey`, `RecoveryCode` | Data key in `datakey.json` (DPAPI) plus recovery-key wrap; never replaced while encrypted data exists |
+| `SecureFile`, `DataMigration` | AES-256-GCM record format for notes, recordings, tasks, settings and backups; one-time encryption of plain files with crash-safe resume |
+| `EncryptedDatabase` | Per-database passwords, encryption of plain databases via `PRAGMA rekey`, plain copy for the explicit SQLite export |
+| `WebLink` | Opens only http(s) links, escaped, in the default browser |
 | `ClipboardProcessor` | Converts current clipboard data into `ClipboardEntry` |
 | `SyntaxService` | Code-language detection |
 | `ContentKindService` | User-facing badges and broad content-kind detection; code entries use the generic `CODE` badge while `Language` stores the detected/editor language |
@@ -84,7 +90,7 @@ ClipwellWin.Tests/            unit, integration and smoke tests
 | `EmbeddingModel` | multilingual-e5-small (int8 ONNX) via ONNX Runtime plus SentencePiece tokenizer (XLM-R id offset), mean pooling and L2 normalization, e5 query/passage prefixes; download of pinned files to `models\e5-small` with SHA256 check |
 | `SemanticSearch` | `SemanticChunker` (clipboard, KB notes and recording snapshots into chunks of up to 1000 chars, skips short single tokens) and `SemanticRanking` (cosine plus word matches fused by reciprocal rank, grouping per item, near-duplicate folding, similar items, Rocchio relevance feedback `SimilarToMarked`, IDF-weighted word matches with word-start matching for terms up to three characters, duplicate groups with canonical links in the text key) |
 | `SemanticIndex` | Vector store in `semantic.db` (key, content hash, vector; no text), incremental background sync with file cache, query embedding, prune of deleted clipboard entries, model release |
-| `KnowledgeGraph` | Knowledge network for the KB "Brain": item nodes (mean vector), semantic/time/session/domain edges, topics by label propagation with TF-IDF keyword labels (`BrainGraph`, `GraphNode`, `GraphEdge`, `GraphCluster`), deterministic Fruchterman-Reingold `ForceLayout` with warm start |
+| `KnowledgeGraph` | Knowledge network for the KB "Brain": item nodes (mean vector), semantic edges (raw cosine threshold, neighbors ranked on centered vectors, loosely mutual k-nearest), time/session/domain edges, topics by label propagation with TF-IDF keyword labels (`BrainGraph`, `GraphNode`, `GraphEdge`, `GraphCluster`), deterministic Fruchterman-Reingold `ForceLayout` with warm start |
 
 ## Recording Flow
 

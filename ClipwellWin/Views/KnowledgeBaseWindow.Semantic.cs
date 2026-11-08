@@ -625,16 +625,6 @@ public partial class KnowledgeBaseWindow
                 : $"Der Artikel ist nicht mehr im {AppNames.KnowledgeBase}.";
             return;
         }
-        if (!FilterItem(item))
-        {
-            SearchBox.Text = "";
-            _searchDebounce.Stop();
-            _notesView?.Refresh();
-            _recordingsView?.Refresh();
-            _clipboardView?.Refresh();
-            UpdateListState();
-        }
-
         ClearSelection();
         SetArea(AreaOf(item.ArticleKind));
         var list = ListOf(item.ArticleKind);

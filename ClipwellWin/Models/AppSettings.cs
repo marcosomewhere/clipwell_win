@@ -28,6 +28,10 @@ public class AppSettings
     public string CategorizationMethod { get; set; } = "auto";
     public List<CategorizationFeedback> CategorizationFeedback { get; set; } = [];
     public List<CategorizationRun> CategorizationRuns { get; set; } = [];
+    /// <summary>Background work with Granite: "off", "idle" (only while the PC is idle) or "always" (throttled).</summary>
+    public string BackgroundWorkMode { get; set; } = Services.BackgroundWork.Idle;
+    /// <summary>Keep the PC from sleeping while background work runs.</summary>
+    public bool BackgroundKeepAwake { get; set; } = false;
     // Win+Shift+V | MOD_NOREPEAT
     public uint HotkeyModifiers { get; set; } = NativeMethods.MOD_WIN | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT;
     public uint HotkeyVk { get; set; } = NativeMethods.VK_V;

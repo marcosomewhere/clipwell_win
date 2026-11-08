@@ -19,9 +19,24 @@ public static class MailHandover
         var name = $"mail-{now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
         var temp = Path.Combine(directory, name + ".tmp");
         var target = Path.Combine(directory, name + ".json");
-        File.WriteAllText(temp, ToJson(mail), new UTF8Encoding(false));
+        File.WriteAllBytes(temp, Protect(ToJson(mail)));
         File.Move(temp, target);
         return target;
+    }
+
+    /// <summary>Marker of a handover file protected for the current Windows user (DPAPI); Merkautomat checks it.</summary>
+    public static readonly byte[] ProtectedMagic = Encoding.ASCII.GetBytes("MKD1");
+    public static readonly byte[] Entropy = Encoding.ASCII.GetBytes("Merkautomat.Inbox.v1");
+
+    /// <summary>The mail never lies in the inbox folder as readable text, not even for the moment until it is picked up.</summary>
+    public static byte[] Protect(string json)
+    {
+        var data = System.Security.Cryptography.ProtectedData.Protect(new UTF8Encoding(false).GetBytes(json), Entropy,
+            System.Security.Cryptography.DataProtectionScope.CurrentUser);
+        var result = new byte[ProtectedMagic.Length + data.Length];
+        Buffer.BlockCopy(ProtectedMagic, 0, result, 0, ProtectedMagic.Length);
+        Buffer.BlockCopy(data, 0, result, ProtectedMagic.Length, data.Length);
+        return result;
     }
 
     public static string ToJson(MailData mail)

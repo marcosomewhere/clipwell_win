@@ -68,7 +68,6 @@ public partial class KnowledgeBaseWindow : Window
 
     private readonly App _app;
     private readonly DispatcherTimer _refreshDebounce;
-    private readonly DispatcherTimer _searchDebounce;
     private readonly DispatcherTimer _recordTimer;
     private readonly InlineDictation _noteDictation;
     private List<KbItem> _noteItems = [];
@@ -96,15 +95,6 @@ public partial class KnowledgeBaseWindow : Window
 
         _refreshDebounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _refreshDebounce.Tick += (_, _) => { _refreshDebounce.Stop(); Reload(); };
-        _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-        _searchDebounce.Tick += (_, _) =>
-        {
-            _searchDebounce.Stop();
-            _notesView?.Refresh();
-            _recordingsView?.Refresh();
-            _clipboardView?.Refresh();
-            UpdateListState();
-        };
         _recordTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _recordTimer.Tick += (_, _) => UpdateRecordStatus();
 
@@ -112,6 +102,8 @@ public partial class KnowledgeBaseWindow : Window
         _app.Recorder.SnapshotWritten += Recorder_SnapshotWritten;
         _app.KnowledgeBaseChanged += App_KnowledgeBaseChanged;
         _app.HistoryChanged += App_HistoryChanged;
+        _app.PreparedDiscoveryChanged += App_PreparedDiscoveryChanged;
+        UpdateDiscoveryHint();
         _noteDictation = new InlineDictation(_app, this, NoteInput);
         _noteDictation.Changed += UpdateNoteDictationUi;
         Closed += (_, _) =>
@@ -121,8 +113,8 @@ public partial class KnowledgeBaseWindow : Window
             _app.Recorder.SnapshotWritten -= Recorder_SnapshotWritten;
             _app.KnowledgeBaseChanged -= App_KnowledgeBaseChanged;
             _app.HistoryChanged -= App_HistoryChanged;
+            _app.PreparedDiscoveryChanged -= App_PreparedDiscoveryChanged;
             _refreshDebounce.Stop();
-            _searchDebounce.Stop();
             _recordTimer.Stop();
             CloseAsk();
             CloseSemantic();
@@ -329,7 +321,6 @@ public partial class KnowledgeBaseWindow : Window
         // Show a just-created item even if the search would hide it.
         var target = pending == null ? null
             : AllItems().FirstOrDefault(i => string.Equals(i.FilePath, pending, StringComparison.OrdinalIgnoreCase));
-        if (target != null && !FilterItem(target)) SearchBox.Text = "";
 
         _suppressSelection = true;
         _notesView = Bind(NotesList, _noteItems);
@@ -418,28 +409,7 @@ public partial class KnowledgeBaseWindow : Window
 
     private bool FilterItem(object o)
     {
-        if (o is not KbItem item) return false;
-        if (!CategoryFilterMatches(item)) return false;
-        var q = SearchBox.Text.Trim();
-        if (q.Length == 0) return true;
-        if (item.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || item.Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (item.Entry is { } entry)
-            return entry.Content?.Contains(q, StringComparison.OrdinalIgnoreCase) == true
-                || entry.OcrText?.Contains(q, StringComparison.OrdinalIgnoreCase) == true
-                || entry.UrlTitle?.Contains(q, StringComparison.OrdinalIgnoreCase) == true
-                || entry.SourceUrl?.Contains(q, StringComparison.OrdinalIgnoreCase) == true;
-        if (item.Session?.Snapshots.Any(s => s.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
-                                           || s.App.Contains(q, StringComparison.OrdinalIgnoreCase)) == true)
-            return true;
-        return ReadArticle(item).Contains(q, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        _searchDebounce.Stop();
-        _searchDebounce.Start();
+        return o is KbItem item && CategoryFilterMatches(item);
     }
 
     private IEnumerable<KbItem> Visible(ICollectionView? view) => view?.Cast<KbItem>() ?? [];
@@ -449,7 +419,7 @@ public partial class KnowledgeBaseWindow : Window
         var notes = Visible(_notesView).Count();
         var recordings = Visible(_recordingsView).Count();
         var clips = Visible(_clipboardView).Count();
-        var searching = SearchBox.Text.Trim().Length > 0 || CategoryFilterActive;
+        var searching = CategoryFilterActive;
 
         NotesCount.Text = searching ? $"{notes} von {_noteItems.Count}" : notes.ToString(De);
         RecordingsCount.Text = searching ? $"{recordings} von {_recordingItems.Count}" : recordings.ToString(De);
@@ -629,7 +599,7 @@ public partial class KnowledgeBaseWindow : Window
     {
         if (item.Entry != null) return KnowledgeExport.ClipboardMarkdown(item.Entry);
         try { return RecordingMarkdown.ReadShared(item.FilePath); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return $"Datei konnte nicht gelesen werden: {ex.Message}"; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException) { return $"Datei konnte nicht gelesen werden: {ex.Message}"; }
     }
 
     private List<KbArticle> ToArticles(IEnumerable<KbItem> items)
@@ -843,7 +813,6 @@ public partial class KnowledgeBaseWindow : Window
         {
             if (TaskDuePopup.IsOpen) TaskDuePopup.IsOpen = false;
             else if (_noteDictation.IsActive) _noteDictation.Cancel();
-            else if (SearchBox.IsKeyboardFocusWithin && SearchBox.Text.Length > 0) SearchBox.Text = "";
             else if (SemanticQuery.IsKeyboardFocusWithin && SemanticQuery.Text.Length > 0) SemanticQuery.Text = "";
             else if (BrainQuery.IsKeyboardFocusWithin && BrainQuery.Text.Length > 0) BrainQuery.Text = "";
             else if (NewTaskInput.IsKeyboardFocusWithin && NewTaskInput.Text.Length > 0) NewTaskInput.Text = "";
@@ -881,9 +850,13 @@ public partial class KnowledgeBaseWindow : Window
         }
         else if (ctrl && e.Key == Key.F)
         {
-            var box = _view == KbView.Semantic ? SemanticQuery : _view == KbView.Brain ? BrainQuery : SearchBox;
-            box.Focus();
-            box.SelectAll();
+            if (_view == KbView.Brain)
+            {
+                BrainQuery.Focus();
+                BrainQuery.SelectAll();
+            }
+            else if (SemanticNav.IsChecked == true) FocusSemanticQuery();
+            else SemanticNav.IsChecked = true;
             e.Handled = true;
         }
         else if (ctrl && e.Key == Key.E)
@@ -971,12 +944,14 @@ public partial class KnowledgeBaseWindow : Window
             {
                 if (!NoteStore.CanImport(path)) { skipped.Add($"{name} (kein .md/.txt)"); continue; }
                 if (new FileInfo(path).Length > NoteStore.MaxImportBytes) { skipped.Add($"{name} (größer als 2 MB)"); continue; }
-                var text = NoteStore.ImportText(name, NoteStore.DecodeImport(File.ReadAllBytes(path)));
+                // A note dragged in from the data folder is encrypted; it opens with this installation's key.
+                var text = NoteStore.ImportText(name, NoteStore.DecodeImport(SecureFile.Decrypt(File.ReadAllBytes(path))));
                 if (text.Length == 0) { skipped.Add($"{name} (leer)"); continue; }
                 last = _app.SaveQuickNote(text);
                 imported++;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or System.Security.Cryptography.CryptographicException or InvalidDataException)
             {
                 App.LogCrash(ex);
                 skipped.Add($"{name} ({ex.Message})");

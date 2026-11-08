@@ -23,7 +23,8 @@ public class DatabaseService : IDisposable
     {
         _dbPath = dbPath ?? DbPath;
         Directory.CreateDirectory(Path.GetDirectoryName(_dbPath)!);
-        _conn = new SqliteConnection($"Data Source={_dbPath};Default Timeout=5");
+        EncryptedDatabase.EnsureEncrypted(_dbPath, EncryptedDatabase.History);
+        _conn = new SqliteConnection(EncryptedDatabase.ConnectionString(_dbPath, EncryptedDatabase.History, "Default Timeout=5"));
         _conn.Open();
         InitSchema();
         VerifyDatabase();
@@ -31,7 +32,9 @@ public class DatabaseService : IDisposable
 
     private void InitSchema()
     {
-        Exec(@"PRAGMA journal_mode=WAL;
+        // Deleted entries (passwords copied by mistake, purged history) must not stay readable in free pages.
+        Exec(@"PRAGMA secure_delete=ON;
+               PRAGMA journal_mode=WAL;
                CREATE TABLE IF NOT EXISTS History (
                    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                    Type        INTEGER NOT NULL,
@@ -77,6 +80,9 @@ public class DatabaseService : IDisposable
             DropFtsTriggers();
             Exec(@"CREATE VIRTUAL TABLE IF NOT EXISTS HistoryFts
                        USING fts5(content, ocrtext, urltitle, language, tokenize='unicode61')");
+            // Without it FTS5 only marks deleted rows; their search terms would stay in the index segments.
+            try { Exec("INSERT INTO HistoryFts(HistoryFts, rank) VALUES('secure-delete', 1)"); }
+            catch (SqliteException ex) { App.LogCrash(new InvalidOperationException("FTS secure-delete is not available.", ex)); }
             CreateFtsTriggers();
 
             if (IsFtsBackfillNeeded())
@@ -698,11 +704,8 @@ public class DatabaseService : IDisposable
         {
             var tmp = filePath + ".tmp";
             if (File.Exists(tmp)) File.Delete(tmp);
-            using (var dest = new SqliteConnection($"Data Source={tmp};Pooling=False"))
-            {
-                dest.Open();
-                _conn.BackupDatabase(dest);
-            }
+            // Like the JSON, CSV and Markdown exports deliberately unencrypted: the copy is meant for other tools.
+            EncryptedDatabase.WritePlainCopy(_conn, EncryptedDatabase.History, tmp);
 
             if (File.Exists(filePath))
                 File.Replace(tmp, filePath, null);
@@ -787,6 +790,8 @@ public class DatabaseService : IDisposable
             cmd.Parameters.AddWithValue("$id", id);
             cmd.ExecuteNonQuery();
             Exec("VACUUM");
+            // VACUUM in WAL mode leaves the old pages in the -wal file until a checkpoint.
+            Exec("PRAGMA wal_checkpoint(TRUNCATE)");
         }
     }
 
@@ -795,9 +800,11 @@ public class DatabaseService : IDisposable
         List<JsonElement>? items;
         try
         {
-            var json = File.ReadAllText(filePath);
+            // Encrypted auto-backups as well as plain exports.
+            var json = SecureFile.ReadAllText(filePath);
             items = JsonSerializer.Deserialize<List<JsonElement>>(json);
         }
+        catch (ForeignKeyException) { throw; }
         catch (Exception ex)
         {
             return (0, 0, [$"Datei konnte nicht gelesen werden: {ex.Message}"]);
@@ -813,6 +820,9 @@ public class DatabaseService : IDisposable
             try
             {
                 string typeStr = item.GetProperty("Type").GetString()!;
+                // Enum.Parse also accepts any number; an undefined type would break display and filters.
+                if (!Enum.TryParse<EntryType>(typeStr, ignoreCase: true, out var type) || !Enum.IsDefined(type))
+                    throw new FormatException($"Unbekannter Typ \"{typeStr}\".");
                 var ts = item.TryGetProperty("Timestamp", out var tsProp)
                     ? ParseDbTimestamp(tsProp.GetString()!)
                     : DateTime.Now;
@@ -822,7 +832,7 @@ public class DatabaseService : IDisposable
 
                 var entry = new ClipboardEntry
                 {
-                    Type = Enum.Parse<EntryType>(typeStr, ignoreCase: true),
+                    Type = type,
                     Content         = content,
                     OcrText         = TryGetStr(item, "OcrText"),
                     Language        = TryGetStr(item, "Language"),
@@ -930,7 +940,8 @@ public class DatabaseService : IDisposable
         var tmp = filePath + ".tmp";
         lock (_gate)
         {
-            using (var fs = File.Create(tmp))
+            // Auto-backups often go to a NAS or USB drive: encrypted, and openable elsewhere with the recovery key.
+            using (var fs = SecureFile.Create(tmp))
             using (var writer = new Utf8JsonWriter(fs, new JsonWriterOptions { Indented = true }))
             {
                 using var cmd = _conn.CreateCommand();

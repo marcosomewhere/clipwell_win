@@ -32,7 +32,7 @@ public sealed class NoteStoreTests : IDisposable
 
         Assert.Equal("2026-11-05_09-15-30", first.Id);
         Assert.Equal("2026-11-05_09-15-30-2", second.Id);
-        Assert.Equal("Erste\nZeile", File.ReadAllText(first.Path));
+        Assert.Equal("Erste\nZeile", SecureFile.ReadAllText(first.Path));
         Assert.True(NoteStore.TryParseId(second.Id, out var created));
         Assert.Equal(Now, created);
     }
@@ -69,7 +69,7 @@ public sealed class NoteStoreTests : IDisposable
         Assert.Equal("Exportierter Stand", notes[0].Title);
         Assert.Equal(legacy.Path, notes[1].Path);
         Assert.Equal("Alte Sprachnotiz", notes[1].Title);
-        Assert.Equal("Spaetere Aenderung", File.ReadAllText(exported.Path));
+        Assert.Equal("Spaetere Aenderung", SecureFile.ReadAllText(exported.Path));
         Assert.False(File.Exists(NoteStore.KbPathFor(KbDir, legacy.Id)));
     }
 
@@ -93,7 +93,7 @@ public sealed class NoteStoreTests : IDisposable
 
         Assert.Equal(
             "# Notiz: Meeting\n\n- Erstellt: 2026-11-05 09:15:30\n- Exportiert: 2026-11-05 09:20:30\n\n# Meeting\n\nPunkt 1\n",
-            File.ReadAllText(path));
+            SecureFile.ReadAllText(path));
 
         var loaded = NoteStore.Load(NotesDir, KbDir).Single();
         Assert.Equal(Now.AddMinutes(5), loaded.KbExportedAt);
@@ -105,7 +105,7 @@ public sealed class NoteStoreTests : IDisposable
         Assert.Equal("Meeting", kb.Title);
         Assert.Equal(Now, kb.Created);
         Assert.Equal(Now.AddMinutes(5), kb.Exported);
-        Assert.DoesNotContain("Punkt 2", File.ReadAllText(kb.Path));
+        Assert.DoesNotContain("Punkt 2", SecureFile.ReadAllText(kb.Path));
     }
 
     [Fact]

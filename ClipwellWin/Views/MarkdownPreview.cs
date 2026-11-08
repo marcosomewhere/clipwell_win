@@ -136,8 +136,7 @@ public static class MarkdownPreview
                     var link = new Hyperlink(new Run(label)) { NavigateUri = uri, Foreground = accent, ToolTip = target };
                     link.RequestNavigate += (_, e) =>
                     {
-                        try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
-                        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { App.LogCrash(ex); }
+                        Services.WebLink.TryOpen(e.Uri);
                         e.Handled = true;
                     };
                     p.Inlines.Add(link);

@@ -62,8 +62,9 @@ public static class NoteStore
             var id = System.IO.Path.GetFileNameWithoutExtension(path);
             if (!TryParseId(id, out var created)) continue;
             string text;
-            try { text = File.ReadAllText(path, Encoding.UTF8); }
+            try { text = SecureFile.ReadAllText(path); }
             catch (IOException) { continue; }
+            catch (System.Security.Cryptography.CryptographicException ex) { App.LogCrash(ex); continue; }
             catch (UnauthorizedAccessException) { continue; }
             result.Add(new Note
             {
@@ -88,7 +89,7 @@ public static class NoteStore
 
         var path = System.IO.Path.Combine(notesDir, id + ".md");
         var normalized = NormalizeNewlines(text);
-        File.WriteAllText(path, normalized, Utf8NoBom);
+        SecureFile.WriteAllText(path, normalized);
         return new Note
         {
             Id = id,
@@ -102,7 +103,7 @@ public static class NoteStore
     public static void Save(Note note, string text)
     {
         var normalized = NormalizeNewlines(text);
-        File.WriteAllText(note.Path, normalized, Utf8NoBom);
+        SecureFile.WriteAllText(note.Path, normalized);
         note.Text = normalized;
         note.Modified = File.GetLastWriteTime(note.Path);
     }
@@ -128,7 +129,7 @@ public static class NoteStore
     {
         Directory.CreateDirectory(kbNotesDir);
         var path = KbPathFor(kbNotesDir, note.Id);
-        File.WriteAllText(path, BuildKbMarkdown(note, now), Utf8NoBom);
+        SecureFile.WriteAllText(path, BuildKbMarkdown(note, now));
         note.KbExportedAt = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind);
         return path;
     }
@@ -203,8 +204,9 @@ public static class NoteStore
             var id = System.IO.Path.GetFileNameWithoutExtension(path);
             if (!TryParseId(id, out var created)) continue;
             string[] lines;
-            try { lines = File.ReadLines(path, Encoding.UTF8).Take(8).ToArray(); }
+            try { lines = SecureFile.ReadAllText(path).Split('\n').Take(8).Select(l => l.TrimEnd('\r')).ToArray(); }
             catch (IOException) { continue; }
+            catch (System.Security.Cryptography.CryptographicException ex) { App.LogCrash(ex); continue; }
             catch (UnauthorizedAccessException) { continue; }
 
             var title = "(ohne Titel)";

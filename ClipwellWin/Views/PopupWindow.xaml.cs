@@ -1151,15 +1151,7 @@ public partial class PopupWindow : Window
 
     private static void OpenUrl(EntryViewModel vm)
     {
-        if (vm.Type != EntryType.Url || !UrlPreviewService.IsUrl(vm.Content)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo(vm.Content!)
-            {
-                UseShellExecute = true,
-            });
-        }
-        catch { }
+        if (vm.Type == EntryType.Url) WebLink.TryOpen(vm.Content);
     }
 
     private void OpenDetails(EntryViewModel vm)

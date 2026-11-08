@@ -387,7 +387,7 @@ public partial class KnowledgeBaseWindow
         try
         {
             if (node.Source == SemanticSource.Note && node.Item.FilePath is { } path && File.Exists(path))
-                return NoteStore.KbBody(File.ReadAllText(path));
+                return NoteStore.KbBody(SecureFile.ReadAllText(path));
             if (node.Source == SemanticSource.Clipboard)
             {
                 var entry = _app.SnapshotEntries().FirstOrDefault(e => e.Id == node.Item.EntryId);

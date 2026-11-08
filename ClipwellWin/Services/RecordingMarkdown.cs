@@ -319,15 +319,11 @@ public static partial class RecordingMarkdown
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+            catch (System.Security.Cryptography.CryptographicException ex) { App.LogCrash(ex); }
         }
         return sessions.OrderByDescending(s => s.Start).ToList();
     }
 
     /// <summary>Reads a file that the recorder may still have open for appending.</summary>
-    public static string ReadShared(string path)
-    {
-        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var reader = new StreamReader(fs, Encoding.UTF8);
-        return reader.ReadToEnd();
-    }
+    public static string ReadShared(string path) => SecureFile.ReadAllText(path);
 }

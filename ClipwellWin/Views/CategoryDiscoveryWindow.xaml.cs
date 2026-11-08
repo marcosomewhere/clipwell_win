@@ -40,7 +40,7 @@ public partial class CategoryDiscoveryWindow : Window
     public CategoryDiscoveryWindow(LocalAiService? ai, IReadOnlyList<DiscoveryItem> items, IReadOnlyList<string> existing,
         Action<IReadOnlyList<string>, string> persist, Action<LocalAiSuggestion?, string>? feedback = null,
         CategoryDiscovery.NameGroup? name = null, string? scope = null, IReadOnlySet<string>? alreadyCategorized = null,
-        IReadOnlyDictionary<string, string>? assignments = null)
+        IReadOnlyDictionary<string, string>? assignments = null, IReadOnlyList<CategoryProposal>? prepared = null, DateTime? preparedAt = null)
     {
         _categorized = alreadyCategorized ?? new HashSet<string>();
         InitializeComponent();
@@ -62,7 +62,13 @@ public partial class CategoryDiscoveryWindow : Window
         _ticker.Tick += (_, _) => Tick();
         ScopeText.Text = (scope ?? $"{items.Count} Einträge ohne Kategorie")
             + (existing.Count > 0 ? $" · vorhandene Kategorien werden bevorzugt: {string.Join(", ", existing.Take(12))}{(existing.Count > 12 ? " …" : "")}" : "");
-        UpdateState();
+        if (prepared is { Count: > 0 })
+        {
+            foreach (var p in prepared) _proposals.Add(p);
+            ResultHeader.Text = $"Vorschläge ({prepared.Count} Gruppen, {prepared.Sum(p => p.Count)} Einträge)";
+            UpdateState($"Im Hintergrund vorbereitet{(preparedAt is { } at ? $" am {at:dd.MM.} um {at:HH:mm}" : "")}. Einträge, die inzwischen eine Kategorie haben, sind herausgenommen. Namen prüfen, unpassende Gruppen abwählen, dann „Ausgewählte übernehmen“. „Erneut analysieren“ startet eine frische Analyse.");
+        }
+        else UpdateState();
     }
 
     private bool Installed => _modelOverride || _ai?.Model.IsInstalled == true;
@@ -198,9 +204,9 @@ public partial class CategoryDiscoveryWindow : Window
             return;
         }
         if (chosen.Count == 0) return;
-        var names = chosen.Select(p => p.Name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var names = chosen.Select(PathOf).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var fresh = names.Where(n => !_existing.Contains(n, StringComparer.OrdinalIgnoreCase)).ToList();
-        var question = $"{chosen.Sum(p => p.Count)} Einträge in {names.Count} Kategorien zuordnen?\n\n" + string.Join("\n", chosen.Select(p => $"• {p.Name.Trim()} ({p.Count})"))
+        var question = $"{chosen.Sum(p => p.Count)} Einträge in {names.Count} Kategorien zuordnen?\n\n" + string.Join("\n", chosen.Select(p => $"• {PathOf(p)} ({p.Count})"))
             + (fresh.Count > 0 ? $"\n\nNeu angelegt: {string.Join(", ", fresh)}" : "")
             + (chosen.Sum(p => p.Keys.Count(_categorized.Contains)) is var replaced and > 0
                 ? $"\n\n{replaced} dieser Einträge haben schon eine Kategorie; sie wird ersetzt."
@@ -210,7 +216,7 @@ public partial class CategoryDiscoveryWindow : Window
         var applied = 0;
         foreach (var p in chosen)
         {
-            var category = p.Name.Trim();
+            var category = PathOf(p);
             try { _persist(p.Keys, category); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -227,4 +233,7 @@ public partial class CategoryDiscoveryWindow : Window
         if (applied > 0) Feedback.Text = $"{applied} Einträge zugeordnet. Ab jetzt schlägt E5 für neue Einträge passende Kategorien vor.";
         UpdateState(StatusText.Text);
     }
+
+    /// <summary>Name as a clean category path; "Haupt › Haupt" becomes "Haupt".</summary>
+    private static string PathOf(CategoryProposal p) => KnowledgeCategories.Parse(p.Name).ToString();
 }

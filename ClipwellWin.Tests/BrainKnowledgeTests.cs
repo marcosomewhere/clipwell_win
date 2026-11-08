@@ -45,10 +45,10 @@ public sealed class BrainKnowledgeTests : IDisposable
         Assert.Equal(first, updated);
         Assert.Equal(2, Directory.GetFiles(Notes, "*.md").Length);
         Assert.Equal(2, Directory.GetFiles(Kb, "*.md").Length);
-        Assert.Equal("# Zweite Fassung", File.ReadAllText(Path.Combine(Notes, first.NoteId + ".md")));
-        Assert.Contains("# Zweite Fassung", File.ReadAllText(first.KbPath));
-        Assert.Contains("# Erste Fassung", File.ReadAllText(first.KbPath + ".bak"));
-        Assert.Equal("Quelle unveraendert", File.ReadAllText(source.Note.Path));
+        Assert.Equal("# Zweite Fassung", SecureFile.ReadAllText(Path.Combine(Notes, first.NoteId + ".md")));
+        Assert.Contains("# Zweite Fassung", SecureFile.ReadAllText(first.KbPath));
+        Assert.Contains("# Erste Fassung", SecureFile.ReadAllText(first.KbPath + ".bak"));
+        Assert.Equal("Quelle unveraendert", SecureFile.ReadAllText(source.Note.Path));
     }
 
     [Fact]

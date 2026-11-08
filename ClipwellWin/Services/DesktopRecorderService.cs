@@ -65,7 +65,8 @@ public sealed class DesktopRecorderService : IDisposable
             _start = DateTime.Now;
             _snapshotCount = 0;
             var path = Path.Combine(_directory, RecordingMarkdown.FileNameFor(_start));
-            var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            // Every Flush becomes one encrypted record, so the knowledge base can read the running recording.
+            var fs = SecureFile.OpenAppend(path);
             _writer = new StreamWriter(fs, new UTF8Encoding(false)) { NewLine = "\n" };
             _writer.Write(RecordingMarkdown.SessionHeader(_start));
             _writer.Flush();

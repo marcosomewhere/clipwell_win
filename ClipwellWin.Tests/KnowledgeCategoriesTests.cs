@@ -28,6 +28,19 @@ public sealed class KnowledgeCategoriesTests
     }
 
     [Fact]
+    public void SubcategoryWithTheMainNameIsDropped()
+    {
+        Assert.Equal("Engineering", KnowledgeCategories.Combine("Engineering", "engineering "));
+        Assert.Equal("Engineering", KnowledgeCategories.Parse("Engineering › Engineering").ToString());
+        Assert.False(KnowledgeCategories.Of(new BrainAnnotation("", "Engineering", "Engineering")).HasSub);
+        Assert.Equal("Engineering › Build", KnowledgeCategories.Combine("Engineering", "Build"));
+        var state = new BackgroundDiscoveryState { Complete = true, Groups = [new(["a"], ["A"], "Engineering › Engineering", "", false, ""), new(["b"], ["B"], "Engineering", "", false, "")] };
+        var merged = Assert.Single(state.Ready(new HashSet<string> { "a", "b" }, ["Engineering"]));
+        Assert.Equal("Engineering", merged.Name);
+        Assert.Equal(2, merged.Count);
+    }
+
+    [Fact]
     public void PathRoundTripsAndOldAnnotationsStayReadable()
     {
         Assert.Equal("Reisen › Strand", KnowledgeCategories.Combine("Reisen", "Strand"));

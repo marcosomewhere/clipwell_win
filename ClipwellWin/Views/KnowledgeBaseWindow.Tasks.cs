@@ -360,9 +360,7 @@ public partial class KnowledgeBaseWindow
     private void SourceLink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
     {
         e.Handled = true;
-        if (e.Uri.Scheme is not ("http" or "https")) return;
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { App.LogCrash(ex); }
+        WebLink.TryOpen(e.Uri);
     }
 
     private TaskRow? EditingRow()

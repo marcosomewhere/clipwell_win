@@ -2584,18 +2584,7 @@ public partial class DetailWindow : Window
         catch { }
     }
 
-    private static void OpenUrl(string? url)
-    {
-        if (!UrlPreviewService.IsUrl(url)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo(url!)
-            {
-                UseShellExecute = true,
-            });
-        }
-        catch { }
-    }
+    private static void OpenUrl(string? url) => WebLink.TryOpen(url);
 
     private void SaveAs_Click(object sender, RoutedEventArgs e)
     {

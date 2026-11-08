@@ -22,6 +22,25 @@ public static partial class MailInbox
             ? Directory.GetFiles(directory, "*.json").OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList()
             : [];
 
+    private static readonly byte[] ProtectedMagic = "MKD1"u8.ToArray();
+    private static readonly byte[] Entropy = "Merkautomat.Inbox.v1"u8.ToArray();
+
+    /// <summary>Text of a handover file: protected for the current user (DPAPI), or plain JSON from older add-ins.</summary>
+    public static string Decode(byte[] data)
+    {
+        if (!data.AsSpan().StartsWith(ProtectedMagic)) return SecureFile.DecodeText(data);
+        try
+        {
+            var plain = System.Security.Cryptography.ProtectedData.Unprotect(data[ProtectedMagic.Length..], Entropy,
+                System.Security.Cryptography.DataProtectionScope.CurrentUser);
+            return new UTF8Encoding(false).GetString(plain);
+        }
+        catch (System.Security.Cryptography.CryptographicException ex)
+        {
+            throw new InvalidDataException("Die Übergabedatei ist für ein anderes Windows-Konto geschützt.", ex);
+        }
+    }
+
     public static InboxMail Parse(string json)
     {
         try

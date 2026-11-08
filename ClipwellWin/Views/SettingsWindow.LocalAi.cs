@@ -14,9 +14,44 @@ public partial class SettingsWindow
     {
         EditorChrome.ApplyTheme(this);
         SelectByTag(LocalAiModelBox, LocalAiModel.Normalize(_app.CurrentSettings.LocalAiModel));
+        SelectByTag(BackgroundModeBox, BackgroundWork.Normalize(_app.CurrentSettings.BackgroundWorkMode));
+        BackgroundKeepAwakeBox.IsChecked = _app.CurrentSettings.BackgroundKeepAwake;
         _localAiLoaded = true;
         UpdateLocalAiControls();
-        Closed += (_, _) => { _localAiClosed = true; _localAiOperation?.Cancel(); };
+        UpdateBackgroundStatus();
+        _app.BackgroundStatusChanged += App_BackgroundStatusChanged;
+        Closed += (_, _) =>
+        {
+            _localAiClosed = true;
+            _localAiOperation?.Cancel();
+            _app.BackgroundStatusChanged -= App_BackgroundStatusChanged;
+        };
+    }
+
+    private void App_BackgroundStatusChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(UpdateBackgroundStatus);
+
+    private void UpdateBackgroundStatus()
+    {
+        if (_localAiClosed) return;
+        BackgroundStatusText.Text = _app.BackgroundStatus.Length > 0 ? _app.BackgroundStatus : "Wird geprüft …";
+        BackgroundKeepAwakeBox.IsEnabled = BackgroundWork.Normalize(_app.CurrentSettings.BackgroundWorkMode) != BackgroundWork.Off;
+    }
+
+    private void BackgroundMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_localAiLoaded) return;
+        _app.CurrentSettings.BackgroundWorkMode = BackgroundWork.Normalize((BackgroundModeBox.SelectedItem as ComboBoxItem)?.Tag as string);
+        _app.SaveSettings();
+        _app.BackgroundSettingsChanged();
+        UpdateBackgroundStatus();
+    }
+
+    private void BackgroundKeepAwake_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_localAiLoaded) return;
+        _app.CurrentSettings.BackgroundKeepAwake = BackgroundKeepAwakeBox.IsChecked == true;
+        _app.SaveSettings();
+        _app.BackgroundSettingsChanged();
     }
 
     private void LocalAiModel_Changed(object sender, SelectionChangedEventArgs e)

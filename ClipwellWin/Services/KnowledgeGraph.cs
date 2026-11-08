@@ -233,25 +233,62 @@ public static class KnowledgeGraph
         return colon >= 0 && int.TryParse(key.AsSpan(colon + 1), out var n) ? n : 0;
     }
 
-    /// <summary>Each node links to its strongest neighbors above the threshold (union, so hubs can exceed k).</summary>
+    /// <summary>
+    /// The raw cosine must reach the threshold; among those candidates neighbors are ranked on centered vectors and
+    /// only (loosely) mutual k-nearest neighbors are linked, plus each node's single best neighbor so nobody is orphaned.
+    /// E5 places almost all texts at a raw cosine of 0.8 to 0.9, so without this everything chains into one topic.
+    /// </summary>
     private static void AddSemanticEdges(List<GraphNode> nodes, BrainOptions options, Action<int, int, GraphEdgeKind, float, string> add)
     {
         var n = nodes.Count;
-        var best = new List<(int Node, float Sim)>[n];
-        for (var i = 0; i < n; i++) best[i] = [];
+        var centered = CenteredVectors(nodes);
+        var candidates = new List<(int Node, float Score, float Sim)>[n];
+        for (var i = 0; i < n; i++) candidates[i] = [];
         for (var i = 0; i < n; i++)
         {
             for (var j = i + 1; j < n; j++)
             {
                 var sim = SemanticRanking.Dot(nodes[i].Vector, nodes[j].Vector);
                 if (sim < options.SemanticThreshold) continue;
-                best[i].Add((j, sim));
-                best[j].Add((i, sim));
+                var score = SemanticRanking.Dot(centered[i], centered[j]);
+                candidates[i].Add((j, score, sim));
+                candidates[j].Add((i, score, sim));
             }
         }
+        var ranked = candidates.Select(c => c.OrderByDescending(x => x.Score).ThenBy(x => x.Node).ToList()).ToArray();
+        // Mutual within 2k on the other side: a hub is in many top-k lists but keeps only its own 2k, while a dense
+        // group of near-copies stays well connected instead of thinning out to a chain.
+        var wide = ranked.Select(r => r.Take(2 * options.SemanticNeighbors).Select(x => x.Node).ToHashSet()).ToArray();
         for (var i = 0; i < n; i++)
-            foreach (var (j, sim) in best[i].OrderByDescending(x => x.Sim).Take(options.SemanticNeighbors))
-                add(i, j, GraphEdgeKind.Semantic, sim, $"inhaltlich {sim * 100:0} %");
+        {
+            for (var r = 0; r < Math.Min(ranked[i].Count, options.SemanticNeighbors); r++)
+            {
+                var (j, _, sim) = ranked[i][r];
+                if (r == 0 || wide[j].Contains(i))
+                    add(i, j, GraphEdgeKind.Semantic, sim, $"inhaltlich {sim * 100:0} %");
+            }
+        }
+    }
+
+    private const int MinNodesForCentering = 8;
+
+    /// <summary>Node vectors minus their mean, normalized; with few nodes the mean says nothing, so raw vectors stay.</summary>
+    private static float[][] CenteredVectors(List<GraphNode> nodes)
+    {
+        if (nodes.Count < MinNodesForCentering) return nodes.Select(x => x.Vector).ToArray();
+        var dims = nodes[0].Vector.Length;
+        var mean = new float[dims];
+        foreach (var node in nodes)
+            for (var k = 0; k < dims && k < node.Vector.Length; k++) mean[k] += node.Vector[k];
+        for (var k = 0; k < dims; k++) mean[k] /= nodes.Count;
+        return nodes.Select(node =>
+        {
+            var v = new float[dims];
+            for (var k = 0; k < dims && k < node.Vector.Length; k++) v[k] = node.Vector[k] - mean[k];
+            if (SemanticRanking.Dot(v, v) < 1e-8f) return node.Vector;
+            SemanticRanking.Normalize(v);
+            return v;
+        }).ToArray();
     }
 
     /// <summary>Consecutive snapshots of one recording form a chain.</summary>
@@ -465,6 +502,7 @@ public static class KnowledgeGraph
         "eigentlich", "einfach", "gerade", "irgendwie", "natürlich", "vielleicht", "schon", "noch", "dann",
         "quelle", "quellen", "kernaussagen", "kategorie", "originalaussagen", "ausgewählte", "markierten",
         "zusammenfassung", "gesamtaussage", "eintrag", "einträge", "eintraege", "formulierte",
+        "keine", "keinen", "löschen", "loeschen", "zurücksetzen", "zuruecksetzen", "abbrechen",
     };
 
     private static HashSet<string> TopicTerms(string text)

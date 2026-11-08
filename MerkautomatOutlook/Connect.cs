@@ -114,7 +114,9 @@ public sealed class Connect : IDTExtensibility2, IRibbonExtensibility
     {
         if (Process.GetProcessesByName("Merkautomat").Length > 0) return;
         using var key = Registry.CurrentUser.OpenSubKey(AddinKey);
-        if (key?.GetValue("MerkautomatPath") is string path && File.Exists(path))
+        // Only ever start Merkautomat itself, whatever else ends up in the registry value.
+        if (key?.GetValue("MerkautomatPath") is string path && Path.IsPathRooted(path)
+            && string.Equals(Path.GetFileName(path), "Merkautomat.exe", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(path) });
     }
 

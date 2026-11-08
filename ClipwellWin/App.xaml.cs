@@ -72,6 +72,12 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+        // Settings, history and all files are encrypted with this key, so it comes before any of them is read.
+        if (!UnlockData())
+        {
+            Shutdown();
+            return;
+        }
 
         _settings = new SettingsService();
         _settings.Load();
@@ -120,6 +126,7 @@ public partial class App : System.Windows.Application
             ShowHotkeyRegistrationWarning();
         RegisterEntryHotkeys();
         StartMailInbox();
+        StartBackgroundWork();
 
         _ = Task.Run(() => RunAutoBackupIfNeeded());
         var liveIds = _popupVm.Entries.Select(e => e.Id).ToHashSet();
@@ -141,6 +148,7 @@ public partial class App : System.Windows.Application
                 _onboarding.Show();
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
+        Dispatcher.InvokeAsync(ShowRecoveryKeyIfPending, System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
     private bool MarkOnboardingSeenIfNeeded()
@@ -208,9 +216,11 @@ public partial class App : System.Windows.Application
             Directory.CreateDirectory(AppPaths.DataDir);
             lock (LogLock)
             {
-                File.AppendAllText(
-                    Path.Combine(AppPaths.DataDir, "clipwell.log"),
-                    $"[{DateTime.Now:O}] {ex}\r\n\r\n");
+                var log = Path.Combine(AppPaths.DataDir, "clipwell.log");
+                // Keeps the log bounded: one previous generation, then the oldest lines go.
+                if (new FileInfo(log) is { Exists: true, Length: > 2 * 1024 * 1024 })
+                    File.Move(log, log + ".1", overwrite: true);
+                File.AppendAllText(log, $"[{DateTime.Now:O}] {ex}\r\n\r\n");
             }
         }
         catch { }
@@ -1410,6 +1420,7 @@ public partial class App : System.Windows.Application
         _singleInstanceMutex?.Dispose();
         _trayIcon?.Dispose();
         StopMailInbox();
+        StopBackgroundWork();
         _msgWin?.Dispose();
         _recorder?.Dispose();
         _dictation?.Dispose();

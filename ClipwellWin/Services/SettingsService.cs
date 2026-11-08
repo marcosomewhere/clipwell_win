@@ -23,10 +23,21 @@ public class SettingsService
         if (!File.Exists(SettingsPath)) { Save(); return; }
         try
         {
-            var json = File.ReadAllText(SettingsPath);
+            var json = SecureFile.ReadAllText(SettingsPath);
             Settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOpts) ?? new();
         }
-        catch { Settings = new(); }
+        catch (Exception ex) when (ex is JsonException or System.Security.Cryptography.CryptographicException or InvalidDataException)
+        {
+            // Names, categories and relations live here: keep the unreadable file instead of overwriting it on the next save.
+            App.LogCrash(ex);
+            Settings = new();
+            File.Move(SettingsPath, SettingsPath + $".defekt-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            App.LogCrash(ex);
+            Settings = new();
+        }
 
         if (Settings.Theme == ClipwellWin.Models.ThemeMode.Compact)
         {
@@ -43,7 +54,7 @@ public class SettingsService
             var json = JsonSerializer.Serialize(Settings, JsonOpts);
             // atomic: temp + replace prevents partial writes on crash
             var tmp = SettingsPath + ".tmp";
-            File.WriteAllText(tmp, json);
+            SecureFile.WriteAllText(tmp, json);
             if (File.Exists(SettingsPath))
                 File.Replace(tmp, SettingsPath, null);
             else

@@ -42,6 +42,17 @@ models\ggml-base.bin
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
+SQLite3 Multiple Ciphers 2.6.1 (sqlite3mc.dll, SQLite3MC.PCLRaw.bundle), encryption of the local databases
+  https://github.com/utelle/SQLite3MultipleCiphers
+  https://github.com/utelle/SQLite3MultipleCiphers-NuGet
+  MIT License, Copyright (c) 2019-2026 Ulrich Telle, et al.
+  Based on SQLite 3.54.0 (https://sqlite.org), public domain.
+
+SQLitePCLRaw core, Microsoft.Data.Sqlite.Core
+  https://github.com/ericsink/SQLitePCL.raw
+  https://github.com/dotnet/efcore
+  Apache License 2.0 (SQLitePCLRaw), MIT License (Microsoft.Data.Sqlite), Copyright (c) Eric Sink, .NET Foundation and Contributors
+
 Whisper.net (runtime and bindings)
   https://github.com/sandrohanea/whisper.net
   MIT License, Copyright (c) Sandro Hanea

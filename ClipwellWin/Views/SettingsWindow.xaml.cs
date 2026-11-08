@@ -485,7 +485,14 @@ public partial class SettingsWindow : FluentWindow
         if (dlg.ShowDialog() != true) return;
         try
         {
-            var (count, skipped, errors) = _app.Database.ImportFromJsonDetailed(dlg.FileName);
+            (int count, int skipped, List<string> errors) result;
+            try { result = _app.Database.ImportFromJsonDetailed(dlg.FileName); }
+            catch (Services.ForeignKeyException foreign)
+            {
+                if (!App.OpenForeignData(this, foreign)) return;
+                result = _app.Database.ImportFromJsonDetailed(dlg.FileName);
+            }
+            var (count, skipped, errors) = result;
             var msg = $"{count} Einträge importiert";
             if (skipped > 0) msg += $", {skipped} Duplikate übersprungen";
             msg += $". Bitte {AppNames.App} neu starten.";
@@ -494,6 +501,19 @@ public partial class SettingsWindow : FluentWindow
             ShowInfo(msg);
         }
         catch (Exception ex) { ShowError($"Import fehlgeschlagen: {ex.Message}"); }
+    }
+
+    private void ShowRecoveryKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (Services.DataProtection.Current.RecoveryKey is not { } key)
+        {
+            ShowError("Der Notschlüssel ist auf diesem Konto nicht hinterlegt.");
+            return;
+        }
+        RecoveryKeyWindow.ShowKey(this, key, "Notschlüssel",
+            "Damit öffnest du die verschlüsselten Daten und Auto-Backups auf einem anderen PC oder nach einem neuen Windows-Profil. " +
+            "Bewahre ihn im Passwortmanager oder auf Papier auf, nicht als Datei auf diesem PC.",
+            requireConfirmation: false);
     }
 
     private void ResetHistory_Click(object sender, RoutedEventArgs e)
@@ -550,7 +570,7 @@ public partial class SettingsWindow : FluentWindow
         var path = Services.SettingsService.SettingsPath;
         var json = System.Text.Json.JsonSerializer.Serialize(defaults,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        System.IO.File.WriteAllText(path, json);
+        Services.SecureFile.WriteAllTextAtomic(path, json);
         _skipSaveOnClose = true;
 
         ShowInfo($"Einstellungen zurückgesetzt. Bitte {AppNames.App} neu starten.");
@@ -650,6 +670,12 @@ public partial class SettingsWindow : FluentWindow
         var ver = asm.GetName().Version;
         AboutVersionLabel.Text = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.0.0";
     }
+
+    private void AboutCover_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) => ShowStory();
+
+    private void AboutStory_Click(object sender, RoutedEventArgs e) => ShowStory();
+
+    private void ShowStory() => new StoryViewerWindow { Owner = this }.ShowDialog();
 
     private void ShowError(string msg) =>
         MessageBox.Show(msg, AppNames.App, MessageBoxButton.OK, MessageBoxImage.Warning);

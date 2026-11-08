@@ -117,4 +117,4 @@ Dependency status: the previous `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 `NU1903` war
 - [STATUS.md](STATUS.md): current state, latest review, verification and known warnings
 - [ROADMAP.md](ROADMAP.md): consolidated feature gaps and product roadmap
 - [ARCHITECTURE.md](ARCHITECTURE.md): stable technical map for Codex, Claude and maintainers
-- [handbuch.md](handbuch.md): user-facing manual
+- [handbuch.md](handbuch.md): manual in German, part A for users, part B for admins

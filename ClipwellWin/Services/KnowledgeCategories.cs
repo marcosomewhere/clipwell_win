@@ -10,10 +10,11 @@ public readonly record struct CategoryPath
     private readonly string? _main;
     private readonly string? _sub;
 
+    /// <summary>A subcategory with the name of its main category adds nothing ("Engineering › Engineering") and is dropped.</summary>
     public CategoryPath(string? main, string? sub)
     {
         _main = main;
-        _sub = sub;
+        _sub = sub != null && main != null && string.Equals(sub.Trim(), main.Trim(), StringComparison.OrdinalIgnoreCase) ? "" : sub;
     }
 
     public string Main { get => _main ?? ""; init => _main = value; }

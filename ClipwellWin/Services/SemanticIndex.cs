@@ -112,7 +112,7 @@ public sealed class SemanticIndex : IDisposable
             _fileCache[path] = (stamp, chunks);
             return chunks;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException) { return []; }
     }
 
     // ---- Sync ------------------------------------------------------------------------------------------------
@@ -241,7 +241,8 @@ public sealed class SemanticIndex : IDisposable
     {
         if (_conn != null) return;
         Directory.CreateDirectory(Path.GetDirectoryName(_dbPath)!);
-        _conn = new SqliteConnection($"Data Source={_dbPath};Default Timeout=5;Pooling=False");
+        EncryptedDatabase.EnsureEncrypted(_dbPath, EncryptedDatabase.Semantic);
+        _conn = new SqliteConnection(EncryptedDatabase.ConnectionString(_dbPath, EncryptedDatabase.Semantic, "Default Timeout=5;Pooling=False"));
         _conn.Open();
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = @"PRAGMA journal_mode=WAL;

@@ -33,13 +33,13 @@ public static partial class TaskStore
     public static List<KbTask> Load(string path)
     {
         if (!File.Exists(path)) return [];
-        var json = File.ReadAllText(path, Encoding.UTF8);
-        if (json.Trim().Length == 0) return [];
         try
         {
+            var json = SecureFile.ReadAllText(path);
+            if (json.Trim().Length == 0) return [];
             return (JsonSerializer.Deserialize<List<KbTask>>(json, Json) ?? []).Where(t => t != null && t.Id.Length > 0).ToList();
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or System.Security.Cryptography.CryptographicException or InvalidDataException)
         {
             // Keep the unreadable file for manual recovery instead of overwriting it with the next save.
             File.Move(path, path + $".defekt-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
@@ -51,7 +51,7 @@ public static partial class TaskStore
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(tasks.ToList(), Json), new UTF8Encoding(false));
+        SecureFile.WriteAllText(temp, JsonSerializer.Serialize(tasks.ToList(), Json));
         File.Move(temp, path, overwrite: true);
     }
 

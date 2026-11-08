@@ -11,26 +11,33 @@ public class UrlPreviewService : IDisposable
 {
     private readonly HttpClient _http;
 
+    // Page content is untrusted: a crafted page must not keep the regex engine busy.
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private static readonly Regex TitleRx = new(@"<title[^>]*>([^<]{1,300})</title>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeout);
     private static readonly Regex LinkRx = new(@"<link\b[^>]*>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeout);
     private static readonly Regex AttrRx = new(@"(?<name>[\w:-]+)\s*=\s*([""'])(?<value>.*?)\2",
-        RegexOptions.IgnoreCase);
+        RegexOptions.IgnoreCase, RegexTimeout);
     private static readonly Regex MetaCharsetRx = new(
-        @"<meta\b[^>]*(?:charset\s*=\s*[""']?(?<charset>[-\w.]+)|content\s*=\s*[""'][^""']*charset\s*=\s*(?<charset>[-\w.]+))",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        @"<meta\b[^>]{0,2048}?(?:charset\s*=\s*[""']?(?<charset>[-\w.]+)|content\s*=\s*[""'][^""']{0,2048}?charset\s*=\s*(?<charset>[-\w.]+))",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeout);
 
     private const int MaxHtmlBytes = 512 * 1024;
     private const int MaxFaviconBytes = 256 * 1024;
+    private const int MaxRedirects = 3;
 
     public UrlPreviewService()
     {
         var handler = new SocketsHttpHandler
         {
             ConnectCallback = ConnectGuardedAsync,
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 3,
+            // Direct connections only: through a proxy the proxy resolves the host, and the connect guard would only
+            // see the proxy's address (DNS rebinding could then reach internal hosts). Behind a mandatory proxy the
+            // preview simply stays empty.
+            UseProxy = false,
+            // Redirects are followed by hand so every hop is checked.
+            AllowAutoRedirect = false,
         };
         _http = new HttpClient(handler)
         {
@@ -56,29 +63,56 @@ public class UrlPreviewService : IDisposable
 
         var host = uri.Host;
         if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
-        if (IPAddress.TryParse(host, out var ip))
+        if (IPAddress.TryParse(host, out var ip) && IsPrivate(ip)) return false;
+        return true;
+    }
+
+    /// <summary>Loopback, private, link-local, shared, multicast and reserved addresses, also as IPv4-mapped IPv6.</summary>
+    public static bool IsPrivate(IPAddress ip)
+    {
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        if (IPAddress.IsLoopback(ip)) return true;
+        if (ip.AddressFamily == AddressFamily.InterNetwork)
         {
-            if (IPAddress.IsLoopback(ip)) return false;
-            if (IsPrivate(ip)) return false;
+            var b = ip.GetAddressBytes();
+            if (b[0] == 0) return true;                                 // 0.0.0.0/8 "this network"
+            if (b[0] == 10) return true;                                // 10.0.0.0/8
+            if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;  // 100.64.0.0/10 shared (CGNAT, VPN)
+            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;   // 172.16.0.0/12
+            if (b[0] == 192 && b[1] == 168) return true;                // 192.168.0.0/16
+            if (b[0] == 192 && b[1] == 0 && b[2] == 0) return true;     // 192.0.0.0/24 protocol assignments
+            if (b[0] == 169 && b[1] == 254) return true;                // 169.254.0.0/16 link-local
+            if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true; // 198.18.0.0/15 benchmarking
+            if (b[0] >= 224) return true;                               // multicast, reserved, broadcast
+            return false;
+        }
+        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            var b = ip.GetAddressBytes();
+            if (b.Take(12).All(x => x == 0)) return true;               // ::, ::1 and IPv4-compatible ::a.b.c.d
+            return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast
+                || (b[0] & 0xFE) == 0xFC;                               // fc00::/7 unique-local
         }
         return true;
     }
 
-    private static bool IsPrivate(IPAddress ip)
+    /// <summary>
+    /// GET with at most <see cref="MaxRedirects"/> redirects. Every hop must be http(s) and pass the address check;
+    /// the address actually connected to is checked again in <see cref="ConnectGuardedAsync"/>.
+    /// </summary>
+    private async Task<HttpResponseMessage> GetCheckedAsync(string url)
     {
-        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        var uri = new Uri(url.Trim());
+        for (var hop = 0; ; hop++)
         {
-            var b = ip.GetAddressBytes();
-            if (b[0] == 10) return true;                              // 10.0.0.0/8
-            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true; // 172.16.0.0/12
-            if (b[0] == 192 && b[1] == 168) return true;             // 192.168.0.0/16
-            if (b[0] == 169 && b[1] == 254) return true;             // 169.254.0.0/16 link-local
-            return false;
+            if (!ShouldFetch(uri.AbsoluteUri)) throw new HttpRequestException("URL preview target is not public.");
+            var response = await _http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead);
+            var status = (int)response.StatusCode;
+            if (status is < 300 or > 399 || response.Headers.Location is not { } location) return response;
+            response.Dispose();
+            if (hop >= MaxRedirects) throw new HttpRequestException("Too many redirects.");
+            uri = location.IsAbsoluteUri ? location : new Uri(uri, location);
         }
-        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-            return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal
-                || (ip.GetAddressBytes()[0] & 0xFE) == 0xFC;          // fc00::/7 unique-local
-        return false;
     }
 
     public async Task<(string? title, byte[]? favicon)> FetchAsync(string url)
@@ -87,7 +121,7 @@ public class UrlPreviewService : IDisposable
 
         try
         {
-            using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await GetCheckedAsync(url);
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync();
             var buf = new byte[MaxHtmlBytes];
@@ -121,7 +155,7 @@ public class UrlPreviewService : IDisposable
 
     private async Task<byte[]> FetchLimitedBytesAsync(string url, int maxBytes)
     {
-        using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        using var response = await GetCheckedAsync(url);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength.HasValue
             && response.Content.Headers.ContentLength.Value > maxBytes)
@@ -178,7 +212,7 @@ public class UrlPreviewService : IDisposable
 
         if (IPAddress.TryParse(host, out var literal))
         {
-            if (IPAddress.IsLoopback(literal) || IsPrivate(literal))
+            if (IsPrivate(literal))
                 throw new HttpRequestException("Private address URL preview is blocked.");
             addresses = [literal];
         }
@@ -186,7 +220,7 @@ public class UrlPreviewService : IDisposable
         {
             addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
             addresses = addresses
-                .Where(ip => !IPAddress.IsLoopback(ip) && !IsPrivate(ip))
+                .Where(ip => !IsPrivate(ip))
                 .ToArray();
             if (addresses.Length == 0)
                 throw new HttpRequestException("Resolved URL preview address is private.");

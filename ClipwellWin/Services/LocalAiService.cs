@@ -20,6 +20,13 @@ public sealed class LocalAiService : IDisposable
     private HttpClient? _client;
     private bool _disposed;
     private readonly Dictionary<string, LocalAiSuggestion> _cache = [];
+    private AiLoad _backgroundLoad = AiLoad.Eco;
+    private AiLoad _appliedLoad = AiLoad.Normal;
+    private CancellationTokenSource? _backgroundCall;
+    private int _interactiveWaiting;
+    private DateTime _lastInteractiveUse = DateTime.MinValue;
+    /// <summary>Last direct (non-background) model call; background work stays away for a while after it.</summary>
+    public DateTime LastInteractiveUse { get { lock (_sync) return _lastInteractiveUse; } }
     public LocalAiModel Model { get; }
     public E5Categorization? E5 => _e5;
     public bool UsesE5 => LocalAiModel.Normalize(_selection()) == E5Categorization.Id;
@@ -58,8 +65,13 @@ public sealed class LocalAiService : IDisposable
     /// and the search model, E5 runs first: <paramref name="e5First"/> lets a confident E5 answer from own examples
     /// replace the slow Granite call, otherwise E5's best candidates are passed to Granite as hints.
     /// </summary>
+    /// <param name="background">
+    /// Background work: runs with the load set by <see cref="SetBackgroundLoad"/> and a longer limit, and gives way to
+    /// every direct call (then throws <see cref="OperationCanceledException"/>).
+    /// </param>
     public async Task<LocalAiSuggestion> SuggestWithGraniteAsync(IEnumerable<BrainSource> sources, IEnumerable<string> categories,
-        CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? assignments = null, bool e5First = false)
+        CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? assignments = null, bool e5First = false,
+        bool background = false)
     {
         if (!Model.IsInstalled) throw new InvalidOperationException("Granite ist nicht installiert. Bitte zuerst herunterladen.");
         var sourceList = sources.ToArray();
@@ -67,7 +79,7 @@ public sealed class LocalAiService : IDisposable
         var e5 = await TryE5Async(sourceList, categoryList, cancellationToken, assignments).ConfigureAwait(false);
         if (e5First && CategorizationCascade.Settles(e5)) return CategorizationCascade.Shortcut(e5!);
         return await SuggestCoreAsync(sourceList, categoryList, cancellationToken, null, useE5: false,
-            CategorizationCascade.Hints(e5)).ConfigureAwait(false);
+            CategorizationCascade.Hints(e5), background).ConfigureAwait(false);
     }
 
     /// <summary>E5 as a cheap first step; any failure just means Granite works without hints.</summary>
@@ -91,7 +103,8 @@ public sealed class LocalAiService : IDisposable
     public bool E5Ready => _e5?.Ready == true;
 
     private Task<LocalAiSuggestion> SuggestCoreAsync(IEnumerable<BrainSource> sources, IEnumerable<string> categories,
-        CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? assignments, bool useE5, IReadOnlyList<string>? hints = null)
+        CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? assignments, bool useE5, IReadOnlyList<string>? hints = null,
+        bool background = false)
     {
         var sourceList = sources.ToArray();
         var categoryList = categories.ToArray();
@@ -110,7 +123,7 @@ public sealed class LocalAiService : IDisposable
             if (_cache.Count >= 64) _cache.Clear();
             _cache[key] = result;
             return result;
-        }, "Bitte weniger Quellen auswählen und erneut versuchen.", cancellationToken);
+        }, "Bitte weniger Quellen auswählen und erneut versuchen.", cancellationToken, background);
     }
 
     /// <summary>
@@ -139,28 +152,55 @@ public sealed class LocalAiService : IDisposable
         return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>One model call at a time, bound to the current session and a three-minute limit.</summary>
-    private async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, string timeoutHint, CancellationToken cancellationToken)
+    /// <summary>
+    /// One model call at a time, bound to the current session and a three-minute limit (ten minutes in the background,
+    /// where the process may run throttled). A direct call cancels a running background call instead of queueing behind it.
+    /// </summary>
+    private async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, string timeoutHint, CancellationToken cancellationToken,
+        bool background = false)
     {
         CancellationToken session;
+        using var preempt = background ? new CancellationTokenSource() : null;
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             session = _session.Token;
+            if (!background)
+            {
+                _lastInteractiveUse = DateTime.Now;
+                _interactiveWaiting++;
+                _backgroundCall?.Cancel();
+            }
         }
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(session, cancellationToken);
-        linked.CancelAfter(TimeSpan.FromMinutes(3));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(session, cancellationToken, preempt?.Token ?? CancellationToken.None);
+        linked.CancelAfter(background ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(3));
         var ct = linked.Token;
-        await _requests.WaitAsync(ct).ConfigureAwait(false);
+        try { await _requests.WaitAsync(ct).ConfigureAwait(false); }
+        finally
+        {
+            if (!background) lock (_sync) _interactiveWaiting--;
+        }
         try
         {
+            lock (_sync)
+            {
+                if (!background) _lastInteractiveUse = DateTime.Now;
+                else if (_interactiveWaiting > 0) preempt!.Cancel();
+                else _backgroundCall = preempt;
+            }
             ct.ThrowIfCancellationRequested();
+            ApplyLoad(background ? BackgroundLoad : AiLoad.Normal);
             return await work(ct).ConfigureAwait(false);
+        }
+        // Giving way keeps the server running: llama.cpp drops a request whose connection was closed.
+        catch (Exception) when (preempt?.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested && !session.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("Die Hintergrundarbeit hat einer direkten Anfrage Platz gemacht.", preempt.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && !session.IsCancellationRequested)
         {
             Stop();
-            throw new TimeoutException("Die lokale KI hat nach drei Minuten nicht geantwortet. " + timeoutHint);
+            throw new TimeoutException($"Die lokale KI hat nach {(background ? "zehn" : "drei")} Minuten nicht geantwortet. " + timeoutHint);
         }
         catch (Exception) when (ct.IsCancellationRequested)
         {
@@ -173,7 +213,37 @@ public sealed class LocalAiService : IDisposable
             Stop();
             throw;
         }
-        finally { _requests.Release(); }
+        finally
+        {
+            lock (_sync) if (_backgroundCall == preempt) _backgroundCall = null;
+            _requests.Release();
+        }
+    }
+
+    private AiLoad BackgroundLoad { get { lock (_sync) return _backgroundLoad; } }
+
+    /// <summary>Load for background calls; applied at once when a background call is running.</summary>
+    public void SetBackgroundLoad(AiLoad load)
+    {
+        bool running;
+        lock (_sync)
+        {
+            if (_backgroundLoad == load && (_backgroundCall == null || _appliedLoad == load)) return;
+            _backgroundLoad = load;
+            running = _backgroundCall != null;
+        }
+        if (running) ApplyLoad(load);
+    }
+
+    private void ApplyLoad(AiLoad load)
+    {
+        Process? process;
+        lock (_sync)
+        {
+            _appliedLoad = load;
+            process = _process;
+        }
+        if (process != null) ProcessLoad.Apply(process, load);
     }
 
     private async Task<HttpClient> StartAsync(CancellationToken ct)
@@ -199,10 +269,12 @@ public sealed class LocalAiService : IDisposable
         // Ignore inherited llama settings: no remote model, tool, proxy or listener configuration.
         foreach (var name in start.Environment.Keys.Where(k => k.StartsWith("LLAMA_", StringComparison.OrdinalIgnoreCase)).ToArray())
             start.Environment.Remove(name);
+        // Through the environment, not the command line: command lines end up in process lists and EDR/audit logs.
+        start.Environment["LLAMA_API_KEY"] = key;
         foreach (var argument in new[]
         {
             "--model", Model.ModelPath, "--host", "127.0.0.1", "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--api-key", key, "--ctx-size", "4096", "--parallel", "1", "--threads", Math.Clamp(Environment.ProcessorCount / 2, 1, 4).ToString(),
+            "--ctx-size", "4096", "--parallel", "1", "--threads", Math.Clamp(Environment.ProcessorCount / 2, 1, 4).ToString(),
             "--gpu-layers", "0", "--no-webui", "--no-webui-mcp-proxy", "--reasoning", "off", "--log-disable",
             "--sleep-idle-seconds", "180"
         }) start.ArgumentList.Add(argument);
@@ -221,6 +293,7 @@ public sealed class LocalAiService : IDisposable
             _client = client;
             _process = Process.Start(start) ?? throw new InvalidOperationException("Die lokale KI konnte nicht gestartet werden.");
             ChildProcessJob.Assign(_process);
+            ProcessLoad.Apply(_process, _appliedLoad);
             _process.OutputDataReceived += (_, _) => { };
             _process.ErrorDataReceived += (_, _) => { };
             _process.BeginOutputReadLine();

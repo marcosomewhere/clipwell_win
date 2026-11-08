@@ -132,6 +132,23 @@ public partial class KnowledgeBaseWindow
         await RunDiscoveryAsync(null, this);
     }
 
+    /// <summary>Opens the category analysis, with proposals prepared in the background if there are any.</summary>
+    internal async Task ShowCategoryDiscoveryAsync()
+    {
+        if (_categorizeOpening || !await EnsureIndexAsync(null)) return;
+        await RunDiscoveryAsync(null, this);
+    }
+
+    private void App_PreparedDiscoveryChanged(object? sender, EventArgs e) => UpdateDiscoveryHint();
+
+    private void UpdateDiscoveryHint()
+    {
+        var ready = _app.PreparedDiscoveryCount;
+        DiscoveryMenuItem.Header = ready > 0 ? $"Kategorien analysieren (Granite) … · {ready} Vorschläge bereit" : "Kategorien analysieren (Granite) …";
+        DiscoveryButton.Content = ready > 0 ? $"Kategorievorschläge bereit ({ready}) …" : "Kategorien analysieren …";
+        DiscoveryButton.Style = (Style)FindResource(ready > 0 ? "PrimaryEditorButtonStyle" : "EditorButtonStyle");
+    }
+
     /// <summary>
     /// Runs the Granite analysis over the newest uncategorized entries, or over <paramref name="onlyKeys"/> (any
     /// category, for re-categorizing). Returns item key to category for everything the user saved.
@@ -143,18 +160,14 @@ public partial class KnowledgeBaseWindow
         settings.BrainAnnotations ??= [];
         var annotations = settings.BrainAnnotations;
         var only = onlyKeys?.ToHashSet(StringComparer.Ordinal);
-        var candidates = _app.Semantic.Snapshot().GroupBy(c => c.Chunk.ItemKey)
-            .Where(g => only != null ? only.Contains(g.Key) : KnowledgeCategories.Effective(annotations, g.Key).IsEmpty)
-            .Select(g => (Key: g.Key, Chunk: g.First().Chunk, Date: g.Max(c => c.Chunk.Date), Vector: RocchioModel.Mean(g.Select(c => c.Vector).ToArray())))
-            .OrderByDescending(x => x.Date).Take(CategoryDiscovery.MaxItems).ToList();
-        var texts = _app.Semantic.ItemTexts(candidates.Select(c => c.Key).ToList());
-        var items = candidates.Where(c => texts.ContainsKey(c.Key))
-            .Select(c => new DiscoveryItem(c.Key, c.Chunk.Title, texts[c.Key].Text, c.Date, c.Vector)).ToList();
+        var items = CategoryDiscovery.Candidates(_app.Semantic.Snapshot(), annotations, _app.Semantic.ItemTexts, only);
         var existing = KnowledgeCategories.Mains(settings);
         var categorized = items.Where(i => !KnowledgeCategories.Effective(annotations, i.Key).IsEmpty).Select(i => i.Key).ToHashSet();
+        var prepared = only == null ? _app.TakePreparedDiscovery(items, existing) : null;
         var window = new CategoryDiscoveryWindow(_app.LocalAi, items, existing, PersistCategory, _app.RecordCategorizationFeedback,
             scope: only != null ? $"{items.Count} markierte Einträge" + (categorized.Count > 0 ? $", davon {categorized.Count} schon mit Kategorie" : "") : null,
-            alreadyCategorized: categorized, assignments: KnowledgeCategories.Assignments(annotations)) { Owner = owner };
+            alreadyCategorized: categorized, assignments: KnowledgeCategories.Assignments(annotations),
+            prepared: prepared?.Proposals, preparedAt: prepared?.Finished) { Owner = owner };
         window.ShowDialog();
         if (!window.Changed) return window.Applied;
         try { _app.SaveSettings(); }

@@ -138,6 +138,27 @@ public class KnowledgeGraphTests
     }
 
     [Fact]
+    public void Build_RanksNeighborsOnCenteredVectorsSoACommonDirectionDoesNotMergeTopics()
+    {
+        // Every pair is above the raw threshold, and strong-common items of different topics are rawly closer
+        // than weak-common items of the same topic; only after removing the shared direction do topics separate.
+        var chunks = new List<IndexedChunk>();
+        for (var i = 0; i < 8; i++)
+        {
+            var common = i % 2 == 0 ? 3f : 1f;
+            chunks.Add(Item($"n:a{i}", SemanticSource.Note, i * 100, Unit(common, 0.35f, 0), "Zertifikat VPN"));
+            chunks.Add(Item($"n:b{i}", SemanticSource.Note, 5000 + i * 100, Unit(common, 0, 0.35f), "Apfelkuchen Zimt"));
+        }
+
+        var g = KnowledgeGraph.Build(chunks, Options);
+
+        var semantic = g.Edges.Where(e => e.Kind == GraphEdgeKind.Semantic).ToList();
+        Assert.NotEmpty(semantic);
+        Assert.All(semantic, e => Assert.Equal(g.Nodes[e.A].ItemKey[..3], g.Nodes[e.B].ItemKey[..3]));
+        Assert.Equal(2, g.Clusters.Count);
+    }
+
+    [Fact]
     public void Neighbors_MergesReasonsAndNeighborhoodFollowsHops()
     {
         var v = Unit(1, 0, 0);

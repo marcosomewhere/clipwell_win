@@ -149,6 +149,16 @@
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
+                                    <TextBlock Text="Verschlüsselung und Notschlüssel" FontWeight="SemiBold" />
+                                    <TextBlock Text="History, Sprachnotizen, Bildschirmaufnahmen, Aufgaben, Einstellungen und Auto-Backups liegen verschlüsselt auf der Platte, gebunden an dein Windows-Konto. Der Notschlüssel öffnet sie auch auf einem anderen PC." FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:Button Content="Notschlüssel anzeigen …" Click="ShowRecoveryKey_Click" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,8">
+                            <ui:CardControl.Header>
+                                <StackPanel>
                                     <TextBlock Text="Kopierte Dateien mit Inhalt speichern" FontWeight="SemiBold" />
                                     <TextBlock Text="Wird eine Datei (z. B. im Explorer) kopiert, übernimmt Merkautomat bei den unten genannten Dateitypen den Textinhalt; Dateiname und Pfad bleiben als Quelle am Eintrag. Aus = kopierte Dateien werden nicht gespeichert." FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
                                 </StackPanel>
@@ -279,7 +289,8 @@
                             </ui:CardExpander.Header>
                             <StackPanel Margin="0,8,0,0">
 
-                                <TextBlock Text="Manueller Export" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <TextBlock Text="Manueller Export" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                <TextBlock Text="Unverschlüsselt, zum Weiterverwenden in anderen Programmen. Speicherort mit Bedacht wählen." FontSize="12" Opacity="0.6" Margin="0,0,0,6" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <ui:Button Content="Als JSON exportieren" Click="ExportJson_Click" Margin="0,0,8,0" />
                                     <ui:Button Content="SQLite-Backup exportieren" Click="ExportSqlite_Click" />
@@ -297,7 +308,7 @@
                                 <Separator Margin="0,0,0,12" />
 
                                 <TextBlock Text="Automatisches tägliches Backup" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                <TextBlock Text="Einmal täglich beim Start einen JSON-Export anlegen" FontSize="12" Opacity="0.6" Margin="0,0,0,10" />
+                                <TextBlock Text="Einmal täglich beim Start einen verschlüsselten JSON-Export anlegen; auf einem anderen PC öffnet ihn der Notschlüssel" FontSize="12" Opacity="0.6" Margin="0,0,0,10" TextWrapping="Wrap" />
 
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
@@ -582,6 +593,19 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
+                        <TextBlock Text="Hintergrundarbeit" FontWeight="SemiBold" Margin="0,24,0,8" />
+                        <TextBlock Text="Granite bereitet „Kategorien analysieren“ vor, während du den PC nicht brauchst. Fertige Vorschläge meldet das Tray-Symbol; im Ideenkombinat öffnen sie sich ohne Wartezeit. Gespeichert wird weiterhin erst nach deiner Bestätigung. Gilt auch, wenn oben E5 gewählt ist; benötigt das installierte Granite-Modell." Margin="0,0,0,10" Opacity="0.75" />
+                        <ComboBox x:Name="BackgroundModeBox" HorizontalAlignment="Stretch" SelectionChanged="BackgroundMode_Changed">
+                            <ComboBoxItem Tag="off" Content="Aus" />
+                            <ComboBoxItem Tag="idle" Content="Nur im Leerlauf (5 Minuten ohne Eingabe)" />
+                            <ComboBoxItem Tag="always" Content="Auch während der Arbeit, sparsam" />
+                        </ComboBox>
+                        <CheckBox x:Name="BackgroundKeepAwakeBox" Content="PC nicht in den Energiesparmodus wechseln lassen, solange gerechnet wird" Margin="0,10,0,0"
+                                  Checked="BackgroundKeepAwake_Changed" Unchecked="BackgroundKeepAwake_Changed" />
+                        <Border Style="{StaticResource BrainCard}" Margin="0,10,0,0">
+                            <TextBlock x:Name="BackgroundStatusText" Text="" />
+                        </Border>
+                        <TextBlock Text="Rücksicht: Granite läuft immer mit niedriger Priorität; während du arbeitest oder ein Video im Vollbild läuft, zusätzlich im Windows-Sparmodus (EcoQoS, bevorzugt Effizienzkerne). Im Akkubetrieb, bei Vollbildspielen und Präsentationen pausiert die Hintergrundarbeit sofort, bei direkter Nutzung der lokalen KI für drei Minuten. Nach einer Pause geht es mit der nächsten Gruppe weiter; fertige Gruppen bleiben erhalten." Margin="0,10,0,0" Opacity="0.75" />
                         <TextBlock Text="So funktioniert es" FontWeight="SemiBold" Margin="0,24,0,8" />
                         <TextBlock Text="Im Brain bei „Thema zuordnen“ oder „Zusammenfassen“ erstellt die aktivierte KI automatisch einen Vorschlag. „KI-Vorschlag übernehmen“ setzt die Kategorie; bei Granite auch den Titel. Erst das anschließende Speichern schreibt die Änderung. E5 benötigt mindestens zwei bereits gespeicherte Kategorien. Mit „Mit lokaler KI einordnen …“ im Brain, „Ohne Kategorie einordnen …“ und „Markierte einordnen …“ in der Suche lassen sich auch viele Einträge nacheinander bestätigen." Opacity="0.75" />
                         <TextBlock Text="Noch keine Kategorien? Im Ideenkombinat „Mehr → Kategorien analysieren (Granite) …“ gruppiert die Einträge und lässt Granite Kategorien vorschlagen, auch wenn hier E5 gewählt ist. E5 lernt aus deinen gespeicherten Zuordnungen (Rocchio-Prototypen: Kategoriename plus Mittel der eigenen Beispiele). Breite Kategorien bekommen bis zu drei Schwerpunkte, als Vergleichsverfahren. „Auswertung öffnen …“ vergleicht alle Verfahren (Rocchio mit und ohne Namen, mehrere Prototypen, k-NN, logistische Regression) auf deinen Zuordnungen; „Automatisch“ nimmt das einfachste, außer ein anderes ist messbar besser. Die Werte sind Ähnlichkeiten, keine Wahrscheinlichkeiten." Margin="0,10,0,0" Opacity="0.75" />
@@ -640,7 +664,9 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                                 CornerRadius="8,0,0,8"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                 BorderThickness="0,0,1,0"
-                                ToolTip="Merkautomat für Windows">
+                                Cursor="Hand"
+                                MouseLeftButtonUp="AboutCover_MouseLeftButtonUp"
+                                ToolTip="Klicken für die Bildergeschichte zur Entstehung">
                             <Border.Background>
                                 <ImageBrush ImageSource="/Assets/about-cover.jpg"
                                             Stretch="UniformToFill"
@@ -728,12 +754,20 @@ Win wird vom System abgefangen und eignet sich nur in Ausnahmefällen.</TextBloc
                                 </DockPanel>
                             </StackPanel>
 
-                            <TextBlock Grid.Row="3"
-                                       HorizontalAlignment="Center"
-                                       FontSize="11.5"
-                                       Opacity="0.5">
-                                <Run Text="Version " /><Run x:Name="AboutVersionLabel" />
-                            </TextBlock>
+                            <StackPanel Grid.Row="3" HorizontalAlignment="Center">
+                                <ui:Button Content="Zur Entstehung"
+                                           Click="AboutStory_Click"
+                                           FontSize="12"
+                                           Padding="12,4"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,12"
+                                           ToolTip="Bildergeschichte: wie Merkautomat entstanden ist" />
+                                <TextBlock HorizontalAlignment="Center"
+                                           FontSize="11.5"
+                                           Opacity="0.5">
+                                    <Run Text="Version " /><Run x:Name="AboutVersionLabel" />
+                                </TextBlock>
+                            </StackPanel>
 
                             <StackPanel Grid.Row="4" Margin="0,18,0,0">
                                 <Grid Margin="0,0,0,10">

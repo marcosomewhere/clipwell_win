@@ -54,7 +54,7 @@ public partial class App
             try
             {
                 if (new FileInfo(file).Length > MailInbox.MaxFileBytes) throw new InvalidDataException("Übergabedatei zu groß.");
-                created.Add(MailInbox.ToTask(MailInbox.Parse(File.ReadAllText(file)), DateTime.Now));
+                created.Add(MailInbox.ToTask(MailInbox.Parse(MailInbox.Decode(File.ReadAllBytes(file))), DateTime.Now));
                 handled.Add(file);
             }
             catch (InvalidDataException ex)
@@ -65,6 +65,10 @@ public partial class App
             catch (IOException)
             {
                 // Still being written or locked; the next event or start picks it up.
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                LogCrash(ex);
             }
         }
         if (created.Count == 0) return;
@@ -82,7 +86,7 @@ public partial class App
         }
         foreach (var file in handled)
         {
-            try { File.Delete(file); }
+            try { SecureFile.Shred(file); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { LogCrash(ex); }
         }
         NotifyTasksChanged();

@@ -567,7 +567,7 @@
                                           ToolTip="Kategorie für ausgewählte Einträge, markierte Suchtreffer oder den gewählten Brain-Knoten vorschlagen und zuordnen" />
                                 <MenuItem Header="Passende ohne Kategorie finden …" Click="FindCategoryMatches_Click"
                                           ToolTip="Für die im Kategorienfilter gewählte Kategorie die Einträge ohne Kategorie suchen, die am besten dazu passen (ohne Granite)" />
-                                <MenuItem Header="Kategorien analysieren (Granite) …" Click="CategoryDiscovery_Click"
+                                <MenuItem x:Name="DiscoveryMenuItem" Header="Kategorien analysieren (Granite) …" Click="CategoryDiscovery_Click"
                                           ToolTip="Einträge ohne Kategorie nach Inhalt gruppieren und von Granite benennen lassen; Vorschläge prüfen und übernehmen" />
                                 <MenuItem Header="Einordnung auswerten …" Click="CategorizationReport_Click"
                                           ToolTip="Verfahren auf deinen Zuordnungen vergleichen, Verfahren wählen, Praxiswerte und Verlauf" />
@@ -653,20 +653,8 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="1" Margin="12,6,12,6">
-                    <Grid>
-                        <TextBox x:Name="SearchBox" Style="{StaticResource EditorTextBoxStyle}" BorderThickness="1"
-                                 Padding="28,6,8,6" FontSize="12.5" TextChanged="SearchBox_TextChanged" />
-                        <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons" FontSize="12" Margin="10,0,0,0"
-                                   VerticalAlignment="Center" IsHitTestVisible="False"
-                                   Foreground="{DynamicResource EditorMutedBrush}" />
-                        <TextBlock x:Name="SearchHint" Text="Suchen (Strg+F)" FontSize="12.5" Margin="31,0,0,0"
-                                   VerticalAlignment="Center" IsHitTestVisible="False"
-                                   Foreground="{DynamicResource EditorMutedBrush}" />
-                    </Grid>
-                    <ComboBox x:Name="CategoryFilterBox" Margin="0,6,0,0" FontSize="12" SelectionChanged="CategoryFilter_SelectionChanged"
+                    <ComboBox x:Name="CategoryFilterBox" Grid.Row="1" Margin="12,6,12,6" FontSize="12" SelectionChanged="CategoryFilter_SelectionChanged"
                               AutomationProperties.Name="Nach Kategorie filtern" ToolTip="Bibliothek nach Haupt- oder Unterkategorie filtern" />
-                    </StackPanel>
 
                     <!-- Area: Sprachnotizen -->
                     <Button x:Name="NotesHeader" Grid.Row="2" Style="{StaticResource SectionHeaderStyle}"
@@ -1215,7 +1203,7 @@
                                 <Button Content="Neu anordnen" Click="BrainRelayout_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,16,4" ToolTip="Positionen der Knoten neu berechnen" />
                                 <Button x:Name="BrainRelationsButton" IsEnabled="False" Content="Weg finden …" Click="BrainRelations_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,6,4" />
                                 <Button x:Name="BrainEditRelationsButton" IsEnabled="{Binding IsEnabled, ElementName=BrainRelationsButton}" Content="Beziehungen …" Click="BrainEditRelations_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,6,4" />
-                                <Button Content="Kategorien analysieren …" Click="CategoryDiscovery_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,6,4"
+                                <Button x:Name="DiscoveryButton" Content="Kategorien analysieren …" Click="CategoryDiscovery_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,6,4"
                                         ToolTip="Granite gruppiert Einträge ohne Kategorie und schlägt Kategorienamen vor (dauert einige Minuten)" />
                                 <Button Content="Ohne Kategorie einordnen …" Click="CategorizeUncategorized_Click" Style="{StaticResource EditorButtonStyle}" Margin="0,0,6,4"
                                         ToolTip="Alle Einträge ohne Kategorie nacheinander mit dem Modell aus der Kontrollstation einordnen" />
