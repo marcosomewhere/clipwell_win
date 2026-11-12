@@ -978,7 +978,7 @@ Internetverbindung, Schalter "URL-Vorschau laden", private Adresse? Rechtsklick 
 
 - Bildschirmaufnahmen sehen nur Text, den Anwendungen über die Bedienungshilfen bereitstellen. Fenster mit ständig wechselndem Text (Uhren, Logs) erzeugen viele kleine Einträge.
 - "Weichzeichnen" im Bildeditor ist eine graue Überlagerung, kein echter Weichzeichner.
-- Der globale Popup-Hotkey nimmt als Taste nur A–Z und 0–9 an; F-Tasten gehen für Popup-Aktionen und Eintrags-Hotkeys.
+- Der globale Popup-Hotkey nimmt Buchstaben, Ziffern und F-Tasten an, immer mit mindestens einer Modifikatortaste (ohne gilt Strg+Umschalt). Eine Kombination, die schon ein Eintrag nutzt, wird abgelehnt.
 - Das Brain zeigt die neuesten Einträge der gewählten Quellen bis zum eingestellten Limit (100 bis 10.000, Standard 1.000); die Dublettensuche betrachtet höchstens die neuesten 6000.
 - Ein gefundener Weg im Brain ist keine Aussage über den Gesamtbestand, sondern gilt nur für den angezeigten Ausschnitt.
 - Granite und Qwen können CPU oder GPU verwenden; ohne geeignete GPU-Sensoren erfolgt die Ausführung auf der CPU. CPU-Temperatursensoren werden derzeit nicht ausgelesen.

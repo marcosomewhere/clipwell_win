@@ -495,7 +495,7 @@ public partial class App : System.Windows.Application
         };
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Öffnen", RenderAppLogo(SystemInformation.SmallIconSize.Width), (_, _) => ShowPopup());
+        menu.Items.Add("Öffnen", RenderAppLogo(SystemInformation.SmallIconSize.Width, TrayLogoUri), (_, _) => ShowPopup());
         menu.Items.Add(new ToolStripSeparator());
         _pinboardMenuItem = new ToolStripMenuItem(AppNames.Pinboard);
         _pinboardMenuItem.Click += (_, _) => TogglePinboard();
@@ -527,17 +527,23 @@ public partial class App : System.Windows.Application
         _trayIcon?.ShowBalloonTip(
             7000,
             $"{AppNames.App} Hotkey-Fallback aktiv",
-            $"{FormatHotkey(requestedModifiers, requestedVk)} ist belegt. Fuer diese Sitzung wurde {FormatHotkey(_registeredHotkeyModifiers, _registeredHotkeyVk)} registriert; die Einstellung wurde nicht ueberschrieben.",
+            $"{EntryHotkeys.Format(requestedModifiers, requestedVk)} ist belegt. Fuer diese Sitzung wurde {EntryHotkeys.Format(_registeredHotkeyModifiers, _registeredHotkeyVk)} registriert; die Einstellung wurde nicht ueberschrieben.",
             ToolTipIcon.Warning);
     }
 
     /// <summary>Application logo (transparent PNG, 256 px); every size is scaled down from it.</summary>
     internal const string AppLogoUri = "pack://application:,,,/Merkautomat;component/Assets/AppLogo.png";
 
+    /// <summary>
+    /// Variant of the logo for 16 to 32 px: no glow halo, one slim ring, a nearly full-width, taller and bolder MA over the ring.
+    /// Scaled down, the full logo spends most of its pixels on glow and padding and the MA blurs.
+    /// </summary>
+    internal const string TrayLogoUri = "pack://application:,,,/Merkautomat;component/Assets/TrayLogo.png";
+
     private static Icon CreateTrayIcon()
     {
-        // The tray shows the small system icon size; drawing exactly that size keeps the thin ring sharp.
-        using var bmp = RenderAppLogo(SystemInformation.SmallIconSize.Width);
+        // The tray shows the small system icon size; drawing exactly that size keeps the ring sharp.
+        using var bmp = RenderAppLogo(SystemInformation.SmallIconSize.Width, TrayLogoUri);
         var hIcon = bmp.GetHicon();
         try
         {
@@ -551,12 +557,12 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>The logo scaled to <paramref name="size"/> pixels with high quality; a blank bitmap if the resource is missing.</summary>
-    internal static Bitmap RenderAppLogo(int size)
+    internal static Bitmap RenderAppLogo(int size, string logoUri = AppLogoUri)
     {
         var bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         try
         {
-            var info = GetResourceStream(new Uri(AppLogoUri));
+            var info = GetResourceStream(new Uri(logoUri));
             if (info == null) return bmp;
             using var stream = info.Stream;
             using var source = System.Drawing.Image.FromStream(stream);
@@ -738,7 +744,7 @@ public partial class App : System.Windows.Application
     internal int LastHotkeyError => _msgWin?.LastHotkeyError ?? 0;
     internal bool IsHotkeyFallbackActive => IsHotkeyRegistered && _usingHotkeyFallback;
     internal string RegisteredHotkeyText => IsHotkeyRegistered
-        ? FormatHotkey(_registeredHotkeyModifiers, _registeredHotkeyVk)
+        ? EntryHotkeys.Format(_registeredHotkeyModifiers, _registeredHotkeyVk)
         : "";
 
     private bool RegisterConfiguredHotkey()
@@ -746,7 +752,7 @@ public partial class App : System.Windows.Application
         if (_msgWin == null || _settings == null) return false;
 
         var s = _settings.Settings;
-        s.HotkeyModifiers = NormalizeHotkeyModifiers(s.HotkeyModifiers);
+        s.HotkeyModifiers = EntryHotkeys.NormalizePopup(s.HotkeyModifiers);
         if (_msgWin.RegisterHotkey(s.HotkeyModifiers, s.HotkeyVk))
         {
             _registeredHotkeyModifiers = s.HotkeyModifiers;
@@ -777,15 +783,6 @@ public partial class App : System.Windows.Application
         return false;
     }
 
-    private static uint NormalizeHotkeyModifiers(uint modifiers)
-    {
-        const uint baseMask = NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT |
-                              NativeMethods.MOD_SHIFT | NativeMethods.MOD_WIN;
-        var baseModifiers = modifiers & baseMask;
-        if (baseModifiers == 0)
-            baseModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
-        return baseModifiers | NativeMethods.MOD_NOREPEAT;
-    }
 
     private static IEnumerable<(uint modifiers, uint vk)> HotkeyFallbacks(uint vk)
     {
@@ -837,56 +834,50 @@ public partial class App : System.Windows.Application
         if (entry.Type == EntryType.Url && entry.Content != null
             && _settings.Settings.UrlPreviewEnabled
             && UrlPreviewService.ShouldFetch(entry.Content))
+            StartUrlPreview(entry.Id, entry.Content, useCache: true);
+    }
+
+    /// <summary>
+    /// Loads title and favicon in the background (at most a few fetches at once) and shows them in the popup.
+    /// A fresh copy takes a cached preview; reloading on request always fetches again.
+    /// </summary>
+    private void StartUrlPreview(long id, string url, bool useCache)
+    {
+        SetUrlState(id, UrlPreviewState.Loading);
+        _ = Task.Run(async () =>
         {
-            var id = entry.Id;
-            var url = entry.Content;
-
-            var urlVm = _popupVm.Entries.FirstOrDefault(x => x.Id == id);
-            if (urlVm != null) urlVm.UrlState = UrlPreviewState.Loading;
-
-            _ = Task.Run(async () =>
+            await _urlFetchSemaphore.WaitAsync();
+            try
             {
-                await _urlFetchSemaphore.WaitAsync();
-                try
+                (string? title, byte[]? favicon) preview = (null, null);
+                if (useCache) preview = _db!.GetUrlCache(url, _settings?.Settings.UrlCacheTtlDays ?? 7);
+                if (preview.title == null && preview.favicon == null)
                 {
-                    var ttl = _settings?.Settings.UrlCacheTtlDays ?? 7;
-                    var (cachedTitle, cachedFavicon) = _db!.GetUrlCache(url, ttl);
-                    if (cachedTitle != null || cachedFavicon != null)
-                    {
-                        Dispatcher.Invoke(() =>
-                        {
-                            _popupVm.UpdateUrlPreview(id, cachedTitle, cachedFavicon);
-                            var v = _popupVm.Entries.FirstOrDefault(x => x.Id == id);
-                            if (v != null) v.UrlState = UrlPreviewState.Loaded;
-                        });
-                        return;
-                    }
-                    var (title, favicon) = await _urlService!.FetchAsync(url);
-                    _db.UpsertUrlCache(url, title, favicon);
-                    Dispatcher.Invoke(() =>
-                    {
-                        _popupVm.UpdateUrlPreview(id, title, favicon);
-                        var v = _popupVm.Entries.FirstOrDefault(x => x.Id == id);
-                        if (v != null) v.UrlState = title != null || favicon != null
-                            ? UrlPreviewState.Loaded
-                            : UrlPreviewState.Failed;
-                    });
+                    preview = await _urlService!.FetchAsync(url);
+                    _db!.UpsertUrlCache(url, preview.title, preview.favicon);
                 }
-                catch (Exception ex)
+                Dispatcher.Invoke(() =>
                 {
-                    LogError("URL-Vorschau laden", ex);
-                    Dispatcher.Invoke(() =>
-                    {
-                        var v = _popupVm?.Entries.FirstOrDefault(x => x.Id == id);
-                        if (v != null) v.UrlState = UrlPreviewState.Failed;
-                    });
-                }
-                finally
-                {
-                    _urlFetchSemaphore.Release();
-                }
-            });
-        }
+                    _popupVm!.UpdateUrlPreview(id, preview.title, preview.favicon);
+                    SetUrlState(id, preview.title != null || preview.favicon != null ? UrlPreviewState.Loaded : UrlPreviewState.Failed);
+                });
+            }
+            catch (Exception ex)
+            {
+                LogError("URL-Vorschau laden", ex);
+                Dispatcher.Invoke(() => SetUrlState(id, UrlPreviewState.Failed));
+            }
+            finally
+            {
+                _urlFetchSemaphore.Release();
+            }
+        });
+    }
+
+    private void SetUrlState(long id, UrlPreviewState state)
+    {
+        var vm = _popupVm?.Entries.FirstOrDefault(x => x.Id == id);
+        if (vm != null) vm.UrlState = state;
     }
 
     private void OnHotkeyPressed(object? sender, EventArgs e)
@@ -910,34 +901,7 @@ public partial class App : System.Windows.Application
     {
         if (vm.Type != EntryType.Url || vm.Content == null) return;
         if (!UrlPreviewService.ShouldFetch(vm.Content)) { vm.UrlState = UrlPreviewState.Failed; return; }
-        vm.UrlState = UrlPreviewState.Loading;
-        var id = vm.Id;
-        var url = vm.Content;
-        _ = Task.Run(async () =>
-        {
-            await _urlFetchSemaphore.WaitAsync();
-            try
-            {
-                var (title, favicon) = await _urlService!.FetchAsync(url);
-                _db!.UpsertUrlCache(url, title, favicon);
-                Dispatcher.Invoke(() =>
-                {
-                    _popupVm!.UpdateUrlPreview(id, title, favicon);
-                    vm.UrlState = title != null || favicon != null
-                        ? UrlPreviewState.Loaded
-                        : UrlPreviewState.Failed;
-                });
-            }
-            catch (Exception ex)
-            {
-                LogError("URL-Vorschau neu laden", ex);
-                Dispatcher.Invoke(() => vm.UrlState = UrlPreviewState.Failed);
-            }
-            finally
-            {
-                _urlFetchSemaphore.Release();
-            }
-        });
+        StartUrlPreview(vm.Id, vm.Content, useCache: false);
     }
 
     private bool TryWriteEntryToClipboard(EntryViewModel vm, bool plainText)
@@ -1423,19 +1387,15 @@ public partial class App : System.Windows.Application
         }
     }
 
-    internal static string FormatHotkey(uint modifiers, uint vk)
+    /// <summary>Modifiers held right now, as RegisterHotKey flags; for the hotkey recorders.</summary>
+    internal static uint KeyboardHotkeyModifiers()
     {
-        var parts = new List<string>();
-        if ((modifiers & NativeMethods.MOD_CONTROL) != 0) parts.Add("Ctrl");
-        if ((modifiers & NativeMethods.MOD_ALT) != 0) parts.Add("Alt");
-        if ((modifiers & NativeMethods.MOD_SHIFT) != 0) parts.Add("Shift");
-        if ((modifiers & NativeMethods.MOD_WIN) != 0) parts.Add("Win");
-        parts.Add(vk switch
-        {
-            >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A => ((char)vk).ToString(),
-            >= 0x70 and <= 0x87 => $"F{vk - 0x6F}",
-            _ => $"VK {vk:X2}",
-        });
-        return string.Join("+", parts);
+        uint mods = 0;
+        if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0) mods |= NativeMethods.MOD_CONTROL;
+        if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Alt) != 0) mods |= NativeMethods.MOD_ALT;
+        if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0) mods |= NativeMethods.MOD_SHIFT;
+        if (System.Windows.Input.Keyboard.IsKeyDown(System.Windows.Input.Key.LWin)
+            || System.Windows.Input.Keyboard.IsKeyDown(System.Windows.Input.Key.RWin)) mods |= NativeMethods.MOD_WIN;
+        return mods;
     }
 }

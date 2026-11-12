@@ -26,6 +26,24 @@ public static class EntryHotkeys
         return null;
     }
 
+    /// <summary>The popup hotkey always has a modifier; without one it falls back to Ctrl+Shift.</summary>
+    public static uint NormalizePopup(uint modifiers)
+    {
+        var mods = modifiers & ModMask;
+        return (mods == 0 ? NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT : mods) | NativeMethods.MOD_NOREPEAT;
+    }
+
+    /// <summary>Null when the combination can open the popup, otherwise the reason in German.</summary>
+    public static string? ValidatePopup(AppSettings s, uint modifiers, uint vk)
+    {
+        if (!IsLetterOrDigit(vk) && !IsFunctionKey(vk))
+            return "Bitte eine Buchstaben-, Ziffern- oder F-Taste verwenden.";
+        modifiers = NormalizePopup(modifiers);
+        return s.EntryHotkeys.Any(h => Same(h.Modifiers, h.Vk, modifiers, vk))
+            ? $"{Format(modifiers, vk)} ist schon einem Eintrag zugewiesen."
+            : null;
+    }
+
     /// <summary>Null when no other hotkey uses the combination, otherwise the reason in German.</summary>
     public static string? Conflict(AppSettings s, long entryId, uint modifiers, uint vk)
     {

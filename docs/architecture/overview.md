@@ -7,11 +7,11 @@
 | Framework | .NET 10, WPF, `net10.0-windows10.0.19041.0` |
 | UI library | WPF-UI 4.3.0 |
 | Tray | WinForms `NotifyIcon` |
-| Database | `Microsoft.Data.Sqlite.Core 10.0.14`, SQLite WAL with FTS5, encrypted with SQLite3 Multiple Ciphers 2.6.1 (`SQLite3MC.PCLRaw.bundle`, ChaCha20-Poly1305) |
+| Database | `Microsoft.Data.Sqlite.Core 11.0.0`, SQLite WAL with FTS5, encrypted with SQLite3 Multiple Ciphers 2.6.1 (`SQLite3MC.PCLRaw.bundle`, ChaCha20-Poly1305) |
 | OCR | `Windows.Media.Ocr.OcrEngine` |
 | YAML | `YamlDotNet 18.1.0` (detection and validation) |
 | Dictation | `Whisper.net 1.9.1` with bundled `ggml-base.bin` |
-| Embeddings | `Microsoft.ML.OnnxRuntime 1.31.1`, `Microsoft.ML.Tokenizers 2.0.1`, multilingual-e5-small bundled as `models\e5-small` |
+| Embeddings | `Microsoft.ML.OnnxRuntime 1.31.1`, `Microsoft.ML.Tokenizers 3.0.0`, multilingual-e5-small bundled as `models\e5-small` |
 | Local categorization | Bundled E5 for existing categories, or optional IBM Granite 4.2 3B Q4_K_M via pinned llama.cpp b12110 Windows CPU server; no new NuGet package |
 | Tests | xUnit v3 4.0.2 on Microsoft Testing Platform, 402 tests |
 

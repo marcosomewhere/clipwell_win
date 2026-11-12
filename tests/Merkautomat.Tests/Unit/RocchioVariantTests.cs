@@ -50,7 +50,7 @@ public sealed class RocchioVariantTests
     [Fact]
     public void BenchmarkFlagsTheMislabeledAssignmentAndReportsTimes()
     {
-        var report = ClassifierBenchmark.Run(Labels, Names, WithMislabel());
+        var report = ClassifierBenchmark.Run(Labels, Names, WithMislabel(), ct: TestContext.Current.CancellationToken);
         var flagged = Assert.Single(report.Suspicious!);
         Assert.Equal("B", flagged.Category);
         Assert.Equal("A", flagged.Suggested);

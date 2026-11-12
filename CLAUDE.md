@@ -6,7 +6,7 @@ Gilt fuer Claude Code und Codex. AGENTS.md und CLAUDE.md muessen inhaltlich iden
 
 WPF-Clipboard-Manager fuer Windows: laeuft im Tray und oeffnet per Hotkey ein tastaturgesteuertes Popup; dazu Wissensbasis (Ideenkombinat) mit lokaler semantischer Suche, Sprachnotizen, Bildschirmaufnahmen als Text, Aufgaben und Outlook-Add-in.
 
-.NET 10, WPF-UI 4.3.0 (Lepo), SQLite WAL mit FTS5, verschluesselt per SQLite3 Multiple Ciphers 2.6.1 (`SQLite3MC.PCLRaw.bundle`, MIT, mit `Microsoft.Data.Sqlite.Core` 10.0.14), YamlDotNet, Whisper.net 1.9.1 (Diktat), Microsoft.ML.OnnxRuntime 1.31.1 plus Microsoft.ML.Tokenizers 2.0.1 (Embeddings fuer die Suche). Grundsatzentscheidungen: `docs/decisions/`.
+.NET 10, WPF-UI 4.3.0 (Lepo), SQLite WAL mit FTS5, verschluesselt per SQLite3 Multiple Ciphers 2.6.1 (`SQLite3MC.PCLRaw.bundle`, MIT, mit `Microsoft.Data.Sqlite.Core` 11.0.0), YamlDotNet, Whisper.net 1.9.1 (Diktat), Microsoft.ML.OnnxRuntime 1.31.1 plus Microsoft.ML.Tokenizers 3.0.0 (Embeddings fuer die Suche). Grundsatzentscheidungen: `docs/decisions/`.
 
 ## Namen in der Oberflaeche
 
@@ -41,7 +41,7 @@ dotnet publish src\Merkautomat\Merkautomat.csproj -c Release -r win-x64 --self-c
 - Release-Build und Tests sind Pflicht nach jeder Codeaenderung. Immer Release, nie Debug. Vor dem Build `taskkill /IM Merkautomat.exe /F`.
 - SDK per `global.json` auf 10.0.4xx (`latestFeature`). `Directory.Build.props` legt Ausgaben per Hardlink an, damit die Modelle nur einmal auf der Platte liegen; eine Datei in der Build-Ausgabe nie direkt aendern, sie ist dieselbe wie die Quelle unter `models\`. `Directory.Build.targets` (`RemoveNonWindowsRuntimes`) laesst native Bibliotheken anderer Betriebssysteme weg.
 - Modelle laedt der Build bei Fehlen nach `models\whisper` und `models\e5-small` (gepinnte Revisionen, SHA256-Pruefung); `models\`, `dist\` und der Inhalt von `tools\` sind in `.gitignore`.
-- Tests: 776 (xUnit v3 4.0.2 auf Microsoft Testing Platform), in `Unit/`, `Integration/` (Dateien, Datenbank, Registry, Windows) und `UI/`; Helfer in `Support/`. `TestDataKey` setzt per Modulinitialisierer einen zufaelligen Datenschluessel; Tests, die den prozessweiten Schluessel wechseln, laufen in der Sammlung `DataKeyFileTests` ohne Parallelisierung. Dateien aus Stores mit `SecureFile.ReadAllText` lesen. Fenster-Tests laufen in `StaTestRunner.Run` und holen die Application ueber `TestApplication.Ensure()` (nie `new Application()`: beim Standard-ShutdownMode ignoriert WPF nach dem ersten geschlossenen Fenster jedes weitere `Show()`). Ein Test laeuft nur mit `MERKAUTOMAT_E5_DOWNLOAD=1` (Netzwerk).
+- Tests: 781 (xUnit v3 4.0.3 auf Microsoft Testing Platform), in `Unit/`, `Integration/` (Dateien, Datenbank, Registry, Windows) und `UI/`; Helfer in `Support/`. `TestDataKey` setzt per Modulinitialisierer einen zufaelligen Datenschluessel; Tests, die den prozessweiten Schluessel wechseln, laufen in der Sammlung `DataKeyFileTests` ohne Parallelisierung. Dateien aus Stores mit `SecureFile.ReadAllText` lesen. Fenster-Tests laufen in `StaTestRunner.Run` und holen die Application ueber `TestApplication.Ensure()` (nie `new Application()`: beim Standard-ShutdownMode ignoriert WPF nach dem ersten geschlossenen Fenster jedes weitere `Show()`). Ein Test laeuft nur mit `MERKAUTOMAT_E5_DOWNLOAD=1` (Netzwerk).
 - Abhaengigkeiten: keine verwundbaren Pakete (auch transitiv). Bei neuen NuGet-Warnungen Status in `docs/STATUS.md` dokumentieren und separat per Update bereinigen.
 
 ## Repository

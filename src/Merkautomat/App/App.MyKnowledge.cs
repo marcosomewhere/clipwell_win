@@ -20,6 +20,8 @@ public partial class App
     private Task? _myKnowledgeRun;
     private readonly CancellationTokenSource _myKnowledgeCts = new();
     private readonly List<long> _deletedClips = [];
+    /// <summary>Background steps and clicks change the collection often; the file is written once for a burst of changes.</summary>
+    private DeferredWriter? _myKnowledgeWriter;
 
     /// <summary>Raised on the UI thread after a run or a change by the user.</summary>
     internal event EventHandler? MyKnowledgeChanged;
@@ -67,6 +69,10 @@ public partial class App
 
     private void StartMyKnowledge()
     {
+        _myKnowledgeWriter = new DeferredWriter(
+            () => { lock (_myKnowledgeGate) return MyKnowledge.Serialize(_myKnowledge); },
+            json => SecureFile.WriteAllTextAtomic(MyKnowledgeFile, json),
+            TimeSpan.FromSeconds(3), ex => LogError("Mein Wissen speichern", ex));
         try { _myKnowledge = MyKnowledge.Load(MyKnowledgeFile); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException
             or System.Security.Cryptography.CryptographicException)
@@ -101,6 +107,8 @@ public partial class App
     {
         _myKnowledgeTimer?.Stop();
         _myKnowledgeCts.Cancel();
+        try { _myKnowledgeWriter?.Flush(); }
+        catch (Exception ex) when (DeferredWriter.IsWriteFailure(ex)) { LogError("Mein Wissen speichern", ex); }
     }
 
     /// <summary>Starts a run unless one is going on or the collection is switched off.</summary>
@@ -150,12 +158,10 @@ public partial class App
                 // Needs the search index; without it (model missing, nothing indexed yet) there is simply no boost.
                 var affinity = MyKnowledgeAi.Affinity(Semantic.Snapshot(), core, targets);
                 ct.ThrowIfCancellationRequested();
-                lock (_myKnowledgeGate)
-                {
-                    var result = MyKnowledge.Update(_myKnowledge, candidates, context with { Affinity = affinity }, DateTime.Now);
-                    MyKnowledge.Save(MyKnowledgeFile, _myKnowledge);
-                    return result;
-                }
+                MyKnowledgeRun result;
+                lock (_myKnowledgeGate) result = MyKnowledge.Update(_myKnowledge, candidates, context with { Affinity = affinity }, DateTime.Now);
+                _myKnowledgeWriter!.Now();
+                return result;
             }, ct);
             MyKnowledgeStatus = $"Stand {DateTime.Now:dd.MM.yyyy HH:mm}: {run.Total:N0} Einträge, {run.Added:N0} neu, "
                 + $"{run.Consolidated:N0} gefestigt, {run.Condensed:N0} zusammengefasst, {run.Expired:N0} entfernt, {run.Waiting:N0} warten noch.";
@@ -172,7 +178,7 @@ public partial class App
 
     /// <summary>Keeps or releases items; kept ones neither decay nor expire.</summary>
     internal void KeepMyKnowledge(IReadOnlyCollection<string> keys, bool keep)
-        => ChangeMyKnowledge("Mein Wissen: dauerhaft behalten speichern", (state, context) =>
+        => ChangeMyKnowledge((state, context) =>
         {
             var set = keys.ToHashSet(StringComparer.Ordinal);
             foreach (var e in state.Entries.Where(e => set.Contains(e.Key)))
@@ -184,7 +190,7 @@ public partial class App
 
     /// <summary>Removed by the user in "Mein Wissen"; the source itself stays untouched.</summary>
     internal void DismissMyKnowledge(IReadOnlyCollection<string> keys)
-        => ChangeMyKnowledge("Mein Wissen: Einträge entfernen", (state, _) => MyKnowledge.Dismiss(state, keys));
+        => ChangeMyKnowledge((state, _) => MyKnowledge.Dismiss(state, keys));
 
     /// <summary>
     /// "Zu Mein Wissen hinzufügen" from any window: fixes the items (100 %, no waiting, never condensed), taking
@@ -211,12 +217,10 @@ public partial class App
                 foreach (var key in set.Where(k => k.StartsWith("c:", StringComparison.Ordinal) && candidates.All(c => c.Key != k)))
                     if (long.TryParse(key.AsSpan(2), out var id) && byId.TryGetValue(id, out var entry) && MyKnowledge.Candidate(entry) is { } extra)
                         candidates.Add(extra);
-                lock (_myKnowledgeGate)
-                {
-                    var n = MyKnowledge.Fix(_myKnowledge, keys, prefixes, candidates, DateTime.Now);
-                    MyKnowledge.Save(MyKnowledgeFile, _myKnowledge);
-                    return n;
-                }
+                int n;
+                lock (_myKnowledgeGate) n = MyKnowledge.Fix(_myKnowledge, keys, prefixes, candidates, DateTime.Now);
+                _myKnowledgeWriter!.Now();
+                return n;
             });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
@@ -237,30 +241,22 @@ public partial class App
     internal string? SummarizeMyKnowledge(IReadOnlyCollection<string> keys)
     {
         string? created = null;
-        ChangeMyKnowledge("Mein Wissen: Einträge zusammenfassen",
-            (state, context) => created = MyKnowledge.Summarize(state, keys, context, DateTime.Now)?.Key);
+        ChangeMyKnowledge((state, context) => created = MyKnowledge.Summarize(state, keys, context, DateTime.Now)?.Key);
         return created;
     }
 
     /// <summary>The source was deleted in Merkautomat, so its copy goes as well.</summary>
     internal void ForgetMyKnowledge(IReadOnlyCollection<string> keys, IReadOnlyCollection<string>? prefixes = null)
-        => ChangeMyKnowledge("Mein Wissen: gelöschte Quellen entfernen", (state, _) => MyKnowledge.Forget(state, keys, prefixes));
+        => ChangeMyKnowledge((state, _) => MyKnowledge.Forget(state, keys, prefixes));
 
-    private void ChangeMyKnowledge(string attempted, Action<MyKnowledgeState, MyKnowledgeContext> change)
+    private void ChangeMyKnowledge(Action<MyKnowledgeState, MyKnowledgeContext> change)
     {
         if (_myKnowledgeBroken) return;
         var context = MyKnowledgeContext();
-        try
+        lock (_myKnowledgeGate)
         {
-            lock (_myKnowledgeGate)
-            {
-                change(_myKnowledge, context);
-                MyKnowledge.Save(MyKnowledgeFile, _myKnowledge);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
-        {
-            LogError(attempted, ex);
+            change(_myKnowledge, context);
+            _myKnowledgeWriter!.Later();
         }
         MyKnowledgeChanged?.Invoke(this, EventArgs.Empty);
     }

@@ -180,7 +180,7 @@ public sealed class ClassifierBenchmarkTests
     [Fact]
     public void BroadDataRecommendsSubPrototypesCompactDataKeepsRocchio()
     {
-        var broad = ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Broad());
+        var broad = ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Broad(), ct: TestContext.Current.CancellationToken);
         Assert.Equal(ClassifierMethods.All.Length, broad.Methods.Count);
         Assert.Equal(16, broad.Examples);
         Assert.Equal(0, broad.Get(ClassifierMethods.Names)!.Coverage);
@@ -189,7 +189,7 @@ public sealed class ClassifierBenchmarkTests
         Assert.NotEqual(ClassifierMethods.Rocchio, broad.Recommended);
         Assert.True(broad.Get(broad.Recommended)!.MacroF1 >= broad.Get(ClassifierMethods.Rocchio)!.MacroF1 + ClassifierBenchmark.RequiredGain);
 
-        var compact = ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Compact());
+        var compact = ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Compact(), ct: TestContext.Current.CancellationToken);
         Assert.Equal(1.0, compact.Get(ClassifierMethods.Rocchio)!.MacroF1, 3);
         Assert.Equal(ClassifierMethods.Rocchio, compact.Recommended);
         Assert.NotNull(compact.Get(ClassifierMethods.LogisticRegression)!.CalibrationError);
@@ -238,9 +238,9 @@ public sealed class ClassifierBenchmarkTests
         string[] labels = ["A", "B", "C", "D"];
         float[][] names = [.. RocchioModelTests.Names, RocchioModelTests.Vec((0, 1f), (29, 0.01f))];
         var examples = RocchioModelTests.Compact().Append([.. Enumerable.Range(0, 6).Select(i => RocchioModelTests.Vec((0, 1), (4, 1), (6 + i, 0.3f)))]).ToArray();
-        var report = ClassifierBenchmark.Run(labels, names, examples);
+        var report = ClassifierBenchmark.Run(labels, names, examples, ct: TestContext.Current.CancellationToken);
         Assert.All(report.Methods, m => Assert.InRange(m.UnknownRejection!.Value, 0, 1));
-        Assert.Null(ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Compact()).Methods[0].UnknownRejection);
+        Assert.Null(ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Compact(), ct: TestContext.Current.CancellationToken).Methods[0].UnknownRejection);
         Assert.True(report.Get(ClassifierMethods.Rocchio)!.SelectiveLow <= report.Get(ClassifierMethods.Rocchio)!.SelectiveAccuracy);
         Assert.Contains("Unbekanntes abgewiesen", CategorizationReporting.ToMarkdown(report, ClassifierMethods.Rocchio, [], []));
     }
@@ -302,7 +302,7 @@ public sealed class CategorizationReportingTests
         var list = Enumerable.Range(0, 5).ToList();
         CategorizationReporting.Append(list, 5, 3);
         Assert.Equal([3, 4, 5], list);
-        var report = ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Compact());
+        var report = ClassifierBenchmark.Run(RocchioModelTests.Labels, RocchioModelTests.Names, RocchioModelTests.Compact(), ct: TestContext.Current.CancellationToken);
         var markdown = CategorizationReporting.ToMarkdown(report, ClassifierMethods.Rocchio, summary, [CategorizationReporting.ToRun(report)]);
         Assert.Contains("| Rocchio (Name + Beispiele) |", markdown);
         Assert.Contains("## Kategorien (Rocchio (Name + Beispiele))", markdown);

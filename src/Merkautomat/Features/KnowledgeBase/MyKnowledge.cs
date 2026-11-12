@@ -575,5 +575,7 @@ public static class MyKnowledge
     }
 
     public static void Save(string path, MyKnowledgeState state)
-        => SecureFile.WriteAllTextAtomic(path, JsonSerializer.Serialize(state));
+        => SecureFile.WriteAllTextAtomic(path, Serialize(state));
+
+    public static string Serialize(MyKnowledgeState state) => JsonSerializer.Serialize(state);
 }
