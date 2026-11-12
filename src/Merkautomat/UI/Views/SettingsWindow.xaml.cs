@@ -53,7 +53,7 @@ public partial class SettingsWindow : FluentWindow
 
         HotkeyChar.Text = s.HotkeyVk is >= 0x41 and <= 0x5A
             ? ((char)s.HotkeyVk).ToString() : "V";
-        HotkeyRecorderBox.Text = App.FormatHotkey(s.HotkeyModifiers, s.HotkeyVk);
+        HotkeyRecorderBox.Text = EntryHotkeys.Format(s.HotkeyModifiers, s.HotkeyVk);
         _pendingHotkeyModifiers = s.HotkeyModifiers;
         _pendingHotkeyVk = s.HotkeyVk;
 
@@ -184,16 +184,15 @@ public partial class SettingsWindow : FluentWindow
             or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
             return;
 
-        var vk = KeyInterop.VirtualKeyFromKey(key);
-        if (vk < 0x30 || vk > 0x5A)
+        var vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+        var modifiers = EntryHotkeys.NormalizePopup(App.KeyboardHotkeyModifiers());
+        if (EntryHotkeys.ValidatePopup(_app.CurrentSettings, modifiers, vk) is { } error)
         {
-            ShowError("Bitte eine Buchstaben- oder Zifferntaste aufnehmen.");
+            ShowError(error);
             return;
         }
 
-        _pendingHotkeyModifiers = NormalizeHotkeyModifiers(ModifiersFromKeyboard());
-        _pendingHotkeyVk = (uint)vk;
-        SyncHotkeyControls(_pendingHotkeyModifiers, _pendingHotkeyVk);
+        SyncHotkeyControls(modifiers, vk);
     }
 
     private void ApplyHotkey_Click(object sender, RoutedEventArgs e)
@@ -212,8 +211,13 @@ public partial class SettingsWindow : FluentWindow
 
     private void ApplyHotkeyValues(uint modifiers, uint vk)
     {
-        modifiers = NormalizeHotkeyModifiers(modifiers);
+        modifiers = EntryHotkeys.NormalizePopup(modifiers);
         var s = _app.CurrentSettings;
+        if (EntryHotkeys.ValidatePopup(s, modifiers, vk) is { } error)
+        {
+            ShowError(error);
+            return;
+        }
         s.HotkeyModifiers = modifiers;
         s.HotkeyVk = vk;
         SyncHotkeyControls(s.HotkeyModifiers, vk);
@@ -226,26 +230,6 @@ public partial class SettingsWindow : FluentWindow
             ShowError($"Hotkey gespeichert, aber aktuell belegt. Fuer diese Sitzung aktiv: {_app.RegisteredHotkeyText}");
         else if (registered) ShowInfo("Hotkey wurde gespeichert.");
         else ShowError($"Hotkey gespeichert, konnte aber nicht registriert werden. Fehlercode: {_app.LastHotkeyError}");
-    }
-
-    private static uint NormalizeHotkeyModifiers(uint modifiers)
-    {
-        const uint baseMask = NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT |
-                              NativeMethods.MOD_SHIFT | NativeMethods.MOD_WIN;
-        var baseModifiers = modifiers & baseMask;
-        if (baseModifiers == 0)
-            baseModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
-        return baseModifiers | NativeMethods.MOD_NOREPEAT;
-    }
-
-    private uint ModifiersFromKeyboard()
-    {
-        uint mods = 0;
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) mods |= NativeMethods.MOD_CONTROL;
-        if ((Keyboard.Modifiers & ModifierKeys.Alt)     != 0) mods |= NativeMethods.MOD_ALT;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift)   != 0) mods |= NativeMethods.MOD_SHIFT;
-        if (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin)) mods |= NativeMethods.MOD_WIN;
-        return mods == 0 ? NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT : mods;
     }
 
     private uint ModifiersFromSwitches()
@@ -265,7 +249,7 @@ public partial class SettingsWindow : FluentWindow
         ModCtrl.IsChecked  = (modifiers & NativeMethods.MOD_CONTROL) != 0;
         ModAlt.IsChecked   = (modifiers & NativeMethods.MOD_ALT)     != 0;
         HotkeyChar.Text = vk is >= 0x41 and <= 0x5A ? ((char)vk).ToString() : "";
-        HotkeyRecorderBox.Text = App.FormatHotkey(modifiers, vk);
+        HotkeyRecorderBox.Text = EntryHotkeys.Format(modifiers, vk);
         _pendingHotkeyModifiers = modifiers;
         _pendingHotkeyVk = vk;
     }
@@ -276,8 +260,8 @@ public partial class SettingsWindow : FluentWindow
         HotkeyStatusLabel.Text = _app.IsHotkeyFallbackActive
             ? $"Fallback aktiv: {_app.RegisteredHotkeyText}"
             : _app.IsHotkeyRegistered
-            ? $"Aktiv: {App.FormatHotkey(s.HotkeyModifiers, s.HotkeyVk)}"
-            : $"Blockiert: {App.FormatHotkey(s.HotkeyModifiers, s.HotkeyVk)}";
+            ? $"Aktiv: {EntryHotkeys.Format(s.HotkeyModifiers, s.HotkeyVk)}"
+            : $"Blockiert: {EntryHotkeys.Format(s.HotkeyModifiers, s.HotkeyVk)}";
     }
 
     private void SaveAllSettings()

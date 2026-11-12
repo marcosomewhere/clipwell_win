@@ -41,7 +41,7 @@ public partial class EntryHotkeyDialog : Window
     private void RecorderBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        var mods = CurrentModifiers();
+        var mods = App.KeyboardHotkeyModifiers();
         // Without modifiers, Tab, Enter and Esc keep their dialog meaning.
         if ((mods & ~NativeMethods.MOD_SHIFT) == 0 && key is Key.Tab or Key.Enter or Key.Escape) return;
         e.Handled = true;
@@ -52,16 +52,6 @@ public partial class EntryHotkeyDialog : Window
         _vk = vk;
         RecorderBox.Text = EntryHotkeys.Format(_modifiers, _vk);
         ShowError(EntryHotkeys.Validate(_modifiers, _vk));
-    }
-
-    private static uint CurrentModifiers()
-    {
-        uint mods = 0;
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) mods |= NativeMethods.MOD_CONTROL;
-        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0) mods |= NativeMethods.MOD_ALT;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) mods |= NativeMethods.MOD_SHIFT;
-        if (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin)) mods |= NativeMethods.MOD_WIN;
-        return mods;
     }
 
     private void Assign_Click(object sender, RoutedEventArgs e)

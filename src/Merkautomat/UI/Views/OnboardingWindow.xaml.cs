@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using Merkautomat.Models;
+using Merkautomat.Services;
 
 namespace Merkautomat.Views;
 
@@ -63,22 +64,23 @@ public partial class OnboardingWindow : Window
             or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
             return;
 
-        var vk = KeyInterop.VirtualKeyFromKey(key);
-        if (!IsSupportedHotkeyKey(vk))
+        var vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+        var modifiers = EntryHotkeys.NormalizePopup(App.KeyboardHotkeyModifiers());
+        if (EntryHotkeys.ValidatePopup(_settings, modifiers, vk) is { } error)
         {
-            FooterStatusLabel.Text = "Bitte einen Buchstaben oder eine Ziffer mit mindestens einer Modifikatortaste verwenden.";
+            FooterStatusLabel.Text = error;
             return;
         }
 
-        _pendingHotkeyModifiers = NormalizeHotkeyModifiers(ModifiersFromKeyboard());
-        _pendingHotkeyVk = (uint)vk;
+        _pendingHotkeyModifiers = modifiers;
+        _pendingHotkeyVk = vk;
         SyncHotkeyControls(_pendingHotkeyModifiers, _pendingHotkeyVk);
         FooterStatusLabel.Text = "Hotkey aufgenommen. Speichern registriert ihn global.";
     }
 
     private void Modifier_Click(object sender, RoutedEventArgs e)
     {
-        _pendingHotkeyModifiers = NormalizeHotkeyModifiers(ModifiersFromSwitches());
+        _pendingHotkeyModifiers = EntryHotkeys.NormalizePopup(ModifiersFromSwitches());
         SyncHotkeyControls(_pendingHotkeyModifiers, _pendingHotkeyVk);
     }
 
@@ -103,7 +105,7 @@ public partial class OnboardingWindow : Window
 
         _isWaitingForHotkey = true;
         TestHotkeyBtn.IsEnabled = false;
-        HotkeyStatusLabel.Text = $"Warte auf {App.FormatHotkey(_settings.HotkeyModifiers, _settings.HotkeyVk)} ...";
+        HotkeyStatusLabel.Text = $"Warte auf {EntryHotkeys.Format(_settings.HotkeyModifiers, _settings.HotkeyVk)} ...";
         FooterStatusLabel.Text = "Drücke jetzt den gespeicherten Hotkey.";
 
         _ = Task.Delay(5000).ContinueWith(_ => Dispatcher.Invoke(() =>
@@ -132,7 +134,7 @@ public partial class OnboardingWindow : Window
 
     private bool ApplyHotkeyValues()
     {
-        _pendingHotkeyModifiers = NormalizeHotkeyModifiers(_pendingHotkeyModifiers);
+        _pendingHotkeyModifiers = EntryHotkeys.NormalizePopup(_pendingHotkeyModifiers);
         _settings.HotkeyModifiers = _pendingHotkeyModifiers;
         _settings.HotkeyVk = _pendingHotkeyVk;
         _settings.HotkeyAction = PasteLatestRadio.IsChecked == true
@@ -179,7 +181,7 @@ public partial class OnboardingWindow : Window
 
     private void UpdateHotkeyStatus()
     {
-        var hotkey = App.FormatHotkey(_settings.HotkeyModifiers, _settings.HotkeyVk);
+        var hotkey = EntryHotkeys.Format(_settings.HotkeyModifiers, _settings.HotkeyVk);
         var action = _settings.HotkeyAction == HotkeyAction.PasteLatest
             ? "neuesten Eintrag einfügen"
             : "Menü öffnen";
@@ -191,28 +193,6 @@ public partial class OnboardingWindow : Window
             : "Hotkey speichern, um ihn global zu registrieren.";
     }
 
-    private static bool IsSupportedHotkeyKey(int vk)
-        => vk is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A;
-
-    private static uint NormalizeHotkeyModifiers(uint modifiers)
-    {
-        const uint baseMask = NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT |
-                              NativeMethods.MOD_SHIFT | NativeMethods.MOD_WIN;
-        var baseModifiers = modifiers & baseMask;
-        if (baseModifiers == 0)
-            baseModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
-        return baseModifiers | NativeMethods.MOD_NOREPEAT;
-    }
-
-    private static uint ModifiersFromKeyboard()
-    {
-        uint mods = 0;
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) mods |= NativeMethods.MOD_CONTROL;
-        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0) mods |= NativeMethods.MOD_ALT;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) mods |= NativeMethods.MOD_SHIFT;
-        if (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin)) mods |= NativeMethods.MOD_WIN;
-        return mods;
-    }
 
     private uint ModifiersFromSwitches()
     {
@@ -226,12 +206,12 @@ public partial class OnboardingWindow : Window
 
     private void SyncHotkeyControls(uint modifiers, uint vk)
     {
-        modifiers = NormalizeHotkeyModifiers(modifiers);
+        modifiers = EntryHotkeys.NormalizePopup(modifiers);
         ModWin.IsChecked = (modifiers & NativeMethods.MOD_WIN) != 0;
         ModShift.IsChecked = (modifiers & NativeMethods.MOD_SHIFT) != 0;
         ModCtrl.IsChecked = (modifiers & NativeMethods.MOD_CONTROL) != 0;
         ModAlt.IsChecked = (modifiers & NativeMethods.MOD_ALT) != 0;
-        HotkeyRecorderBox.Text = App.FormatHotkey(modifiers, vk);
+        HotkeyRecorderBox.Text = EntryHotkeys.Format(modifiers, vk);
         _pendingHotkeyModifiers = modifiers;
         _pendingHotkeyVk = vk;
     }

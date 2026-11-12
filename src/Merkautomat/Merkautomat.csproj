@@ -19,9 +19,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="11.0.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.1" />
-    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.1" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="3.0.0" />
     <PackageReference Include="SQLite3MC.PCLRaw.bundle" Version="2.6.1" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\AppLogo.png" />
+    <Resource Include="Assets\TrayLogo.png" />
     <Resource Include="Assets\kb-icon-16.png" />
     <Resource Include="Assets\kb-rec-logo.png" />
     <Resource Include="Assets\mic-rec-logo.png" />

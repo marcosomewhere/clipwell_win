@@ -45,22 +45,15 @@ public partial class App
                 break;
             }
         }
-        try
+        lock (_myKnowledgeGate)
         {
-            lock (_myKnowledgeGate)
+            foreach (var e in _myKnowledge.Entries)
             {
-                foreach (var e in _myKnowledge.Entries)
-                {
-                    if (!results.TryGetValue(e.Key, out var suggestion)) continue;
-                    if (suggestion == null) e.SuggestionChecked = true;
-                    else MyKnowledgeAi.ApplyE5(e, suggestion);
-                }
-                MyKnowledge.Save(MyKnowledgeFile, _myKnowledge);
+                if (!results.TryGetValue(e.Key, out var suggestion)) continue;
+                if (suggestion == null) e.SuggestionChecked = true;
+                else MyKnowledgeAi.ApplyE5(e, suggestion);
             }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
-        {
-            LogError("Mein Wissen: Vorschläge speichern", ex);
+            _myKnowledgeWriter!.Later();
         }
         MyKnowledgeChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -111,7 +104,7 @@ public partial class App
         }
         // An unusable answer for this text is not retried; the entry simply keeps its title.
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { }
-        ChangeModelResult("Mein Wissen: Titel speichern", state =>
+        ChangeModelResult(state =>
         {
             if (state.Entries.FirstOrDefault(e => e.Key == entry.Key) is not { } live) return;
             if (suggestion == null) live.ModelChecked = true;
@@ -130,7 +123,7 @@ public partial class App
                 "Fasse diese Kernaussagen aus einem Monat lesbar zusammen.", background: true, ct);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { sentences = []; }
-        ChangeModelResult("Mein Wissen: Zusammenfassung speichern", state =>
+        ChangeModelResult(state =>
         {
             // The digest may have changed in the meantime; then the next job writes a summary for the new statements.
             if (state.Entries.FirstOrDefault(e => e.Key == digest.Key) is not { } live || MyKnowledgeAi.Fingerprint(live.Statements) != fingerprint) return;
@@ -152,7 +145,7 @@ public partial class App
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { sentence = new MyKnowledgeSummarySentence("", []); }
         var context = MyKnowledgeContext();
-        ChangeModelResult("Mein Wissen: Wochenrückblick speichern", state =>
+        ChangeModelResult(state =>
         {
             state.ReviewSentences[group.Signature] = sentence;
             // Only the groups of the current week are kept.
@@ -161,19 +154,12 @@ public partial class App
         });
     }
 
-    private void ChangeModelResult(string attempted, Action<MyKnowledgeState> change)
+    private void ChangeModelResult(Action<MyKnowledgeState> change)
     {
-        try
+        lock (_myKnowledgeGate)
         {
-            lock (_myKnowledgeGate)
-            {
-                change(_myKnowledge);
-                MyKnowledge.Save(MyKnowledgeFile, _myKnowledge);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
-        {
-            LogError(attempted, ex);
+            change(_myKnowledge);
+            _myKnowledgeWriter!.Later();
         }
     }
 

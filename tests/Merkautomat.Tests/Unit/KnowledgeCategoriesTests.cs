@@ -195,7 +195,7 @@ public sealed class HierarchicalCategorizationTests
     public async Task MainCategoryFirstThenItsSubcategory()
     {
         var result = await Service().SuggestAsync([Source("Unsere Reise an den Strand im Sommer, mit viel Sonne.")],
-            ["Reisen › Strand", "Reisen › Berg", "Reisen › Stadt", "Technik"]);
+            ["Reisen › Strand", "Reisen › Berg", "Reisen › Stadt", "Technik"], TestContext.Current.CancellationToken);
         Assert.False(result.Uncertain);
         Assert.Equal("Reisen › Strand", result.Category);
         Assert.Equal("Strand", result.SubCandidates![0].Category);
@@ -206,7 +206,7 @@ public sealed class HierarchicalCategorizationTests
     public async Task OtherMainCategoryIsNotOfferedSubcategoriesOfReisen()
     {
         var result = await Service().SuggestAsync([Source("Neue Technik für den Rechner, Strand als Bildschirmhintergrund.")],
-            ["Reisen › Strand", "Reisen › Berg", "Technik"]);
+            ["Reisen › Strand", "Reisen › Berg", "Technik"], TestContext.Current.CancellationToken);
         Assert.Equal("Technik", result.Category);
         Assert.Null(result.SubCandidates);
     }
@@ -214,7 +214,7 @@ public sealed class HierarchicalCategorizationTests
     [Fact]
     public async Task SingleSubcategoryIsOnlyOfferedNeverChosen()
     {
-        var sub = await Service().SuggestSubcategoryAsync([Source("Eine Reise an den Strand mit genug Text.")], "Reisen", ["Reisen › Strand"]);
+        var sub = await Service().SuggestSubcategoryAsync([Source("Eine Reise an den Strand mit genug Text.")], "Reisen", ["Reisen › Strand"], TestContext.Current.CancellationToken);
         Assert.NotNull(sub);
         Assert.True(sub!.Uncertain);
         Assert.Equal(["Strand"], sub.SubCandidates!.Select(c => c.Category));
@@ -244,7 +244,7 @@ public sealed class HierarchicalCategorizationTests
         };
         var service = new E5Categorization((batch, _) => Task.FromResult(batch.Select(Embed).ToArray()), () => true,
             keys => { requested.AddRange(keys); return texts.Where(t => keys.Contains(t.Key)).ToDictionary(); });
-        await service.SuggestSubcategoryAsync([Source("Eine Reise in die Berge mit genug Text.")], "Reisen", ["Reisen › Strand"],
+        await service.SuggestSubcategoryAsync([Source("Eine Reise in die Berge mit genug Text.")], "Reisen", ["Reisen › Strand"], TestContext.Current.CancellationToken,
             assignments: new Dictionary<string, string> { ["c:1"] = "Reisen › Berg", ["c:2"] = "Reisen › Berg", ["c:3"] = "Technik › Berg" });
         Assert.Contains("c:1", requested);
         Assert.DoesNotContain("c:3", requested);

@@ -61,6 +61,22 @@ public class EntryHotkeysTests
     }
 
     [Fact]
+    public void ValidatePopup_AcceptsFunctionKeysAndRejectsEntryHotkeys()
+    {
+        var s = new AppSettings();
+        Assert.Null(EntryHotkeys.ValidatePopup(s, Win | Shift, KeyA));
+        Assert.Null(EntryHotkeys.ValidatePopup(s, Ctrl, F5));
+        Assert.NotNull(EntryHotkeys.ValidatePopup(s, Ctrl, Space));
+
+        EntryHotkeys.Assign(s, 1, Ctrl | Shift, F5, false);
+        Assert.NotNull(EntryHotkeys.ValidatePopup(s, Ctrl | Shift, F5));
+        // Without a modifier the popup falls back to Ctrl+Shift, which is the entry hotkey here.
+        Assert.NotNull(EntryHotkeys.ValidatePopup(s, 0, F5));
+        Assert.Equal(Ctrl | Shift | NoRepeat, EntryHotkeys.NormalizePopup(0));
+        Assert.Equal(Win | NoRepeat, EntryHotkeys.NormalizePopup(Win | NoRepeat));
+    }
+
+    [Fact]
     public void Clean_DropsInvalidAndDuplicateAssignments()
     {
         var s = new AppSettings

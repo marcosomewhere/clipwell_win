@@ -16,7 +16,7 @@ Aus dem Review vom 2026-11-12. Offensichtliches ist behoben (siehe STATUS.md); h
 | --- | --- | --- | --- |
 | Hoch | Granite/Qwen mit echten Daten messen: Qualitaet von Titeln, Kategorievorschlaegen, feineren Kategorien und Zusammenfassungen, Rechenzeit je Schritt, Last im Leerlauf | fachlich | Offen; Tests pruefen nur Anfrage und Auswertung, keine echten Modellaufrufe |
 | Hoch | Startwerte an echten Daten justieren: Grundgewichte (1,0/0,8/0,5/0,35), Halbwertszeiten (7/30 Tage), Aufbewahrung 60 Tage, Wartezeit 48 Stunden, Anlauf 30 % ueber 14 Tage, Festigung (14 Tage, 0,4), Naehe 0,85 bis 0,95, Vorwahl beim Zusammenfuehren 0,92, feinere Kategorien ab 12 Eintraegen | fachlich | Offen; nur Aufbewahrung, Wartezeit und Halbwertszeit der Zwischenablage sind einstellbar |
-| Mittel | Mein Wissen speichert bei jeder Aenderung (auch jedem Hintergrundschritt) die ganze verschluesselte Datei; bei vielen tausend Eintraegen (bis 12.000 Zeichen je Eintrag) Speicherbedarf und Schreiblast messen, ggf. gesammelt speichern oder Kopien begrenzen | technisch | Offen |
+| Niedrig | Mein Wissen bei vielen tausend Eintraegen (bis 12.000 Zeichen je Eintrag): Dateigroesse und Schreibdauer messen, ggf. Kopien begrenzen | technisch | Gesammeltes Speichern umgesetzt (`DeferredWriter`: Klicks und Hintergrundschritte schreiben einmal nach 3 s im Hintergrund statt je Aenderung, Tageslauf und "Zu Mein Wissen" sofort, Rest beim Beenden); Messung am grossen Bestand offen |
 | Mittel | Zusammenfassungen und Kopien ohne Quelle sind nicht im Suchindex: im Brain unsichtbar, beim Fragen nur ueber Woerter auffindbar | fachlich | Offen; braeuchte eine eigene Indexquelle fuer Mein-Wissen-Texte |
 | Niedrig | Zusammenfuehren: Aufgaben, deren Herkunft auf ein entferntes Original zeigt, behalten ihren Text, verlieren aber den Verweis | fachlich | Offen; bewusst kein automatisches Umhaengen |
 
@@ -41,7 +41,6 @@ Manuelle Abnahme Kategorienanalyse: vorbereitete und neue Vorschlaege bei hell/d
 | Niedrig | Notschluessel erneuern (neuer Notschluessel, alle Dateikoepfe neu schreiben, alte Auto-Backups brauchen weiter den alten) | Offen; heute nur anzeigen |
 | Mittel | Bildeditor manuell auf DPI-, Zoom- und Multi-Monitor-Setups pruefen | Offen |
 | Mittel | UI-Interaktionstests fuer Maus/Tastaturpfade ergaenzen | Offen |
-| Niedrig | URL-Preview-Koordination in `App.OnClipboardChanged` und `App.ReloadUrlPreview` ggf. extrahieren | Beobachten |
 | Mittel | Semantische Suche: Schwellen (0,80/0,83/0,97) mit echten Daten pruefen und ggf. nachjustieren | Offen; Stufe 1 (Embeddings, hybride Suche, Aehnliche, Dubletten) umgesetzt |
 | Mittel | Brain: Schwelle (0,86), Themenbildung und Stichworte mit echten Daten pruefen | Offen; Stufe 2 (Wissensnetz aus Inhalt, Zeit, Aufnahme und Webseite, Themen, Darstellung) umgesetzt, Kanten werden live aus dem Index berechnet statt in SQLite gespeichert |
 | Hoch | Brain: bessere Themennamen. Am echten Bestand entstehen Namen aus Oberflaechen-/Entwicklerwoertern ("Kontrollstation · Zurueck · Alles", "Fuers · Geloescht · Property", "Tools · July · Views"). Ideen: Stichwoerter per TF-IDF gegen den Gesamtbestand statt nur gegen das Netz, Stoppwoerter fuer UI-/Code-Begriffe und Monatsnamen erweitern, Anwendung/Webseite als Hinweis nutzen, optional im Hintergrund per Granite/Qwen benennen (nur Vorschlag, Speichern ueber Mappe/Annotation). Seitenleiste: statt "Engineering · 19 Eintraege · 19 Zwischenablage" Zeitraum, Anwendungen und offene Aufgaben zeigen | Offen; Voraussetzung fuer Rueckblick und Mappen-Vorschlaege mit verstaendlichen Namen. Vorher-Nachher an echten Daten vergleichen (`KnowledgeGraph.Keywords`, `TopicNoise`) |
@@ -124,7 +123,7 @@ Selbst signiert genuegt, solange jeder PC, auf dem Merkautomat laeuft, unter eig
 | Mittel | RTF-Formatierung erhalten (z. B. aus Word) | HTML ist umgesetzt (`HtmlContent`, Einfuegen mit Formatierung, Markdown-Aufbereitung); RTF wird weiterhin zu Klartext reduziert | Eigene Spalte oder RTF nach HTML wandeln |
 | Mittel | Bibliotheksansicht fuer Webinhalte, gruppiert nach Webseite (`SourceUrl`) | Webinhalte sind pro Eintrag im Detailfenster sichtbar, aber nicht gesammelt | Liste nach Host, Suche, Markdown-Export pro Seite; optional Anbindung der Chrome-Erweiterung per Native Messaging |
 | Niedrig | Dateien und Ordner aus dem Explorer erfassen (`FileDrop`) | Lesbare Textdateien werden mit Inhalt gespeichert (Liste in der Kontrollstation); andere Dateien und Ordner nicht | Pfadliste als Eintrag; Einfuegen als `FileDrop` |
-| Mittel | Quell-App und Fenstertitel pro Eintrag speichern | Nicht vorhanden | Ermoeglicht Suchpraefix `app:` und App-Ausschlussliste |
+| Mittel | Suchpraefix `app:` ueber die gespeicherte Quell-Anwendung | Anwendung und Fenstertitel stehen seit den gemeinsamen Herkunftsmetadaten je Eintrag in `MetadataJson`; Suche und Filter nutzen sie noch nicht | Gleiche Grundlage wie die App-Ausschlussliste |
 
 ### Einfuegen und Arbeitsablauf
 
@@ -134,7 +133,7 @@ Selbst signiert genuegt, solange jeder PC, auf dem Merkautomat laeuft, unter eig
 | Niedrig | Eintrags-Hotkeys auch fuer Sprachnotizen und Pinstation-Gruppen, Hinweis beim Entpinnen eines Eintrags mit Hotkey | Offen; heute nur History-Eintraege, Zuweisung bleibt nach Loeschen als "Eintrag geloescht" sichtbar |
 | Mittel | Paste-Stapel (mehrere Eintraege nacheinander einfuegen) | Bulk-"Kopieren" verbindet Texte mit `---`; kein sequenzielles Einfuegen | Eigener Modus mit Hotkey |
 | Mittel | Snippets/Vorlagen mit Platzhaltern (Datum, Cursorposition) | Notizen als Markdown-Dateien, keine Platzhalter | Kann auf `NoteStore` aufbauen |
-| Niedrig | Weitere globale Hotkeys (Pinboard, Eyedropper, Paste-Stapel) | Ein globaler Popup-Hotkey plus Hotkeys fuer einzelne Eintraege; Pinboard nur ueber Tray oder Popup | Der Recorder fuer den Popup-Hotkey nimmt nur Buchstaben und Ziffern auf (der Dialog fuer Eintrags-Hotkeys kann F-Tasten) |
+| Niedrig | Weitere globale Hotkeys (Pinboard, Eyedropper, Paste-Stapel) | Ein globaler Popup-Hotkey plus Hotkeys fuer einzelne Eintraege; Pinboard nur ueber Tray oder Popup | Popup-Hotkey und Eintrags-Hotkeys nehmen Buchstaben, Ziffern und F-Tasten an und pruefen gegenseitig auf Doppelbelegung |
 
 ### Organisation und Suche
 
@@ -169,7 +168,7 @@ Bekannte Grenzen stehen zentral in `STATUS.md`.
 - Kategorien im Export: Zeile "Kategorie: Haupt › Unter" unter der Artikelueberschrift, Kategorie im Inhaltsverzeichnis, ZIP-Ordner je Haupt-/Unterkategorie (sobald ein Artikel eine Kategorie hat, sonst wie bisher nach Art).
 - Gerenderte Markdown-Vorschau im Ideenkombinat (`MarkdownPreview`).
 - Alte Tagesdateien `docs/next-feature.md`, `docs/refactoring-2026-06-07.md` und `docs/review-2026-06-07.md` wurden in `STATUS.md` und diese Roadmap ueberfuehrt.
-- Fruehere Refactoring-Punkte zu Regex-Caching, Clipboard-Schreibpfad, Thumbnail/Favicon-Laden und Monitor/DPI-Helfern sind umgesetzt.
+- Fruehere Refactoring-Punkte zu Regex-Caching, Clipboard-Schreibpfad, Thumbnail/Favicon-Laden, Monitor/DPI-Helfern und der doppelten URL-Vorschau-Koordination (`App.StartUrlPreview`) sind umgesetzt.
 - Favicon-Fetches sind groessenlimitiert und URL-Preview-Fetches blockieren private, Loopback- und Link-Local-Ziele.
 - JSON-Export/Import erhaelt Nutzung, Pin-Reihenfolge, LastUsedAt und ThumbnailData.
 

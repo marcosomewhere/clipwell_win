@@ -217,9 +217,9 @@ public class KnowledgeGraphTests
         var g = KnowledgeGraph.Build(chunks, Options);
 
         var first = new ForceLayout(g);
-        first.Run();
+        first.Run(TestContext.Current.CancellationToken);
         var second = new ForceLayout(g);
-        second.Run();
+        second.Run(TestContext.Current.CancellationToken);
 
         Assert.Equal(first.X, second.X);
         Assert.All(first.X.Concat(first.Y), v => Assert.True(double.IsFinite(v)));

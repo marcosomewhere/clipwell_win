@@ -2,12 +2,27 @@
 
 Stand: 2026-11-12
 
+## Offene Punkte aus den Docs bereinigt, Pakete aktualisiert
+
+- Mein Wissen speichert gesammelt: `DeferredWriter` (Infrastructure/Persistence) zaehlt Aenderungen und schreibt die verschluesselte Datei einmal 3 s nach der letzten Aenderung im Hintergrund, jeweils mit dem neuesten Stand; Schreibvorgaenge ueberlappen nie, ein langsamer frueherer kann keinen aelteren Stand ueber einen neueren legen. Gilt fuer Klicks (Dauerhaft behalten, Entfernen, Zusammenfassen, geloeschte Quellen) und alle KI-Hintergrundschritte; vorher schrieb jede Aenderung die ganze Datei, die Klicks dabei auf dem UI-Thread. Tageslauf und "Zu Mein Wissen hinzufuegen" schreiben weiter sofort (Fehlermeldung im Tray bleibt), Ausstehendes beim Beenden. Ein fehlgeschlagenes Schreiben bleibt ausstehend und wird beim naechsten Mal nachgeholt.
+- Popup-Hotkey: Kontrollstation und Onboarding nehmen jetzt auch F-Tasten auf (vorher nur A–Z/0–9) und lehnen eine Kombination ab, die schon ein Eintrags-Hotkey nutzt (vorher scheiterte dann still eine der beiden Registrierungen). Regeln in `EntryHotkeys.NormalizePopup`/`ValidatePopup`; die drei Kopien der Modifikator-Abfrage und die zwei von Normalisierung und Formatierung sind zusammengelegt (`App.KeyboardHotkeyModifiers`, `EntryHotkeys.Format`).
+- URL-Vorschau: die zwei fast gleichen Ablaeufe in `OnClipboardChanged` und `ReloadUrlPreview` sind eine Methode `StartUrlPreview` (neue Kopie mit Cache, Neu laden ohne).
+- Testprojekt ohne Warnungen: die 12 xUnit1051-Hinweise sind behoben (`TestContext.Current.CancellationToken`).
+- Pakete: Microsoft.Data.Sqlite.Core 10.0.14 → 11.0.0 (net10, weiter SQLitePCLRaw.core 3.0.5 mit SQLite3 Multiple Ciphers), Microsoft.ML.Tokenizers 2.0.1 → 3.0.0, Microsoft.NET.Test.Sdk 18.11.0 → 18.12.0, xunit.v3 4.0.2 → 4.0.3. Keine neuen Abhaengigkeiten, `dotnet list package --vulnerable --include-transitive` ohne Treffer, `--outdated` ohne Treffer. Tokenizer gegen 2.0.1 verglichen: SentencePiece-IDs des E5-Modells fuer 318 Texte (Deutsch, CJK, Kyrillisch, Emoji, Code, URLs, Steuerzeichen, 3000 Zeichen, 300 Zufallstexte) byteidentisch, gespeicherte Suchvektoren bleiben also gueltig.
+- Docs: in diesem Abschnitt verlorene Zeile zu Prompts/drei Kategorieebenen wiederhergestellt, doppelte Symbolzeile entfernt; veraltete Angaben in ROADMAP (Quell-App wird laengst gespeichert, Hotkey-Recorder, URL-Vorschau), Handbuch und Architektur aktualisiert.
+- Verifiziert: Release-Build App und Tests mit 0 Warnungen/0 Fehlern; 781 Tests, 780 bestanden und ein optionaler E5-Netzwerktest uebersprungen. 5 neue Tests (`DeferredWriterTests`: Buendeln, nur bei Aenderung, Fehler bleiben ausstehend, Fehler im Hintergrund; `ValidatePopup`).
+- Manuell offen (Checkliste, keine Bildschirmaufnahme erstellt):
+  1. Kontrollstation, Popup-Hotkey: Aufnahmefeld anklicken, z. B. Strg+Umschalt+F8 druecken, Uebernehmen, Popup oeffnet damit; einen Eintrags-Hotkey zuweisen und dieselbe Kombination als Popup-Hotkey versuchen → Meldung, alte Belegung bleibt.
+  2. Onboarding (ggf. `data\onboarding.seen` beiseitelegen): F-Taste aufnehmen und "Testen".
+  3. Mein Wissen: mehrere Eintraege schnell nacheinander dauerhaft behalten/entfernen, App sofort ueber das Tray beenden und neu starten → alle Aenderungen sind da.
+  4. URL kopieren → Titel/Favicon erscheinen; Rechtsklick "Vorschau neu laden".
+
 ## Version 1.3.0: Mein Wissen, lokale KI, drei Kategorieebenen, Zusammenfuehren, App-Symbol
 
 - Mein Wissen (Strg+M, Entscheidung 0009): taeglich gewichtete Sammlung aller Quellen mit eigenen verschluesselten Textkopien; Wartezeit (Standard 48 Stunden) und Anlaufgewicht; Festigung; Verdichten zu Monatszusammenfassungen nach der Aufbewahrungsfrist (abschaltbar, Knowledgeordner ohne Fristen); "Zusammenfassen …"; Wissensprofil; Wort- und Bedeutungssuche; "Dauerhaft behalten" (100 %); Kontextmenue "Zu Mein Wissen hinzufuegen" in Popup, Pinstation, Bibliothek, Suche, Brain. Seitenleiste in "Wissen" und "Quellen" (Knowledgeordner, Sprechwerk, Bildschirmaufnahmen, Zwischenablage). Brain-Filter "Nur Mein Wissen" (Standard an).
 - Lokale KI fuer Mein Wissen: E5-Kategorievorschlaege nach jedem Tageslauf (nach Aenderung der Kategorien neu), Sprachmodell im Leerlauf fuer Titel, unsichere Kategorien, Monatszusammenfassungen mit Belegpflicht und Wochenrueckblick; Fragen an Mein Wissen; Filter "Fast gleich"; Naehe zum Kernwissen; Dashboard-Karte "Neu in Mein Wissen". Vorschlaege speichern nie selbst eine Kategorie.
 - Prompts der lokalen KI in der Kontrollstation (fuenf Aufgaben, einstellbar); drei Kategorieebenen (Haupt › Unter › Fein) ueberall; feinere Kategorien im Leerlauf mit Pruefung im Fenster der Kategorieanalyse; Brain "Verlustfrei zusammenfuehren …" (Entscheidung 0010).
-- Neues App-Symbol fuer Tray, Titelleisten, Tray-Menue und EXE (aussen transparent, innen dunkle Scheibe fuer Lesbarkeit auf hellem Grund).
+- Neues App-Symbol fuer Titelleisten und EXE (aussen transparent, innen dunkle Scheibe fuer Lesbarkeit auf hellem Grund); Tray und Tray-Menue nutzen die kleine Variante `TrayLogo.png` (ohne Leuchtrand, schlankerer Ring, MA fast symbolbreit, hoeher und kraeftiger, mit dunkler Kontur ueber dem Ring), damit das MA bei 16 bis 24 px schneller erkennbar ist.
 - Aufraeumen: gemeinsame Zwischenablage-Textregel `ClipboardEntry.KnowledgeText` statt vier Kopien, `MyKnowledgeEntry.Clone` statt Feldkopie in der App, eine Methode fuer Kategoriezuordnung mit vollstaendigem Zuruecksetzen bei Schreibfehlern (vorher flache Kopie der Definitionen), keine zweite Prompt-Begrenzung mehr, Brain baut bei Hintergrund-Aenderungen an Mein Wissen nur neu, wenn sich Eintraege oder Gewichte aendern, zusammengefuehrte Originale stehen nicht mehr doppelt in Mein Wissen. Danach: Beschreibung feinerer Kategorien wird beim Uebernehmen als Kategoriebeschreibung gespeichert (wenn noch keine da ist), uebernommene Vorschlaege aus Mein Wissen zaehlen in den Praxiswerten der Auswertung (mit dem echten Verfahren), Zaehler bereitliegender feinerer Kategorien wird nach jeder Kategorieaenderung neu berechnet, Fehler der E5-Laufzeit beim taeglichen Vorschlagen nur noch im Log, Detailfenster mit "Zu Mein Wissen".
 - Verifiziert: Release-Build mit 0 Warnungen/0 Fehlern; 776 Tests, 775 bestanden und ein optionaler E5-Netzwerktest uebersprungen. Keine echten Aufrufe von Granite/Qwen in den Tests; Qualitaet und Rechenzeit der KI-Vorschlaege sind ungeprueft. Bestehende xUnit1051-Hinweise unveraendert.
 - Manuell offen (Checkliste, keine Bildschirmaufnahme erstellt):
@@ -132,8 +147,7 @@ Stand: 2026-11-12
 - Zielplattform: .NET 10 WPF, `net10.0-windows10.0.19041.0`
 - UI: WPF-UI 4.3.0 plus WinForms `NotifyIcon`
 - Speicher: SQLite WAL in `data\history.db`, Benutzerdaten im Tool-Stamm
-- Tests: 605 xUnit-Tests (604 bestanden, ein Fallback-Download-Test ohne `MERKAUTOMAT_E5_DOWNLOAD=1` uebersprungen); Release-Build des Hauptprojekts ohne Warnungen und Fehler.
-- Testprojekt: bestehende xUnit1051-Hinweise (Aufrufe ohne `TestContext.Current.CancellationToken`) in `KnowledgeGraphTests.cs`, `KnowledgeCategoriesTests.cs`, `RocchioModelTests.cs` und `RocchioVariantTests.cs`; keine fehlgeschlagenen Tests.
+- Tests: 781 xUnit-Tests (780 bestanden, ein Fallback-Download-Test ohne `MERKAUTOMAT_E5_DOWNLOAD=1` uebersprungen); Release-Build von App und Testprojekt ohne Warnungen und Fehler.
 - Solution: `Merkautomat.slnx`
 - Architekturstatus: Code-behind in den bestehenden WPF-Fenstern bleibt bewusst bestehen; keine MVVM- oder Architektur-Umbauten geplant.
 
@@ -335,20 +349,20 @@ otes`, nicht exportierte aus `notes`, Oeffnen ebenfalls im Ideenkombinat) und Bi
 
 ## Verifikation
 
-Zuletzt ausgefuehrt am 2026-11-08:
+Zuletzt ausgefuehrt am 2026-11-12:
 
 ```powershell
 taskkill /IM Merkautomat.exe /F
-dotnet build Merkautomat\Merkautomat.csproj -c Release --nologo -v q
-dotnet test --project Merkautomat.Tests\Merkautomat.Tests.csproj -c Release
+dotnet build src\Merkautomat\Merkautomat.csproj -c Release --nologo -v q
+dotnet test --project tests\Merkautomat.Tests\Merkautomat.Tests.csproj -c Release
 ```
 
 Ergebnis:
 
-- Tests: 574 bestanden, 1 uebersprungen (Fallback-Download ohne `MERKAUTOMAT_E5_DOWNLOAD=1`; mit der Variable vorher ebenfalls bestanden). Der Test mit dem echten Modell nutzt die mitgelieferte Kopie.
+- Tests: 780 bestanden, 1 uebersprungen (Fallback-Download ohne `MERKAUTOMAT_E5_DOWNLOAD=1`; mit der Variable vorher ebenfalls bestanden). Der Test mit dem echten Modell nutzt die mitgelieferte Kopie.
 - Release-Build: erfolgreich, 0 Warnungen.
-- Dependency-Warnung bereinigt: `SQLitePCLRaw.lib.e_sqlite3` 2.1.11/`NU1903` wird durch `Microsoft.Data.Sqlite` 10.0.14 plus direktem `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 Override nicht mehr aufgeloest. `dotnet list package --vulnerable --include-transitive`: keine Treffer, auch nicht fuer Microsoft.ML.OnnxRuntime 1.31.1, Microsoft.ML.Tokenizers 2.0.1 und deren transitive Pakete Google.Protobuf 3.30.2 und System.Numerics.Tensors 9.0.0.
-- Testprojekt laeuft auf `xunit.v3` 4.0.2 mit `xunit.runner.visualstudio` 4.0.1 auf der Microsoft Testing Platform (`global.json` `test.runner`); `dotnet test` braucht deshalb `--project`.
+- Abhaengigkeiten: `dotnet list package --vulnerable --include-transitive` und `--outdated` ohne Treffer (Microsoft.Data.Sqlite.Core 11.0.0 mit SQLite3 Multiple Ciphers 2.6.1 auf SQLitePCLRaw.core 3.0.5, Microsoft.ML.OnnxRuntime 1.31.1, Microsoft.ML.Tokenizers 3.0.0).
+- Testprojekt laeuft auf `xunit.v3` 4.0.3 mit `xunit.runner.visualstudio` 4.0.1 auf der Microsoft Testing Platform (`global.json` `test.runner`); `dotnet test` braucht deshalb `--project`.
 
 ## Bekannte Grenzen
 
@@ -375,5 +389,4 @@ Keine kritischen Race Conditions bekannt:
 
 Technische Schulden:
 
-- `App.OnClipboardChanged` und `App.ReloadUrlPreview` enthalten aehnliche async URL-Preview-Koordination. Nicht extrahiert, weil State- und UI-Koordination dort sensibel ist.
 - Einige UI-Smoke-Tests decken Renderbarkeit ab, aber keine echten Interaktionspfade per Maus/Tastatur.
