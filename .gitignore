@@ -29,6 +29,8 @@ TestResults/
 *_wpftmp.csproj
 
 ## Local app data / logs
+data/
+data.migration-*/
 *.log
 *.db
 *.db-shm
@@ -40,5 +42,14 @@ Desktop.ini
 
 ## Publish output
 dist/
-Tools/
 
+## Models fetched by the build (see src/Merkautomat/Merkautomat.csproj)
+models/
+
+## Local developer tools; only the README is tracked
+tools/*
+!tools/README.md
+
+
+## Temporary files (design drafts, screenshots)
+tmp/

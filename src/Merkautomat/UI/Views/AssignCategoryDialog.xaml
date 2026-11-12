@@ -1,0 +1,34 @@
+<Window x:Class="Merkautomat.Views.AssignCategoryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Kategorie festlegen – Ideenkombinat" Icon="/Merkautomat;component/Assets/kb-icon-16.png"
+        Width="560" SizeToContent="Height" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource EditorChromeBrush}" Foreground="{DynamicResource OnboardingTextPrimaryBrush}">
+    <Window.Resources>
+        <ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="BrainDialogResources.xaml" /></ResourceDictionary.MergedDictionaries></ResourceDictionary>
+    </Window.Resources>
+    <StackPanel Margin="20">
+        <TextBlock Text="Kategorie festlegen" FontSize="20" FontWeight="SemiBold" />
+        <TextBlock x:Name="ScopeText" Style="{StaticResource BrainCaption}" Margin="0,5,0,14" />
+
+        <TextBlock Text="Hauptkategorie" FontWeight="SemiBold" Margin="0,0,0,4" />
+        <ComboBox x:Name="MainBox" IsEditable="True" AutomationProperties.Name="Hauptkategorie"
+                  ToolTip="Vorhandene Hauptkategorie wählen oder neue eingeben" />
+        <TextBlock x:Name="MainDescription" Style="{StaticResource BrainCaption}" Margin="0,4,0,0" Visibility="Collapsed" />
+
+        <TextBlock Text="Unterkategorie und Feinkategorie (optional)" FontWeight="SemiBold" Margin="0,14,0,4" />
+        <ComboBox x:Name="SubBox" IsEditable="True" AutomationProperties.Name="Unterkategorie"
+                  ToolTip="„Unter“ oder „Unter › Fein“ unterhalb der Hauptkategorie; leer lassen für nur die Hauptkategorie" />
+        <TextBlock x:Name="SubDescription" Style="{StaticResource BrainCaption}" Margin="0,4,0,0" Visibility="Collapsed" />
+
+        <TextBlock x:Name="ErrorText" Foreground="#FFE57373" Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+
+        <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Button x:Name="RemoveButton" Content="Kategorie entfernen" Click="Remove_Click" Style="{StaticResource EditorButtonStyle}"
+                    ToolTip="Die Kategorie der ausgewählten Einträge mit allen Ebenen entfernen; Titel bleiben erhalten" />
+            <Button Grid.Column="2" Content="Abbrechen" IsCancel="True" Style="{StaticResource EditorButtonStyle}" Margin="0,0,8,0" />
+            <Button Grid.Column="3" Content="Zuordnen" IsDefault="True" Click="Assign_Click" Style="{StaticResource BrainPrimaryButton}" />
+        </Grid>
+    </StackPanel>
+</Window>

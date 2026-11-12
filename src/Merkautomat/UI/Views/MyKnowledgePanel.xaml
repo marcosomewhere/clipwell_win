@@ -1,0 +1,246 @@
+<UserControl x:Class="Merkautomat.Views.MyKnowledgePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="KnowledgeBaseStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <DataTemplate x:Key="KnowledgeRowTemplate">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Top" Margin="0,3,10,0" ToolTip="{Binding WeightTip}">
+                        <Border Height="5" CornerRadius="2" Background="#FF2A2520">
+                            <Border HorizontalAlignment="Left" Width="{Binding BarWidth}" CornerRadius="2"
+                                    Background="{StaticResource InstrumentOrange}" />
+                        </Border>
+                        <TextBlock Text="{Binding WeightLabel}" FontSize="10.5" Margin="0,3,0,0" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Meta}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="18,10,18,8" BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid>
+                        <TextBox x:Name="QueryBox" Style="{StaticResource EditorTextBoxStyle}" BorderThickness="1"
+                                 Padding="28,7,8,7" FontSize="13" TextChanged="QueryBox_TextChanged" PreviewKeyDown="QueryBox_PreviewKeyDown"
+                                 AutomationProperties.Name="In Mein Wissen suchen oder fragen" />
+                        <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons" FontSize="12" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource EditorMutedBrush}" />
+                        <TextBlock x:Name="QueryHint" FontSize="13" Margin="31,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                   TextTrimming="CharacterEllipsis" Text="Suchen (Wörter oder Bedeutung) oder fragen mit Strg+Enter"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="AskButton" Click="Ask_Click" Style="{StaticResource EditorButtonStyle}" Margin="8,0,0,0" Padding="10,4" FontSize="12"
+                                ToolTip="Die Eingabe als Frage an dein Wissen stellen; das Sprachmodell antwortet nur aus Mein Wissen und nennt die Quellen (Strg+Enter)">
+                            <TextBlock Text="Fragen" />
+                        </Button>
+                        <Button x:Name="AcceptSureButton" Click="AcceptSure_Click" Style="{StaticResource EditorButtonStyle}" Margin="8,0,0,0" Padding="10,4" FontSize="12"
+                                IsEnabled="False" ToolTip="Alle Kategorievorschläge übernehmen, bei denen E5 mit deinen eigenen Beispielen eindeutig war">
+                            <TextBlock x:Name="AcceptSureText" Text="Sichere Vorschläge übernehmen" />
+                        </Button>
+                        <Button x:Name="RunButton" Click="Run_Click" Style="{StaticResource EditorButtonStyle}"
+                                Margin="8,0,0,0" Padding="10,4" FontSize="12"
+                                ToolTip="Alle Quellen jetzt gewichten und übernehmen; läuft sonst einmal am Tag">
+                            <TextBlock Text="Jetzt aktualisieren" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <WrapPanel Margin="0,8,0,0">
+                    <RadioButton x:Name="SourceAll" GroupName="MkSource" Content="Alle Quellen" IsChecked="True" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4" />
+                    <RadioButton x:Name="SourceFolder" GroupName="MkSource" Content="Knowledgeordner" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4" />
+                    <RadioButton x:Name="SourceNotes" GroupName="MkSource" Content="Sprachnotizen" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4" />
+                    <RadioButton x:Name="SourceRecordings" GroupName="MkSource" Content="Bildschirmaufnahmen" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4" />
+                    <RadioButton x:Name="SourceClipboard" GroupName="MkSource" Content="Zwischenablage" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,18,4" />
+                    <RadioButton x:Name="StateAll" GroupName="MkState" Content="Alle" IsChecked="True" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4" />
+                    <RadioButton x:Name="StateNew" GroupName="MkState" Content="Neu heute" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4"
+                                 ToolTip="Heute übernommen" />
+                    <RadioButton x:Name="StateLasting" GroupName="MkState" Content="Gefestigt" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4"
+                                 ToolTip="Dauerhaft behalten, gefestigt, eingeordnet, in einer Mappe oder aus dem Knowledgeordner: wird nicht zusammengefasst" />
+                    <RadioButton x:Name="StateDigest" GroupName="MkState" Content="Zusammenfassungen" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4"
+                                 ToolTip="Verdichtete Einträge: ausgewählte Originalaussagen, Einzelheiten nicht mehr gespeichert" />
+                    <RadioButton x:Name="StateExpiring" GroupName="MkState" Content="Bald verdichtet" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4"
+                                 ToolTip="Wird in den nächsten 14 Tagen zusammengefasst (oder entfernt, wenn Verdichten ausgeschaltet ist), außer es wird dauerhaft behalten oder eingeordnet" />
+                    <RadioButton x:Name="StateSuggested" GroupName="MkState" Content="Vorschläge" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4"
+                                 ToolTip="Einträge ohne Kategorie mit einem Vorschlag von E5 oder dem Sprachmodell; übernommen wird erst auf deinen Klick" />
+                    <RadioButton x:Name="StateSimilar" GroupName="MkState" Content="Fast gleich" Style="{StaticResource ScopeChipStyle}" Checked="Filter_Changed" Margin="0,0,6,4"
+                                 ToolTip="Einträge, die sich inhaltlich fast gleichen (E5), nach Gruppen; gut zum Zusammenfassen" />
+                </WrapPanel>
+                <Border x:Name="AnswerPanel" Visibility="Collapsed" Margin="0,8,0,0" Padding="12,10" CornerRadius="6"
+                        BorderThickness="1" BorderBrush="{DynamicResource OnboardingAccentBrush}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Click="AnswerClose_Click" Style="{StaticResource KbLinkButton}" Content="Schließen"
+                                    AutomationProperties.Name="Antwort schließen" />
+                            <TextBlock x:Name="AnswerTitle" FontWeight="SemiBold" FontSize="12.5" />
+                        </DockPanel>
+                        <TextBox x:Name="AnswerText" Style="{StaticResource EditorTextBoxStyle}" IsReadOnly="True" BorderThickness="0" Padding="0"
+                                 TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12.5" Background="Transparent" MaxHeight="180"
+                                 VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Antwort" />
+                        <ItemsControl x:Name="AnswerSources" Margin="0,6,0,0" Focusable="False">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Click="AnswerSource_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,2" FontSize="11.5" Margin="0,0,6,4"
+                                            Content="{Binding Label}" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <TextBlock x:Name="CategoryFilterBar" FontSize="11.5" Margin="0,4,0,0" Visibility="Collapsed">
+                    <Run x:Name="CategoryFilterText" Foreground="{StaticResource InstrumentOrange}" FontWeight="SemiBold" />
+                    <Hyperlink Click="CategoryFilterClear_Click">Filter aufheben</Hyperlink>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="300" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="1.1*" MinWidth="240" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Padding="14,10,14,8" BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel>
+                        <TextBlock Text="Wissensprofil" Style="{StaticResource PanelTitle}" FontSize="13" />
+                        <TextBlock x:Name="ProfileSubtitle" Style="{StaticResource PanelSubtitle}" TextWrapping="Wrap"
+                                   Text="Hauptkategorien nach Gewicht. Ein Klick filtert die Liste." />
+                        <ItemsControl x:Name="ProfileList" Focusable="False" MaxHeight="190">
+                            <ItemsControl.Template>
+                                <ControlTemplate TargetType="ItemsControl">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False"><ItemsPresenter /></ScrollViewer>
+                                </ControlTemplate>
+                            </ItemsControl.Template>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Click="ProfileRow_Click" Style="{StaticResource KbLinkButton}" HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch" Padding="0,2" ToolTip="{Binding Tip}"
+                                            AutomationProperties.Name="{Binding Name}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="130" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="ProfileName" Text="{Binding Name}" FontSize="11.5" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                                            <Border Grid.Column="1" Height="6" CornerRadius="3" Background="#FF2A2520" VerticalAlignment="Center">
+                                                <Border HorizontalAlignment="Left" Width="{Binding BarWidth}" CornerRadius="3"
+                                                        Background="{StaticResource InstrumentOrange}" />
+                                            </Border>
+                                            <TextBlock Grid.Column="2" Text="{Binding Label}" FontSize="11" Margin="8,0,0,0"
+                                                       Foreground="{DynamicResource EditorMutedBrush}" />
+                                        </Grid>
+                                    </Button>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter TargetName="ProfileName" Property="FontWeight" Value="Bold" />
+                                            <Setter TargetName="ProfileName" Property="Foreground" Value="{StaticResource InstrumentOrange}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <ListBox x:Name="EntryList" Grid.Row="1" SelectionMode="Extended"
+                         Style="{StaticResource KbListStyle}" Background="Transparent" BorderThickness="0" Padding="8,6"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                         ItemContainerStyle="{StaticResource SemanticItemContainerStyle}"
+                         ItemTemplate="{StaticResource KnowledgeRowTemplate}"
+                         SelectionChanged="EntryList_SelectionChanged"
+                         AutomationProperties.Name="Einträge in Mein Wissen">
+                    <ListBox.ContextMenu>
+                        <ContextMenu Opened="EntryMenu_Opened">
+                            <MenuItem x:Name="EntryMenuAccept" Header="Vorschlag übernehmen" Click="AcceptSuggestion_Click" />
+                            <MenuItem x:Name="EntryMenuKeep" Header="Dauerhaft behalten" Click="Keep_Click" />
+                            <MenuItem Header="Kategorie …" Click="Category_Click" />
+                            <MenuItem Header="Zusammenfassen …" Click="Summarize_Click" />
+                            <MenuItem Header="Im Brain zeigen" Click="Brain_Click" />
+                            <Separator />
+                            <MenuItem Header="Entfernen …" InputGestureText="Entf" Click="Remove_Click" />
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                </ListBox>
+                <TextBlock x:Name="EntriesEmpty" Grid.Row="1" Style="{StaticResource ListEmptyStyle}" Margin="22,14,16,6" />
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Stretch" Background="{DynamicResource EditorBorderBrush}" />
+
+            <Grid Grid.Column="2" Margin="18,10,18,14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="DetailTitle" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="DetailMeta" FontSize="11.5" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Foreground="{DynamicResource EditorMutedBrush}" />
+                </StackPanel>
+                <WrapPanel x:Name="DetailActions" Grid.Row="1" Margin="0,10,0,8" IsEnabled="False">
+                    <Button x:Name="AcceptSuggestionButton" Click="AcceptSuggestion_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,3" FontSize="11.5" Margin="0,0,6,6"
+                            Visibility="Collapsed" ToolTip="Den vorgeschlagenen Kategorien der gewählten Einträge zustimmen">
+                        <TextBlock Text="Vorschlag übernehmen" />
+                    </Button>
+                    <Button x:Name="KeepButton" Click="Keep_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,3" FontSize="11.5" Margin="0,0,6,6"
+                            ToolTip="Dauerhaft behalten: 100 % Gewicht, keine Wartezeit, kein Ablauf und kein Zusammenfassen">
+                        <TextBlock x:Name="KeepButtonText" Text="Dauerhaft behalten" />
+                    </Button>
+                    <Button Click="Category_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,3" FontSize="11.5" Margin="0,0,6,6"
+                            ToolTip="Kategorie festlegen; eingeordnete Einträge laufen nicht aus">
+                        <TextBlock Text="Kategorie …" />
+                    </Button>
+                    <Button Click="Summarize_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,3" FontSize="11.5" Margin="0,0,6,6"
+                            ToolTip="Gewählte Einträge zu einer Zusammenfassung verdichten; Einzelheiten gehen verloren, die Quellen bleiben">
+                        <TextBlock Text="Zusammenfassen …" />
+                    </Button>
+                    <Button Click="Brain_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,3" FontSize="11.5" Margin="0,0,6,6"
+                            ToolTip="Im Brain hervorheben, sofern der Eintrag im Netz enthalten ist">
+                        <TextBlock Text="Im Brain zeigen" />
+                    </Button>
+                    <Button Click="Remove_Click" Style="{StaticResource EditorButtonStyle}" Padding="8,3" FontSize="11.5" Margin="0,0,6,6"
+                            ToolTip="Aus Mein Wissen entfernen; die Quelle bleibt unverändert (Entf)">
+                        <TextBlock Text="Entfernen …" />
+                    </Button>
+                </WrapPanel>
+                <TextBox x:Name="DetailText" Grid.Row="2" Style="{StaticResource EditorTextBoxStyle}" IsReadOnly="True"
+                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" BorderThickness="1" Padding="10,8" FontSize="12.5"
+                         VerticalContentAlignment="Top" Height="Auto" AutomationProperties.Name="Text des Eintrags" />
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,64 @@
+using System.IO;
+using System.Text.Json;
+using Merkautomat.Models;
+
+namespace Merkautomat.Services;
+
+public class SettingsService
+{
+    private static readonly string DataDir = AppPaths.DataDir;
+
+    public static readonly string SettingsPath = Path.Combine(DataDir, "settings.json");
+
+    private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
+
+    // Save() wird vom UI-Thread und vom Auto-Backup-Hintergrundthread aufgerufen.
+    private readonly object _saveGate = new();
+
+    public AppSettings Settings { get; private set; } = new();
+
+    public void Load()
+    {
+        Directory.CreateDirectory(DataDir);
+        if (!File.Exists(SettingsPath)) { Save(); return; }
+        try
+        {
+            var json = SecureFile.ReadAllText(SettingsPath);
+            Settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOpts) ?? new();
+        }
+        catch (Exception ex) when (ex is JsonException or System.Security.Cryptography.CryptographicException or InvalidDataException)
+        {
+            // Names, categories and relations live here: keep the unreadable file instead of overwriting it on the next save.
+            App.LogCrash(ex);
+            Settings = new();
+            File.Move(SettingsPath, SettingsPath + $".defekt-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            App.LogCrash(ex);
+            Settings = new();
+        }
+
+        if (Settings.Theme == Merkautomat.Models.ThemeMode.Compact)
+        {
+            Settings.Theme = Merkautomat.Models.ThemeMode.Light;
+            Save();
+        }
+    }
+
+    public void Save()
+    {
+        lock (_saveGate)
+        {
+            Directory.CreateDirectory(DataDir);
+            var json = JsonSerializer.Serialize(Settings, JsonOpts);
+            // atomic: temp + replace prevents partial writes on crash
+            var tmp = SettingsPath + ".tmp";
+            SecureFile.WriteAllText(tmp, json);
+            if (File.Exists(SettingsPath))
+                File.Replace(tmp, SettingsPath, null);
+            else
+                File.Move(tmp, SettingsPath);
+        }
+    }
+}

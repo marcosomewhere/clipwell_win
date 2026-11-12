@@ -1,0 +1,226 @@
+<UserControl x:Class="Merkautomat.Views.TasksPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Merkautomat.Views"
+             xmlns:services="clr-namespace:Merkautomat.Services">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="KnowledgeBaseStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <DataTemplate x:Key="TaskItemTemplate">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <CheckBox AutomationProperties.Name="Erledigt" IsChecked="{Binding Done, Mode=OneWay}" Click="TaskDone_Click" VerticalAlignment="Top" Margin="0,2,9,0"
+                              ToolTip="Als erledigt markieren" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock x:Name="TaskTitleText" Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="TaskMetaText" Text="{Binding Meta}" FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </StackPanel>
+                </Grid>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Done}" Value="True">
+                        <Setter TargetName="TaskTitleText" Property="TextDecorations" Value="Strikethrough" />
+                        <Setter TargetName="TaskTitleText" Property="Foreground" Value="{DynamicResource EditorMutedBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Overdue}" Value="True">
+                        <Setter TargetName="TaskMetaText" Property="Foreground" Value="#FFE8603B" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="18,10,18,8" BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid>
+                        <TextBox x:Name="NewTaskInput" Style="{StaticResource EditorTextBoxStyle}" BorderThickness="1"
+                                 Padding="28,7,8,7" FontSize="13" MaxLength="{x:Static services:TaskStore.MaxTitle}"
+                                 TextChanged="NewTaskInput_TextChanged" PreviewKeyDown="NewTaskInput_PreviewKeyDown" />
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="12" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                        <TextBlock x:Name="NewTaskHint" FontSize="13" Margin="31,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                                   Text="Neue Aufgabe, mit Enter hinzufügen"
+                                   Foreground="{DynamicResource EditorMutedBrush}" />
+                    </Grid>
+                </Grid>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <RadioButton x:Name="TaskFilterOpen" GroupName="TaskFilter" Content="Offen" IsChecked="True"
+                                 Style="{StaticResource ScopeChipStyle}" Checked="TaskFilter_Checked" />
+                    <RadioButton x:Name="TaskFilterDone" GroupName="TaskFilter" Content="Erledigt"
+                                 Style="{StaticResource ScopeChipStyle}" Checked="TaskFilter_Checked" />
+                    <RadioButton x:Name="TaskFilterAll" GroupName="TaskFilter" Content="Alle"
+                                 Style="{StaticResource ScopeChipStyle}" Checked="TaskFilter_Checked" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="300" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="1.25*" MinWidth="240" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Padding="14,10,14,8" BorderBrush="{DynamicResource EditorBorderBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel HorizontalAlignment="Left">
+                        <DockPanel Margin="0,0,0,6">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button AutomationProperties.Name="Vorheriger Monat" Click="TaskCalendarPrev_Click" Style="{StaticResource EditorButtonStyle}" MinHeight="24" Padding="7,2"
+                                        ToolTip="Vorheriger Monat">
+                                    <TextBlock Text="&#xE76B;" FontFamily="Segoe Fluent Icons" FontSize="10" />
+                                </Button>
+                                <Button Click="TaskCalendarToday_Click" Style="{StaticResource EditorButtonStyle}" MinHeight="24" Padding="8,2"
+                                        FontSize="11.5" Margin="4,0" ToolTip="Zum aktuellen Monat und die Aufgaben von heute zeigen">
+                                    <TextBlock Text="Heute" />
+                                </Button>
+                                <Button AutomationProperties.Name="Nächster Monat" Click="TaskCalendarNext_Click" Style="{StaticResource EditorButtonStyle}" MinHeight="24" Padding="7,2"
+                                        ToolTip="Nächster Monat">
+                                    <TextBlock Text="&#xE76C;" FontFamily="Segoe Fluent Icons" FontSize="10" />
+                                </Button>
+                            </StackPanel>
+                            <TextBlock x:Name="TaskCalendarTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+                        </DockPanel>
+                        <Grid x:Name="TaskCalendarGrid" />
+                    </StackPanel>
+                </Border>
+
+                <DockPanel x:Name="TaskDateFilterBar" Grid.Row="1" Margin="16,8,16,0" Visibility="Collapsed">
+                    <Button DockPanel.Dock="Right" Content="Filter aufheben" Click="TaskDateFilterClear_Click"
+                            Style="{StaticResource KbLinkButton}" Margin="10,0,0,0" />
+                    <TextBlock x:Name="TaskDateFilterLabel" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" Foreground="{StaticResource InstrumentOrange}" />
+                </DockPanel>
+
+                <ListBox x:Name="TasksList" Grid.Row="2" SelectionMode="Single"
+                         Style="{StaticResource KbListStyle}" Background="Transparent" BorderThickness="0" Padding="8,6"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource SemanticItemContainerStyle}"
+                         ItemTemplate="{StaticResource TaskItemTemplate}"
+                         SelectionChanged="TasksList_SelectionChanged" />
+                <TextBlock x:Name="TasksEmpty" Grid.Row="2" Style="{StaticResource ListEmptyStyle}" Margin="22,14,16,6" />
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Stretch"
+                          Background="{DynamicResource EditorBorderBrush}" />
+
+            <Grid x:Name="TaskDetail" Grid.Column="2">
+                <!-- Notes and source share the remaining height; the splitter between them sets the split. -->
+                <Grid x:Name="TaskEditor" Margin="18,4,18,14" IsEnabled="False">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition x:Name="TaskNotesRow" Height="*" MinHeight="60" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition x:Name="TaskSourceRow" Height="3*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="Titel" Style="{StaticResource FieldLabel}" />
+                        <TextBox x:Name="TaskTitleBox" Style="{StaticResource EditorTextBoxStyle}" BorderThickness="1" Padding="8,6"
+                                 FontSize="13" MaxLength="{x:Static services:TaskStore.MaxTitle}" TextChanged="TaskField_Changed" />
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Fällig am" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                                <TextBox x:Name="TaskDueBox" Style="{StaticResource EditorTextBoxStyle}" BorderThickness="1" Padding="8,6"
+                                         FontSize="13" MaxLength="10" TextChanged="TaskField_Changed"
+                                         PreviewKeyDown="TaskDueBox_PreviewKeyDown" PreviewMouseLeftButtonUp="TaskDueBox_PreviewMouseLeftButtonUp"
+                                         ToolTip="Klicken öffnet den Kalender; Datum auch eintippbar (TT.MM.JJJJ oder TT.MM., leer für kein Datum)" />
+                                <Popup x:Name="TaskDuePopup" PlacementTarget="{Binding ElementName=TaskDueBox}" Placement="Bottom"
+                                       VerticalOffset="4" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                                    <Border Background="{DynamicResource EditorPanelBrush}" BorderBrush="{DynamicResource EditorBorderBrush}"
+                                            BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,8,8">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.5" Color="Black" />
+                                        </Border.Effect>
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,6">
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                    <Button AutomationProperties.Name="Vorheriger Monat" Click="TaskDuePickerPrev_Click" Style="{StaticResource EditorButtonStyle}" MinHeight="24" Padding="7,2"
+                                                            Margin="0,0,4,0" ToolTip="Vorheriger Monat">
+                                                        <TextBlock Text="&#xE76B;" FontFamily="Segoe Fluent Icons" FontSize="10" />
+                                                    </Button>
+                                                    <Button AutomationProperties.Name="Nächster Monat" Click="TaskDuePickerNext_Click" Style="{StaticResource EditorButtonStyle}" MinHeight="24" Padding="7,2"
+                                                            ToolTip="Nächster Monat">
+                                                        <TextBlock Text="&#xE76C;" FontFamily="Segoe Fluent Icons" FontSize="10" />
+                                                    </Button>
+                                                </StackPanel>
+                                                <TextBlock x:Name="TaskDuePickerTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                           Margin="0,0,12,0" Foreground="{DynamicResource OnboardingTextPrimaryBrush}" />
+                                            </DockPanel>
+                                            <Grid x:Name="TaskDuePickerGrid" />
+                                            <WrapPanel Margin="0,8,0,0">
+                                                <Button Content="Heute" Tag="0" Click="TaskDueQuick_Click" Style="{StaticResource EditorButtonStyle}"
+                                                        MinHeight="24" Padding="8,2" FontSize="11.5" Margin="0,0,4,0" />
+                                                <Button Content="Morgen" Tag="1" Click="TaskDueQuick_Click" Style="{StaticResource EditorButtonStyle}"
+                                                        MinHeight="24" Padding="8,2" FontSize="11.5" Margin="0,0,4,0" />
+                                                <Button Content="Nächster Montag" Tag="monday" Click="TaskDueQuick_Click" Style="{StaticResource EditorButtonStyle}"
+                                                        MinHeight="24" Padding="8,2" FontSize="11.5" Margin="0,0,4,0" />
+                                                <Button Content="Kein Datum" Tag="none" Click="TaskDueQuick_Click" Style="{StaticResource EditorButtonStyle}"
+                                                        MinHeight="24" Padding="8,2" FontSize="11.5" />
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Bottom">
+                                <TextBlock x:Name="TaskDueError" FontSize="11" Foreground="#FFE8603B" Margin="0,0,0,4"
+                                           Text="Datum als TT.MM.JJJJ eingeben." Visibility="Collapsed" />
+                                <CheckBox x:Name="TaskDoneBox" Content="Erledigt" Click="TaskDoneBox_Click" Margin="0,0,0,7" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                    <TextBlock Grid.Row="1" Text="Notizen" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="TaskNotesBox" Grid.Row="2" Style="{StaticResource EditorTextBoxStyle}" BorderThickness="1" Padding="8,6"
+                             FontSize="12.5" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                             VerticalScrollBarVisibility="Auto" MaxLength="{x:Static services:TaskStore.MaxNotes}" TextChanged="TaskField_Changed" />
+                    <Border x:Name="TaskSplitterLine" Grid.Row="3" Height="1" Margin="0,5" Visibility="Collapsed"
+                            Background="{DynamicResource EditorBorderBrush}" IsHitTestVisible="False" />
+                    <GridSplitter x:Name="TaskSplitter" Grid.Row="3" Height="11" HorizontalAlignment="Stretch" Visibility="Collapsed"
+                                  ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" Background="Transparent" Cursor="SizeNS"
+                                  ToolTip="Ziehen: Platz zwischen Notizen und Quelle verteilen" />
+                    <Grid x:Name="TaskSourcePanel" Grid.Row="4" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="TaskSourceLabel" Style="{StaticResource FieldLabel}" Margin="0,2,0,4" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                        <RichTextBox x:Name="TaskSourceText" Grid.Row="1" IsReadOnly="True" IsDocumentEnabled="True" IsReadOnlyCaretVisible="False"
+                                     BorderThickness="1" BorderBrush="{DynamicResource EditorBorderBrush}" Padding="6,6" MinHeight="80"
+                                     Background="{DynamicResource EditorTextBodyBrush}" Foreground="{DynamicResource EditorTextBrush}"
+                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                     FontSize="12.5" />
+                    </Grid>
+                    <TextBlock x:Name="TaskCreatedLabel" Grid.Row="5" FontSize="11" Margin="0,10,0,0" Foreground="{DynamicResource EditorMutedBrush}" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

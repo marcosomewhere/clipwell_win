@@ -1,0 +1,86 @@
+<Window x:Class="Merkautomat.Views.ClassifierReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Einordnung auswerten – Ideenkombinat" Icon="/Merkautomat;component/Assets/kb-icon-16.png"
+        Width="1080" Height="860" MinWidth="760" MinHeight="560" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource EditorChromeBrush}" Foreground="{DynamicResource OnboardingTextPrimaryBrush}">
+    <Window.Resources>
+        <ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="BrainDialogResources.xaml" /></ResourceDictionary.MergedDictionaries></ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,14">
+            <TextBlock Text="Einordnung auswerten" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Style="{StaticResource BrainCaption}" Margin="0,5,0,0"
+                       Text="Alle Verfahren werden auf deinen gespeicherten Zuordnungen gleich geprüft: Kreuzvalidierung mit mehreren Wiederholungen, nahezu gleiche Kopien bleiben zusammen. Unten siehst du zusätzlich, wie oft Vorschläge im Alltag angenommen wurden." />
+        </StackPanel>
+        <Border Grid.Row="1" Style="{StaticResource BrainCard}" Margin="0,0,0,12" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Verfahren für Vorschläge" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <ComboBox x:Name="MethodBox" Grid.Column="1" SelectionChanged="MethodBox_SelectionChanged" AutomationProperties.Name="Verfahren für Vorschläge"
+                          ToolTip="Automatisch nutzt das einfachste Verfahren, außer ein anderes ist in der Auswertung messbar besser." />
+                <StackPanel Grid.Column="2" Margin="14,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusText" Style="{StaticResource BrainCaption}" TextTrimming="CharacterEllipsis" />
+                    <ProgressBar x:Name="Progress" Height="4" Margin="0,4,0,0" Minimum="0" Maximum="1" Visibility="Collapsed" />
+                </StackPanel>
+                <Button x:Name="RunButton" Grid.Column="3" Content="Neu auswerten" Click="Run_Click" Style="{StaticResource BrainPrimaryButton}" Margin="0,0,8,0" />
+                <Button Grid.Column="4" Content="Bericht kopieren" Click="Copy_Click" Style="{StaticResource EditorButtonStyle}" ToolTip="Auswertung als Markdown in die Zwischenablage" />
+            </Grid>
+        </Border>
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Style="{StaticResource BrainCard}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Vergleich der Verfahren" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock x:Name="ProtocolText" Style="{StaticResource BrainCaption}" Margin="0,4,0,12" />
+                        <TextBlock Text="Macro-F1 je Verfahren (0 bis 1, höher ist besser; jede Kategorie zählt gleich)" FontSize="12" Margin="0,0,0,8" />
+                        <Grid x:Name="ChartGrid" Margin="0,0,0,16" />
+                        <Grid x:Name="MethodTable" />
+                        <TextBlock Style="{StaticResource BrainCaption}" Margin="0,10,0,0" FontSize="11"
+                                   Text="beantwortet: Anteil mit Vorschlag · davon richtig: Treffer unter den Vorschlägen · Top-3: richtige Kategorie unter den drei besten · Abdeckung bei max. 10 % Fehler: Anteil, der sich nach Sicherheit sortiert mit höchstens 10 % Fehlern zuordnen ließe · Unbekanntes abgewiesen: eine Kategorie wird ganz weggelassen, gezählt wird, wie oft ihre Texte keinen Vorschlag bekommen (ab vier Kategorien) · Schwelle kalibriert: ab 40 Beispielen aus deinen Daten bestimmte Enthaltungsschwelle, bei der mindestens 90 % richtig sind (untere Grenze des 95-%-Intervalls); sie wird für Vorschläge verwendet · ECE: Abweichung zwischen angegebener und tatsächlicher Trefferquote (nur logistische Regression; Ähnlichkeiten sind keine Wahrscheinlichkeiten)." />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource BrainCard}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <DockPanel>
+                            <ComboBox x:Name="DetailBox" DockPanel.Dock="Right" Width="280" SelectionChanged="DetailBox_SelectionChanged" AutomationProperties.Name="Verfahren für Kategoriedetails" />
+                            <TextBlock Text="Kategorien und Verwechslungen" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource BrainCaption}" Margin="0,4,0,12" Text="Erste Wiederholung der Kreuzvalidierung. Zeilen: tatsächliche Kategorie, Spalten: Vorschlag; dunkler bedeutet einen größeren Anteil der Zeile." />
+                        <Grid x:Name="CategoryTable" Margin="0,0,0,16" />
+                        <Grid x:Name="ConfusionGrid" HorizontalAlignment="Left" />
+                        <TextBlock x:Name="ConfusionNote" Style="{StaticResource BrainCaption}" Margin="0,6,0,0" FontSize="11" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource BrainCard}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button x:Name="SuspiciousButton" DockPanel.Dock="Right" Content="Diese Einträge einordnen …" Click="Suspicious_Click"
+                                    Style="{StaticResource EditorButtonStyle}" IsEnabled="False" ToolTip="Die aufgelisteten Einträge im Einordnungsfenster prüfen und bei Bedarf umordnen" />
+                            <TextBlock Text="Zuordnungen zur Prüfung" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource BrainCaption}" Margin="0,4,0,12"
+                                   Text="Rocchio hat diese gespeicherten Zuordnungen in jeder Wiederholung sicher einer anderen Kategorie zugeordnet. Oft ist die gespeicherte Kategorie falsch oder zwei Kategorien überschneiden sich. Falsche Beispiele verschieben die Schwerpunkte aller Verfahren." />
+                        <Grid x:Name="SuspiciousTable" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource BrainCard}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Praxis: deine Bestätigungen" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource BrainCaption}" Margin="0,4,0,12"
+                                   Text="Gezählt beim Speichern im Einordnungsfenster und im Brain-Dialog: übernommen, korrigiert oder ohne eindeutigen Vorschlag. Das zeigt, wie gut ein Verfahren im Alltag trifft. Zum Vergleich ein Verfahren eine Weile fest einstellen." />
+                        <Grid x:Name="FeedbackTable" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource BrainCard}">
+                    <StackPanel>
+                        <TextBlock Text="Verlauf" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource BrainCaption}" Margin="0,4,0,12" Text="Jede Auswertung wird gespeichert. So siehst du, ob mehr Zuordnungen die Ergebnisse verbessern." />
+                        <Grid x:Name="HistoryTable" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

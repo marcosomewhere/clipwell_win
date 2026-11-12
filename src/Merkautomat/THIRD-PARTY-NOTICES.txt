@@ -1,0 +1,97 @@
+Merkautomat - Third-party notices
+
+Optional local AI (downloaded only on request)
+  IBM Granite 4.2 3B, official Q4_K_M GGUF model, Apache License 2.0.
+  https://huggingface.co/ibm-granite/granite-4.2-3b
+  https://huggingface.co/ibm-granite/granite-4.2-3b-GGUF
+  Model revision: c40945d71cd90f249a56985e8155551a9188dc30
+  The model is used without modifications. Full license: Licenses\Granite-Apache-2.0.txt
+
+Optional local Qwen model (downloaded only on request; not bundled)
+  Qwen3.5-2B by the Qwen Team, Alibaba Cloud, Apache License 2.0.
+  Q4_K_M GGUF quantization by Unsloth AI.
+  https://huggingface.co/Qwen/Qwen3.5-2B
+  https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
+  Pinned revision: f6d5376be1edb4d416d56da11e5397a961aca8ae
+  Full license: Licenses\Qwen-Apache-2.0.txt
+
+Optional local category models (downloaded only on request; not bundled)
+  MiniLM L6: sentence-transformers/all-MiniLM-L6-v2 by the Sentence Transformers authors.
+  https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+  Pinned revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+  Horizon ZeroShot Small: Horizon-Labs/multilingual-zeroshot-small by Horizon Labs.
+  https://huggingface.co/Horizon-Labs/multilingual-zeroshot-small
+  Pinned revision: 17af5f8a728d101ce33a9bffad227b0cd005e95e
+  Both use their published ONNX weights and tokenizers, Apache License 2.0.
+  Full license: Licenses\CategoryModels-Apache-2.0.txt
+
+  llama.cpp b12110 Windows CPU x64 and optional Windows Vulkan x64, MIT License.
+  Copyright (c) 2023-2026 The ggml authors.
+  https://github.com/ggml-org/llama.cpp/releases/tag/b12110
+  Full license: Licenses\llama.cpp-MIT.txt
+  Included LLVM OpenMP runtime notices: Licenses\LLVM-OpenMP.txt
+  The downloaded runtime archive retains its LICENSE-LLVM-OpenMP file.
+  Optional Vulkan archive: llama-b12110-bin-win-vulkan-x64.zip (37,661,146 bytes).
+  SHA256: 9732a5e48887ca54d0bfe4af4324dc85fd56cd8cda19b52df3542fa6ebe6874f
+  Uses the installed graphics driver; no CUDA Toolkit/runtime or driver is redistributed.
+
+models\ggml-base.bin
+  Whisper base model by OpenAI, converted to ggml format by the whisper.cpp project.
+  https://github.com/openai/whisper
+  https://github.com/ggml-org/whisper.cpp
+
+  MIT License
+
+  Copyright (c) 2022 OpenAI
+  Copyright (c) 2023-2024 The ggml authors
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+SQLite3 Multiple Ciphers 2.6.1 (sqlite3mc.dll, SQLite3MC.PCLRaw.bundle), encryption of the local databases
+  https://github.com/utelle/SQLite3MultipleCiphers
+  https://github.com/utelle/SQLite3MultipleCiphers-NuGet
+  MIT License, Copyright (c) 2019-2026 Ulrich Telle, et al.
+  Based on SQLite 3.54.0 (https://sqlite.org), public domain.
+
+SQLitePCLRaw core, Microsoft.Data.Sqlite.Core
+  https://github.com/ericsink/SQLitePCL.raw
+  https://github.com/dotnet/efcore
+  Apache License 2.0 (SQLitePCLRaw), MIT License (Microsoft.Data.Sqlite), Copyright (c) Eric Sink, .NET Foundation and Contributors
+
+Whisper.net (runtime and bindings)
+  https://github.com/sandrohanea/whisper.net
+  MIT License, Copyright (c) Sandro Hanea
+
+ONNX Runtime (onnxruntime.dll, Microsoft.ML.OnnxRuntime)
+  https://github.com/microsoft/onnxruntime
+  MIT License, Copyright (c) Microsoft Corporation
+
+Microsoft.ML.Tokenizers
+  https://github.com/dotnet/machinelearning
+  MIT License, Copyright (c) .NET Foundation and Contributors
+
+Google.Protobuf (dependency of Microsoft.ML.Tokenizers)
+  https://github.com/protocolbuffers/protobuf
+  BSD 3-Clause License, Copyright 2008 Google Inc.
+
+models\e5-small (multilingual-e5-small, int8 ONNX model and sentencepiece.bpe.model)
+  Embedding model by Liang Wang et al. (intfloat), ONNX conversion by Xenova
+  https://huggingface.co/intfloat/multilingual-e5-small
+  https://huggingface.co/Xenova/multilingual-e5-small
+  MIT License

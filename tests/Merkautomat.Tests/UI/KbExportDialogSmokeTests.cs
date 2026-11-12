@@ -1,0 +1,42 @@
+using System.Windows;
+using System.Windows.Controls;
+using Merkautomat.Views;
+using Xunit;
+
+namespace Merkautomat.Tests;
+
+public class KbExportDialogSmokeTests
+{
+    [Fact]
+    public void ExportDialog_LoadsSharedChromeAndDefaultsToCombinedMarkdown()
+    {
+        StaTestRunner.Run(() =>
+        {
+            TestApplication.Ensure();
+
+            var dialog = new KbExportDialog("3 ausgewählte Artikel", includeOverview: false, canExportArticles: true);
+            dialog.Show();
+            dialog.UpdateLayout();
+
+            Assert.False(dialog.AsZip);
+            Assert.False(dialog.IncludeOverview);
+            Assert.NotNull(dialog.TryFindResource("PrimaryEditorButtonStyle"));
+            Assert.Equal("3 ausgewählte Artikel", Assert.IsType<TextBlock>(dialog.FindName("ScopeLabel")).Text);
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExportDialog_WithoutArticles_ForcesOverview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            TestApplication.Ensure();
+
+            var dialog = new KbExportDialog("leer", includeOverview: false, canExportArticles: false);
+            Assert.True(dialog.IncludeOverview);
+            Assert.False(Assert.IsType<CheckBox>(dialog.FindName("OverviewCheck")).IsEnabled);
+            dialog.Close();
+        });
+    }
+}

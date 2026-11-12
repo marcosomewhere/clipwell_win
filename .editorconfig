@@ -1,0 +1,23 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{csproj,props,targets,slnx,xml,json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Folders group files by area (Features, Infrastructure, UI); namespaces stay ClipwellWin.Services/Views/...
+# for compatibility, so they deliberately do not follow the folders.
+dotnet_style_namespace_match_folder = false
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_new_line_before_open_brace = all
+csharp_prefer_braces = when_multiline:silent
+dotnet_sort_system_directives_first = false

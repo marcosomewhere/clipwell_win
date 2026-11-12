@@ -7,6 +7,14 @@ Das Handbuch hat zwei Teile:
 - **Teil A — Für Nutzer:** Wie du Merkautomat im Alltag benutzt. Nach Aufgaben geordnet: "Ich will …".
 - **Teil B — Für Admins:** Installation, Einstellungen, lokale KI, Outlook-Add-in, Datenschutz, Datenablage, Sicherung und Fehlerbehebung.
 
+## Herkunft bleibt beim Inhalt
+
+Merkautomat merkt sich bei neuen Einträgen automatisch die wichtigsten verfügbaren Angaben: Erfassungszeit, Eingangsart, Anwendung, Fenstertitel und Quelle. Dazu kommen bei Bildern die Pixelgröße, bei importierten Dateien der Pfad und bei Diktaten das verwendete Whisper-Modell und die Spracheinstellung. Welche Angaben verfügbar sind, hängt von der Quellanwendung ab.
+
+Im Ideenkombinat findest du die Herkunft in der formatierten Artikelansicht; im Brain steht sie beim ausgewählten Eintrag, vollständig im Hinweis beim Überfahren der Angaben. Webseitenquellen helfen dem Brain, auch Sprachnotizen, kopierte Inhalte und Bildschirmaufnahmen miteinander zu verbinden. Mehrere eingefügte Quellen bleiben bei einer Notiz erhalten. Gleiche Inhalte aus unterschiedlichen bekannten Quellen bleiben getrennte Einträge.
+
+Die Angaben werden zusammen mit dem Inhalt verschlüsselt gespeichert und beim Export mitgenommen. Alte Einträge erhalten nur Angaben, die bereits vorhanden sind; frühere Fenster oder Anwendungen lassen sich nicht nachträglich rekonstruieren. Bilder benötigen weiterhin ausreichend erkannten Text, um in der semantischen Suche und im Brain zu erscheinen.
+
 ## Die Bereiche
 
 | Name | Was es ist | So öffnest du es |
@@ -272,12 +280,14 @@ Das Ideenkombinat ist deine Wissensbasis. Hier kommen Sprachnotizen, Bildschirma
 |-----------|--------|-------|
 | **Dashboard** | | Zähler, Instrumente zur laufenden Aufnahme, Herkunft nach Anwendung und Webseite |
 | **Gesamtübersicht** | | Alles zusammengefasst als Markdown |
+| **Mein Wissen** | Strg+M | Dein gewichtetes Wissen aus allen Quellen, täglich aktualisiert (siehe unten) |
 | **Aufgaben** | Strg+T | Deine Aufgaben, die Zahl daneben zeigt offene ([Kapitel 9](#9-aufgaben)) |
 | **Suche** | Strg+K oder Strg+F | Suche nach Bedeutung und Fragen ([Kapitel 10](#10-suche-und-fragen)) |
 | **Brain** | Strg+B | Wissensnetz ([Kapitel 11](#11-brain-das-wissensnetz)) |
 
-**Darunter** der Kategorienfilter (Alle, Ohne Kategorie, eine Haupt- oder Unterkategorie) und drei aufklappbare Bereiche:
+Die Navigation steht unter **Wissen**: das sind die festen Bestandteile. **Darunter** folgen unter **Quellen** die flüchtigen Inhalte, aus denen Mein Wissen täglich schöpft: der Kategorienfilter (Alle, Ohne Kategorie, eine Haupt- oder Unterkategorie) und vier aufklappbare Bereiche, vom Beständigsten zum Flüchtigsten. Der Tooltip eines Bereichs nennt, wie lange sein Inhalt in Mein Wissen zählt.
 
+- **Knowledgeordner:** synchronisierte Dateien aus deinem lokalen Ordner, mit Unterordner und Dateiname als Herkunft.
 - **Sprechwerk:** alle Sprachnotizen, neueste zuerst.
 - **Bildschirmaufnahmen:** benannt nach den erfassten Anwendungen, mit Startzeit, Einträgen und Dauer.
 - **Zwischenablage:** die ganze History. Doppelklick öffnet das Detailfenster.
@@ -285,6 +295,43 @@ Das Ideenkombinat ist deine Wissensbasis. Hier kommen Sprachnotizen, Bildschirma
 Gesucht wird oben über **Suche**; ein eigenes Suchfeld in der Bibliothek gibt es nicht.
 
 **Rechts** steht der gewählte Artikel. **Markdown / Text** schaltet zwischen formatierter Ansicht und Quelltext um. Kopieren und Export nehmen immer den Quelltext.
+
+### Mein Wissen
+
+**Mein Wissen** (Strg+M) sammelt einmal am Tag alles aus deinen Quellen und gewichtet es: Knowledgeordner zählt am meisten, dann Sprachnotizen, dann Bildschirmaufnahmen, zuletzt die Zwischenablage. Zwischenablage-Einträge verlieren schnell an Gewicht (nach 7 Tagen nur noch die Hälfte), Aufnahmen langsamer. Erneutes Kopieren, Anheften, eine Kategorie oder eine Mappe heben das Gewicht wieder.
+
+Neues taucht nicht sofort auf: Ein Eintrag erscheint erst, wenn er mindestens 48 Stunden in der Wissensbasis ist (einstellbar von 0 bis 168 Stunden, also bis zu einer Woche). Danach zählt er zunächst nur 30 % und erreicht sein volles Gewicht nach 14 Tagen. So drängt sich Frisches nicht vor bewährtes Wissen. Dauerhaft behaltene Einträge sind davon ausgenommen.
+
+- **Gespeichert:** Jeder Eintrag bekommt eine eigene, verschlüsselte Kopie. Fällt ein Zwischenablage-Eintrag später aus der History, bleibt das Wissen hier erhalten. Löschst du selbst etwas (Popup, Bibliothek, Suche), verschwindet auch die Kopie.
+- **Zu Mein Wissen hinzufügen:** Rechtsklick auf einen Eintrag, und zwar überall, wo Einträge stehen: im Popup, in der Pinstation (im Detailfenster der Knopf **Zu Mein Wissen**), in den Listen des Ideenkombinats, in den Suchergebnissen und im Brain unter **Weitere Aktionen …**. Der Eintrag kommt sofort dazu, ohne Wartezeit, zählt immer 100 % und wird nie zusammengefasst. Bei einer Bildschirmaufnahme gilt das für alle ihre Bildwechsel. Popup und Pinstation melden das Ergebnis über das Tray-Symbol. In Mein Wissen selbst heißt der Knopf **Dauerhaft behalten** bzw. **Nicht mehr dauerhaft**.
+- **Gefestigt:** Was mindestens 14 Tage da und noch relevant ist, wird gefestigt und bleibt. Ebenso alles mit Kategorie, in einer Mappe oder dauerhaft behalten.
+- **Knowledgeordner:** keine Fristen und kein Zusammenfassen. Seine Dateien bleiben, solange sie im Ordner liegen.
+- **Wird zusammengefasst:** Alles andere mit wenig Gewicht wird nach der Aufbewahrungszeit (Kontrollstation → Allgemein → Mein Wissen, Standard 60 Tage) zu einer Zusammenfassung je Monat und Kategorie verdichtet, ohne Kategorie je Quelle, etwa „Zusammenfassung Zwischenablage · November 2026“. Sie enthält bis zu 15 wichtige Originalsätze und die Titel der Einträge; die übrigen Einzelheiten gehen verloren. Zusammenfassungen bleiben dauerhaft. Wer das nicht will, schaltet „Statt entfernen zusammenfassen“ aus; dann verschwinden die Einträge.
+- **Selbst zusammenfassen:** mehrere Einträge wählen und **Zusammenfassen …**. Auch Zusammenfassungen lassen sich so zu einer größeren verdichten. Die Quellen bleiben unverändert.
+- **Wissensprofil:** oben die Hauptkategorien nach Gewichtsanteil. Ein Klick filtert die Liste.
+- **Suchen:** das Suchfeld findet Wörter in den Kopien und, mit Suchmodell, auch Inhalte nach Bedeutung. Schwere Einträge stehen bei ähnlichen Treffern oben.
+- **Aktionen:** Dauerhaft behalten, Kategorie …, Zusammenfassen …, Im Brain zeigen, Entfernen … (Entf; die Quelle bleibt unverändert). **Jetzt aktualisieren** übernimmt sofort, statt bis morgen zu warten.
+
+Das Brain zeigt mit dem Filter **Nur Mein Wissen** (Standard an) nur diese Einträge, die schwersten zuerst.
+
+**Lokale KI in Mein Wissen.** Alles läuft auf deinem Rechner. Die KI schlägt nur vor; gespeichert wird erst, wenn du zustimmst.
+
+- **Kategorievorschläge:** Nach dem täglichen Lauf schlägt E5 für Einträge ohne Kategorie eine vor, sobald es mindestens zwei Kategorien gibt. Der Filter **Vorschläge** zeigt sie, **Vorschlag übernehmen** übernimmt einzelne, **Sichere Vorschläge übernehmen** alle, bei denen E5 mit deinen eigenen Beispielen eindeutig war. Ein Vorschlag allein schützt nicht vor dem Zusammenfassen.
+- **Im Leerlauf mit dem Sprachmodell** (Granite oder Qwen, über die Hintergrundarbeit unter Lokale KI): kurze Titel für Zwischenablage-Einträge und Bildwechsel (der ursprüngliche Titel steht in der Detailansicht), Kategorievorschläge, wo E5 unsicher war, lesbare Monatszusammenfassungen und ein Satz je Thema im Wochenrückblick. Jeder Satz muss seine Quellen nennen, sonst wird er verworfen.
+- **Fragen:** Frage ins Suchfeld schreiben und **Fragen** oder Strg+Enter. Die Antwort stammt nur aus Mein Wissen, auch aus Zusammenfassungen und Kopien, deren Quelle schon weg ist; die Knöpfe darunter zeigen die Quellen (✓ = zitiert).
+- **Fast gleich:** zeigt Gruppen fast gleicher Einträge, gut zum gemeinsamen Zusammenfassen.
+- **Nähe zum Kernwissen:** Was inhaltlich nah an deinem Knowledgeordner und an dauerhaft behaltenen Einträgen liegt, zählt etwas mehr.
+- **Dashboard → Neu in Mein Wissen:** die Themen der letzten 7 Tage; ein Klick filtert Mein Wissen, **Offene Punkte …** legt Aufgaben aus TODO-Zeilen und offenen Kästchen an.
+
+### Einen Knowledgeordner synchronisieren
+
+Unter **Kontrollstation → Allgemein → Knowledgeordner → Ordner wählen …** wählst du einen lokalen Ordner. **Synchronisierung aktiv** schaltet den automatischen Abgleich ein. Unterordner werden mit erfasst. Merkautomat prüft alle 15 Sekunden, solange die App läuft; das Ideenkombinat darf geschlossen sein. **Jetzt abgleichen** startet eine zusätzliche Prüfung.
+
+Es gelten die **Lesbaren Dateitypen** und die **Höchstgröße je Kopie / Ordnerdatei** in der Kontrollstation, beispielsweise TXT und Markdown. Binärdateien, leere oder zu große Dateien werden übersprungen. Der Status zeigt die erfassten Dateien, übersprungene Dateien und Lesefehler.
+
+Im Ideenkombinat findest du die Artikel unter **Knowledgeordner**; Unterordner und Dateiname bleiben sichtbar. In **Suche** und **Brain** kannst du auf diese Quelle filtern. Mit dem Suchmodell findet Brain die inhaltlichen Beziehungen automatisch. Sehr kurze Texte erscheinen nur in der Bibliothek.
+
+**Pause** behält den letzten Stand. Bei einem nicht erreichbaren Laufwerk bleibt er ebenfalls erhalten. **Entfernen** entfernt die Quelle und ihre interne Kopie; deine Originaldateien bleiben erhalten. Bearbeiten und Löschen erledigst du im Quellordner, Merkautomat übernimmt die Änderung beim nächsten aktiven Abgleich.
 
 ### Auswählen
 
@@ -390,7 +437,7 @@ Kästchen an den Treffern markieren, **Alle markieren** nimmt alle angezeigten. 
 
 **Öffnen:** Ideenkombinat → **Brain** oder Strg+B.
 
-Das Brain zeigt deine neuesten 1000 Einträge als Netz. Jeder Eintrag ist ein Punkt, Bezüge sind Linien. Merkautomat findet die Bezüge selbst:
+Das Brain zeigt deine neuesten Einträge bis zum eingestellten Limit als Netz (Standard 1.000). Unter **Kontrollstation → Allgemein → Brain: maximale Einträge** kannst du 100 bis 10.000 einstellen. Größere Netze benötigen deutlich mehr Rechenzeit. Jeder Eintrag ist ein Punkt, Bezüge sind Linien. Merkautomat findet die Bezüge selbst:
 
 | Bezug | Bedeutung | Linie |
 |-------|-----------|-------|
@@ -404,7 +451,15 @@ Das Brain zeigt deine neuesten 1000 Einträge als Netz. Jeder Eintrag ist ein Pu
 
 **Formen:** Kreis = Zwischenablage, Raute = Sprachnotiz, Quadrat = Bildwechsel. Je mehr Verbindungen, desto größer.
 
-**Themen:** Eng verknüpfte Einträge bilden ein Thema mit Farbe und Stichwort-Namen, z. B. "Zertifikat · Vpn · Portal". **Gruppieren nach → Kategorien** färbt stattdessen nach deinen Kategorien.
+**Themen:** Eng verknüpfte Einträge bilden ein Thema mit Farbe und Stichwort-Namen, z. B. "Zertifikat · Vpn · Portal". **Gruppieren nach → Kategorien** färbt stattdessen nach deinen Kategorien, **Gruppieren nach → Mappen** nach deinen Mappen.
+
+Rechts oben wählst du, was die Seitenleiste zeigt:
+
+- **Übersicht:** Themen, Kategorien oder Mappen, je nach Gruppierung.
+- **Rückblick:** Was in den letzten 7 Tagen **neu** dazukam, **wächst** oder **aktiv** war, und welche Gruppen seit drei Wochen **ruhen**, vor allem solche mit offenen Aufgaben. Dieselbe Übersicht steht im Dashboard unter **Woran du gearbeitet hast**; ein Klick darauf öffnet das Brain und hebt die Gruppe hervor.
+- **Entdecken:** Dinge, die eine Suche nicht zeigt. **Wiederentdeckt** sind ältere Einträge (über 30 Tage), die zu etwas aus den letzten Tagen passen. **Brücken** verbinden zwei oder mehr Themen. **Fast gleiche Einträge** sind Kandidaten zum Aufräumen. **Ohne Bezug** sind ältere Einträge, die mit nichts inhaltlich verbunden sind.
+
+Eine Zeile anklicken hebt ihre Einträge im Netz hervor. Die Knöpfe unten wirken dann auf genau diese Einträge.
 
 ### Bedienung
 
@@ -416,6 +471,7 @@ Das Brain zeigt deine neuesten 1000 Einträge als Netz. Jeder Eintrag ist ein Pu
 | Klick auf Punkt | Rechts Details und alle Verbindungen mit Begründung, z. B. "inhaltlich 91 % · zeitlich nah (2 min)" |
 | Klick daneben oder Esc | Zurück zur Themenliste |
 | Doppelklick / Öffnen | Artikel im Ideenkombinat |
+| Rechtsklick auf Punkt | **Verlustfrei zusammenführen …** und **Zu Mein Wissen hinzufügen** (siehe unten) |
 | Ähnliche | In der Suche ähnliche Einträge zeigen |
 | Pos1 / Netz einpassen | Ganzes Netz zeigen |
 | Neu anordnen | Layout neu berechnen |
@@ -438,23 +494,49 @@ Thema rechts oder einen Punkt wählen, dann **Thema bearbeiten …** oder **Zusa
 - **Zusammenfassung speichern** legt eine Sprachnotiz an; **aktualisieren** überschreibt sie und hält die alte Fassung als Sicherung. Die Ausgangseinträge bleiben unverändert.
 - Mit eingeschalteter lokaler KI schlägt Merkautomat Titel und Kategorie vor; **KI-Vorschlag übernehmen** und danach Speichern übernimmt ihn.
 
+### Mappen
+
+Automatische Themen ändern sich, sobald neue Einträge dazukommen. Eine **Mappe** hält ein Thema fest.
+
+- **Als Mappe speichern …** nimmt die hervorgehobenen Einträge (Thema, Rückblick- oder Entdecken-Zeile, gewählter Punkt mit seinen Verbindungen). Namen vergeben und Einträge an- oder abwählen.
+- Unter **Gruppieren nach → Mappen** siehst du deine Mappen. Neue Einträge, die gut zu einer Mappe passen, zählen dort als **Vorschläge**.
+- **Mappe bearbeiten …** ändert den Namen, nimmt Vorschläge auf oder entfernt Einträge. Entfernte Einträge werden dieser Mappe nicht wieder vorgeschlagen. **Mappe auflösen** löscht nur die Mappe, nie die Einträge.
+
+### Weitere Aktionen
+
+**Weitere Aktionen …** wirkt auf die hervorgehobenen Einträge:
+
+- **In der Bibliothek auswählen:** Danach kannst du sie wie gewohnt exportieren (Strg+E), löschen oder eine Kategorie festlegen (Strg+Umschalt+K).
+- **Offene Punkte als Aufgaben …:** Findet offene Kästchen (`- [ ]`) und Zeilen, die mit TODO, FIXME, Offen:, Aufgabe: oder Nächster Schritt: beginnen. Du wählst aus, was eine Aufgabe werden soll; die Herkunft bleibt bei der Aufgabe.
+- **Als Markdown kopieren:** Liste der Einträge mit Quelle und Datum.
+
 ### Wege und eigene Beziehungen
 
 - **Weg finden …:** Start und Ziel wählen, Merkautomat zeigt den kürzesten Weg mit dem Grund jedes Schritts. Standardmäßig über deine eigenen Beziehungen und Zusammenfassungen; **Automatische Hinweise** nimmt die automatischen Bezüge dazu.
 - **Beziehungen …:** Eigene Beziehung anlegen: Von, Typ (frei wählbar, z. B. "widerspricht"), Nach und Begründung. Aufgabe und Arbeitsschritte sind optional. **Änderungen speichern** übernimmt alles, **Abbrechen** verwirft. Entfernen löscht nur die Beziehung, nie Inhalte.
 
+### Verlustfrei zusammenführen
+
+Rechtsklick auf einen Punkt (oder **Weitere Aktionen … → Verlustfrei zusammenführen …**) bietet den Eintrag mit allen verknüpften Einträgen an; sehr ähnliche sind vorgewählt. Daraus entsteht eine neue Sprachnotiz, die jeden Originaltext **vollständig** mit Herkunft und Datum enthält. Nur wortgleiche Texte stehen einmal mit allen Herkünften. Kategorie, Mappen und Beziehungen gehen auf die neue Notiz über.
+
+Mit **Originale danach entfernen** wird die Wissensbasis schlanker. Entfernt werden nur Zwischenablage-Texte und Sprachnotizen, und nur, wenn Merkautomat in der gespeicherten Notiz geprüft hat, dass ihr Text vollständig drinsteht. Bilder, formatierte Texte, angeheftete Einträge, Bildschirmaufnahmen und Dateien im Knowledgeordner bleiben immer erhalten; der Dialog sagt bei jedem Eintrag, ob er bleibt und warum.
+
 ---
 
 ## 12. Kategorien vergeben
 
-Jeder Eintrag kann eine **Hauptkategorie** und optional eine **Unterkategorie** haben, z. B. "Reisen › Strand". Kategorien helfen beim Filtern, Exportieren und im Brain.
+Jeder Eintrag kann eine **Hauptkategorie**, darunter optional eine **Unterkategorie** und darunter eine **Feinkategorie** haben, z. B. "Technik › Netzwerk › WLAN". Im zweiten Feld der Dialoge gibst du "Netzwerk" oder "Netzwerk › WLAN" ein. Kategorien helfen beim Filtern, Exportieren und im Brain; ein Filter auf eine Kategorie zeigt alles darunter mit.
 
 ### Von Hand
 
 - **Kategorie festlegen:** Einträge in der Bibliothek auswählen, dann **Strg+Umschalt+K**, Rechtsklick oder **Mehr → Kategorie festlegen …**. **Kategorie entfernen** nimmt sie weg. Bei einer Bildschirmaufnahme gilt sie für alle Bildwechsel.
-- **Kategorien verwalten** (Mehr): anlegen, kurz beschreiben (was gehört dazu, was nicht), umbenennen, verschieben, löschen. Umbenennen auf einen vorhandenen Namen führt beide zusammen.
+- **Kategorien verwalten** (Mehr): auf allen drei Ebenen anlegen („Neue Unterebene“ legt unter einer Hauptkategorie eine Unter-, darunter eine Feinkategorie an), kurz beschreiben (was gehört dazu, was nicht), umbenennen, verschieben, löschen. Umbenennen auf einen vorhandenen Namen führt beide zusammen.
 
 > **Tipp:** Vergib die ersten zwei, drei Kategorien von Hand, mit verständlichen Namen wie "Reisen" statt Kürzeln. Danach werden die Vorschläge deutlich besser.
+
+### Feinere Kategorien von der KI
+
+Hat eine Haupt- oder Unterkategorie viele Einträge (ab 12), die noch nicht feiner eingeordnet sind, gruppiert Merkautomat sie im Leerlauf nach Inhalt, und das Sprachmodell schlägt je Gruppe eine Unter- bzw. Feinkategorie vor. Wenn Vorschläge bereitliegen, meldet sich das Tray-Symbol; im Ideenkombinat unter **Mehr → Feinere Kategorien prüfen …**. Du prüfst die Gruppen im bekannten Fenster der Kategorieanalyse; gespeichert wird nur, was du bestätigst. Dafür braucht es Granite oder Qwen und die Hintergrundarbeit (Kontrollstation → Lokale KI).
 
 ### Mit Vorschlägen: das Einordnungsfenster
 
@@ -527,6 +609,7 @@ Kategorie im Kategorienfilter wählen, dann **Mehr → Passende ohne Kategorie f
 | Strg+T | Aufgaben |
 | Strg+K | Suche |
 | Strg+F | Suche, im Brain die Netzsuche |
+| Strg+M | Mein Wissen |
 | Strg+B | Brain |
 | Strg+Enter | In der Suche: Fragen; bei Sprachnotizen: Speichern |
 | Strg+Umschalt+K | Kategorie festlegen |
@@ -576,13 +659,13 @@ Mehr in [Kapitel 22](#22-fehlerbehebung).
 | `outlook\MerkautomatOutlook.dll` | Outlook-Add-in (optional) |
 | `Licenses\`, `THIRD-PARTY-NOTICES.txt` | Lizenztexte |
 
-**Beim ersten Start** legt Merkautomat `%APPDATA%\Clipwell\` an und zeigt das Onboarding. Der Datenordner heißt aus Kompatibilitätsgründen weiter `Clipwell`.
+**Beim ersten Start** verwendet Merkautomat `data\` im Tool-Verzeichnis: bei einer verteilten Anwendung neben der EXE, bei Entwicklungsbuilds im Projektstamm. Vorhandene Dateien aus `%APPDATA%\Clipwell` werden samt Datenschlüssel vollständig übernommen; die alte Kopie bleibt als Sicherung erhalten. Ohne vorhandenes Profil erscheint das Onboarding. Der Tool-Ordner muss beschreibbar sein.
 
 **Autostart:** Kontrollstation → Allgemein → Windows-Autostart. Eintrag `Merkautomat` unter `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Ein alter Eintrag `Clipwell` wird dabei entfernt.
 
 **Einzelinstanz:** Es läuft immer nur eine Instanz je Benutzer. Ein zweiter Start öffnet das Popup der laufenden Instanz.
 
-**Update:** Merkautomat beenden (Tray → Beenden), Programmordner ersetzen, neu starten. Daten unter `%APPDATA%\Clipwell` bleiben. Bei eingerichtetem Outlook-Add-in danach bei geschlossenem Outlook **Erneut einrichten** ([Kapitel 18](#18-outlook-add-in)).
+**Update:** Merkautomat beenden (Tray → Beenden), nur die Programmdateien ersetzen und den gesamten Ordner `data\` erhalten. Danach neu starten. Bei eingerichtetem Outlook-Add-in danach bei geschlossenem Outlook **Erneut einrichten** ([Kapitel 18](#18-outlook-add-in)).
 
 ---
 
@@ -607,6 +690,7 @@ Tray → Kontrollstation. Fünf Reiter: **Allgemein**, **Tastenkürzel**, **Loka
 | URL-Cache-Dauer | Wie lange Titel und Symbole zwischengespeichert werden (Standard 7 Tage); Cache leeren |
 | Diktat (Whisper, lokal) | Modell Base (ca. 145 MB, mitgeliefert), Small (ca. 470 MB) oder Medium (ca. 1,5 GB), beide als Download nach Rückfrage; Sprache Deutsch, Englisch oder Automatisch. Größer ist genauer, aber langsamer. |
 | Speicherlimits | Maximales Alter in Tagen, maximale Datenbankgröße in MB (0 = aus) |
+| Mein Wissen | "Täglich übernehmen", Wartezeit in Stunden (Standard 48, bis 168), Aufbewahrung in Tagen (Standard 60, 0 = nie, gilt nicht für den Knowledgeordner), "Statt entfernen zusammenfassen" (Standard an), Halbwertszeit der Zwischenablage (Standard 7 Tage), "Jetzt aktualisieren" und Stand |
 | Sichern & Wiederherstellen | Export als JSON, SQLite, CSV oder Markdown, Import aus JSON, automatisches Backup ([Kapitel 20](#20-sichern-wiederherstellen-löschen)) |
 | Zurücksetzen | Ungepinnte History löschen, Gesamte History löschen, URL-Cache löschen, Einstellungen zurücksetzen |
 
@@ -637,23 +721,38 @@ Merkautomat bringt zwei lokale Modelle mit bzw. kann eines nachladen. Nichts dav
 |--------|-------|-------|----------|
 | **multilingual-e5-small** (MIT) | Bedeutungssuche, Brain, Kategorievorschläge (E5) | ca. 123 MB | mitgeliefert |
 | **Granite 4.2 3B** (Apache 2.0) mit llama.cpp (MIT) | Fragen, Kategorien benennen, Titelvorschläge | ca. 2,27 GB | Download auf Klick |
+| **Qwen3.5-2B** (Apache 2.0) mit llama.cpp (MIT) | Fragen, Kategorien benennen, Titelvorschläge | ca. 1,31 GB | Download auf Klick |
+| **MiniLM L6 / Horizon ZeroShot Small** (Apache 2.0) | Vorhandene Kategorien zuordnen | ca. 23 / 303 MB | Download auf Klick |
 | **Whisper Base/Small/Medium** (MIT) | Diktat | Base mitgeliefert | Small/Medium auf Klick |
 
 ### Auswahl im Reiter Lokale KI
 
 - **Aus** (Standard): keine automatischen Kategorievorschläge.
 - **E5 · bestehende Kategorien:** schnell, kein Download, wählt nur unter vorhandenen Kategorien. Braucht mindestens zwei von Hand angelegte Kategorien.
-- **Granite 4.2 3B · lokal (CPU):** kann neue Kategorien und Titel formulieren. **Modell herunterladen** holt Modell und Laufzeit von gepinnten Adressen (Hugging Face, GitHub) und prüft Größe und SHA256. **Download prüfen / reparieren** prüft vorhandene Dateien.
+- **Granite 4.2 3B / Qwen3.5-2B · lokal (CPU/GPU):** können neue Kategorien und Titel formulieren. **Modell herunterladen** holt Modell und Laufzeit von gepinnten Adressen (Hugging Face, GitHub) und prüft Größe und SHA256. **Download prüfen / reparieren** prüft vorhandene Dateien.
+- **MiniLM L6 / Horizon ZeroShot Small:** ordnen vorhandenen Kategorien zu. MiniLM eignet sich vorwiegend für Englisch; für deutsche Texte ist E5 eine gute Ausgangswahl. Horizon arbeitet mehrsprachig; englische Kategorienamen werden empfohlen.
 - **Funktion testen** prüft die gewählte Variante mit einem Beispiel.
 
-Fragen in der Suche und "Kategorien analysieren" nutzen Granite unabhängig von dieser Auswahl, wenn es installiert ist.
+**Sprachmodell für Themen und Antworten** wählt unabhängig davon Granite oder Qwen für Fragen und die Benennung von Gruppen. Die eigentliche Gruppierung verwendet E5; MiniLM und Horizon ersetzen in Merkautomat keinen Themenentdecker.
 
-### Betrieb von Granite
+**Prompts der lokalen KI** zeigt jede Anweisung an Granite und Qwen: Einordnen und Kategorien analysieren, Unter- und Feinkategorien ausdenken, Fragen beantworten, Monatszusammenfassungen und Wochenrückblick. Zu jedem Prompt steht, wo er eingesetzt wird und welche Daten mitgehen. Du kannst jeden anpassen, etwa „Ordne nach Kundenprojekten“. Gespeichert wird beim Verlassen des Feldes oder beim Wechsel der Aufgabe; **Standard wiederherstellen** setzt den mitgelieferten Text zurück. Die Antwortfelder gibt Merkautomat fest vor, ein geänderter Prompt kann das Format also nicht kaputt machen. E5, MiniLM und Horizon verwenden keinen Prompt.
+
+### Betrieb von Granite und Qwen
 
 - Läuft als versteckter Prozess nur auf 127.0.0.1 mit zufälligem Port und Schlüssel; kein Web-UI, kein Proxy, kein Werkzeugzugriff.
 - Der Prozess endet mit Merkautomat, auch bei Absturz. Nach drei Minuten ohne Nutzung wird der Speicher freigegeben; **Aus** beendet ihn sofort.
 - Direkte Aufrufe laufen mit leicht abgesenkter Priorität; ein Aufruf darf höchstens 3 Minuten dauern.
-- Richtwerte: erster Aufruf 17 bis 26 Sekunden, danach 9 bis 17 Sekunden. Abhängig von Rechner und Text.
+- Die Geschwindigkeit hängt von Modell, Text, CPU/GPU und aktueller Last ab; die Kontrollstation kann die Ausführung auf deinem Rechner vergleichen.
+
+### CPU und GPU
+
+Unter **Lokale KI → CPU und GPU** gibt es **Automatisch**, **GPU bevorzugen** und **Nur CPU**. **GPU-Unterstützung laden (38 MB)** ergänzt den geprüften Vulkan-Build von llama.cpp. Er nutzt den vorhandenen Grafiktreiber; es werden weder Treiber noch CUDA-Pakete installiert. Die Lizenzhinweise müssen bei Weitergabe erhalten bleiben.
+
+**CPU/GPU vergleichen** misst das gewählte Sprachmodell mit künstlichen Texten: CPU mit unterschiedlichen Threadzahlen, vollständige GPU-Auslagerung und verteilte Modellschichten zwischen RAM und VRAM. Nach dem Aufwärmen werden je Variante zwei kurze Anfragen gemittelt; Ladezeiten werden separat erfasst. Automatisch erfolgt eine begrenzte Erstvermessung bei geringer Last im Netzbetrieb. **Automatisch** wählt die schnellste gemessene Variante, die mit Speicherreserve nutzbar ist. Das ist eine Orientierung für kurze Anfragen; längere Texte können sich anders verhalten. Die Messwerte liegen verschlüsselt in `data/ai-execution-benchmarks.json`.
+
+Während Granite oder Qwen auf der GPU rechnen, können E5, Rocchio, Clustering und Suchindexierung die CPU nutzen. Begrenzte Threadzahlen, niedrige Prozesspriorität und Reserven für Windows reduzieren Lastspitzen. Bei Speicherdruck oder GPU-Überhitzung wird das Modell entladen; nach einem GPU-Fehler wird einmal auf CPU gewechselt. Drei Minuten ohne Generierung geben den Modellspeicher wieder frei.
+
+Die Anzeige enthält freien RAM/VRAM, CPU-/GPU-Auslastung sowie GPU-Temperatur und thermische Drosselung, soweit der Treiber sie liefert. Eine verlässliche **CPU-Temperatur ist ohne zusätzliche Sensorunterstützung nicht verfügbar**. Reduzierter Takt allein beweist kein thermisches Problem. Ressourcensteuerung kann unerwartete Last anderer Programme oder Paging nicht vollständig verhindern.
 
 ### Hintergrundarbeit
 
@@ -669,7 +768,7 @@ Fragen in der Suche und "Kategorien analysieren" nutzen Granite unabhängig von 
 - Nutzt jemand die KI direkt, hat das Vorrang; die Hintergrundarbeit wartet danach drei Minuten.
 - Start ab 10 Einträgen ohne Kategorie, Wiederholung nach 10 neuen. Zwischenstände bleiben erhalten (`background-discovery.json`).
 - Optional **PC nicht in den Energiesparmodus wechseln lassen**, solange gerechnet wird.
-- Voraussetzung: Granite und Suchmodell installiert.
+- Voraussetzung: gewähltes Sprachmodell und Suchmodell installiert. Speicherdruck, hohe CPU-Last oder GPU-Hitze pausieren die Hintergrundarbeit zusätzlich.
 
 ### Wie die Vorschläge entstehen
 
@@ -706,7 +805,7 @@ Ergänzt im **klassischen Outlook für Microsoft 365 (64 Bit)** das Kontextmenü
 2. Outlook beenden und neu starten.
 3. Rechtsklick auf eine Mail (bis zu 20 markierte) → **Aufgabe in Merkautomat erstellen**. Läuft Merkautomat nicht, startet das Add-in ihn.
 
-Keine Adminrechte nötig. Die DLL wird nach `%LOCALAPPDATA%\Clipwell\outlook\` kopiert, damit Outlook nie den Programmordner sperrt. Geschrieben wird nur unter HKCU:
+Keine Adminrechte nötig. Die DLL wird nach `data\outlook\` kopiert, damit Outlook nie die Build-Ausgabe sperrt. Geschrieben wird nur unter HKCU:
 
 | Schlüssel | Inhalt |
 |-----------|--------|
@@ -723,7 +822,7 @@ Keine Adminrechte nötig. Die DLL wird nach `%LOCALAPPDATA%\Clipwell\outlook\` k
 
 ### Was übergeben wird
 
-Nur die Mails, die der Nutzer auswählt, und davon nur Betreff, Absendername, Empfangszeit, Text (bis 20.000 Zeichen) und die Outlook-Kennung. Keine Anhänge. Die Übergabe läuft über eine Datei in `%APPDATA%\Clipwell\inbox\`, die Merkautomat sofort verarbeitet und löscht; unlesbare Dateien landen in `inbox\fehler`. Nichts verlässt den Rechner.
+Nur die Mails, die der Nutzer auswählt, und davon nur Betreff, Absendername, Empfangszeit, Text (bis 20.000 Zeichen) und die Outlook-Kennung. Keine Anhänge. Die Übergabe läuft über eine Datei in `data\inbox\`, die Merkautomat sofort verarbeitet und löscht; unlesbare Dateien landen in `inbox\fehler`. Nichts verlässt den Rechner.
 
 ### Firmenumgebungen
 
@@ -765,7 +864,7 @@ Beim ersten Start mit Verschlüsselung zeigt Merkautomat einmal den **Notschlüs
 
 Die Verschlüsselung schützt vor kopierten oder gestohlenen Dateien, Backups auf NAS oder USB-Stick, anderen Windows-Konten und einer ausgebauten Platte. Sie schützt **nicht** vor Schadsoftware, die unter deinem Konto läuft, und auf Firmen-PCs in einer Domäne nicht vor den Domänen-Admins. BitLocker zusätzlich eingeschaltet lassen.
 
-**Unverschlüsselt** bleiben bewusst: manuelle Exporte (JSON, CSV, Markdown, SQLite-Kopie, Ideenkombinat-Export), das Fehlerprotokoll `clipwell.log` und die Modelle.
+**Unverschlüsselt** bleiben bewusst: manuelle Exporte (JSON, CSV, Markdown, SQLite-Kopie, Ideenkombinat-Export), das Fehlerprotokoll `merkautomat.log` und die Modelle.
 
 ### Was wo gespeichert wird
 
@@ -791,7 +890,7 @@ Die Verschlüsselung schützt vor kopierten oder gestohlenen Dateien, Backups au
 | History löschen | Kontrollstation → Zurücksetzen → Ungepinnte bzw. Gesamte History löschen | "Ungepinnte" behält die gepinnten Einträge |
 | Einzelnen Eintrag restlos löschen | Popup → Rechtsklick → Sicher löschen | Nicht rückgängig zu machen |
 
-**Vollständige Sicherung:** Merkautomat beenden und den ganzen Ordner `%APPDATA%\Clipwell` kopieren. Er enthält History, Einstellungen, Notizen, Aufnahmen, Aufgaben, Kategorien und die Schlüsseldatei `datakey.json`, alles verschlüsselt. Auf einem anderen PC öffnet Merkautomat die Kopie nach Eingabe des Notschlüssels. Die Modelle unter `models\` lassen sich neu laden und müssen nicht gesichert werden.
+**Vollständige Sicherung:** Merkautomat beenden und den ganzen Ordner `data` kopieren. Er enthält History, Einstellungen, Notizen, Aufnahmen, Aufgaben, Kategorien und die Schlüsseldatei `datakey.json`, alles verschlüsselt. Auf einem anderen PC öffnet Merkautomat die Kopie nach Eingabe des Notschlüssels. Die Modelle unter `models\` lassen sich neu laden und müssen nicht gesichert werden.
 
 ---
 
@@ -799,31 +898,33 @@ Die Verschlüsselung schützt vor kopierten oder gestohlenen Dateien, Backups au
 
 | Was | Pfad |
 |-----|------|
-| Einstellungen (inkl. Kategorien, Beziehungen, Eintrags-Hotkeys) | `%APPDATA%\Clipwell\settings.json` |
-| History-Datenbank | `%APPDATA%\Clipwell\history.db` (plus `history.db-wal`) |
-| Fehlerprotokoll | `%APPDATA%\Clipwell\clipwell.log` |
-| Sprachnotizen | `%APPDATA%\Clipwell\notes\*.md` |
-| Sprachnotizen im Ideenkombinat | `%APPDATA%\Clipwell\kb\notes\*.md` |
-| Bildschirmaufnahmen | `%APPDATA%\Clipwell\recordings\*.md` |
-| Aufgaben | `%APPDATA%\Clipwell\tasks.json` |
-| Suchindex (nur Vektoren) | `%APPDATA%\Clipwell\semantic.db` |
-| Zwischenstand der Hintergrundanalyse | `%APPDATA%\Clipwell\background-discovery.json` |
-| Übergabe aus Outlook | `%APPDATA%\Clipwell\inbox\` (unlesbare in `inbox\fehler`) |
-| Bildeditor-Stile | `%APPDATA%\Clipwell\editor-styles.json` |
-| Onboarding-Marker | `%APPDATA%\Clipwell\onboarding.seen` |
-| Nachgeladene Modelle (Whisper Small/Medium, Granite, Ersatz für e5-small) | `%APPDATA%\Clipwell\models\` |
+| Einstellungen (inkl. Kategorien, Beziehungen, Eintrags-Hotkeys) | `data\settings.json` |
+| History-Datenbank | `data\history.db` (plus `history.db-wal`) |
+| Fehlerprotokoll | `data\merkautomat.log` |
+| Sprachnotizen | `data\notes\*.md` |
+| Sprachnotizen im Ideenkombinat | `data\kb\notes\*.md` |
+| Bildschirmaufnahmen | `data\recordings\*.md` |
+| Aufgaben | `data\tasks.json` |
+| Suchindex (nur Vektoren) | `data\semantic.db` |
+| Zwischenstand der Hintergrundanalyse | `data\background-discovery.json` |
+| Mein Wissen (gespeicherte Kopien) | `data\my-knowledge.json` |
+| Vorschläge feinerer Kategorien | `data\category-refinement.json` |
+| Übergabe aus Outlook | `data\inbox\` (unlesbare in `inbox\fehler`) |
+| Bildeditor-Stile | `data\editor-styles.json` |
+| Onboarding-Marker | `data\onboarding.seen` |
+| Nachgeladene Modelle (Whisper Small/Medium, Granite, Ersatz für e5-small) | `data\models\` |
 | Mitgelieferte Modelle | `models\` neben `Merkautomat.exe` |
-| Outlook-Add-in (eingerichtete Kopie) | `%LOCALAPPDATA%\Clipwell\outlook\MerkautomatOutlook.dll` |
-| Auto-Backups | Wählbarer Ordner, `clipwell-autobackup-JJJJMMTT-hhmmss.json` |
-| Gesicherte defekte Datenbank | `%APPDATA%\Clipwell\history.db.broken-JJJJMMTT-hhmmss` |
-| Gesicherte defekte Aufgabendatei | `%APPDATA%\Clipwell\tasks.json.defekt-*` |
-| Schlüsseldatei der Verschlüsselung | `%APPDATA%\Clipwell\datakey.json` (an das Windows-Konto gebunden; nicht löschen) |
+| Outlook-Add-in (eingerichtete Kopie) | `data\outlook\MerkautomatOutlook.dll` |
+| Auto-Backups | Wählbarer Ordner, `merkautomat-autobackup-JJJJMMTT-hhmmss.json` |
+| Gesicherte defekte Datenbank | `data\history.db.broken-JJJJMMTT-hhmmss` |
+| Gesicherte defekte Aufgabendatei | `data\tasks.json.defekt-*` |
+| Schlüsseldatei der Verschlüsselung | `data\datakey.json` (an das Windows-Konto gebunden; nicht löschen) |
 
 ---
 
 ## 22. Fehlerbehebung
 
-Erste Anlaufstelle ist immer das Protokoll `%APPDATA%\Clipwell\clipwell.log`.
+Erste Anlaufstelle ist immer das Protokoll `data\merkautomat.log`.
 
 ### Popup öffnet sich nicht
 
@@ -878,7 +979,7 @@ Internetverbindung, Schalter "URL-Vorschau laden", private Adresse? Rechtsklick 
 - Bildschirmaufnahmen sehen nur Text, den Anwendungen über die Bedienungshilfen bereitstellen. Fenster mit ständig wechselndem Text (Uhren, Logs) erzeugen viele kleine Einträge.
 - "Weichzeichnen" im Bildeditor ist eine graue Überlagerung, kein echter Weichzeichner.
 - Der globale Popup-Hotkey nimmt als Taste nur A–Z und 0–9 an; F-Tasten gehen für Popup-Aktionen und Eintrags-Hotkeys.
-- Das Brain zeigt höchstens die neuesten 1000 Einträge; die Dublettensuche betrachtet höchstens die neuesten 6000.
+- Das Brain zeigt die neuesten Einträge der gewählten Quellen bis zum eingestellten Limit (100 bis 10.000, Standard 1.000); die Dublettensuche betrachtet höchstens die neuesten 6000.
 - Ein gefundener Weg im Brain ist keine Aussage über den Gesamtbestand, sondern gilt nur für den angezeigten Ausschnitt.
-- Granite rechnet auf dem Prozessor; auf schwächeren Rechnern dauern Antworten deutlich länger.
+- Granite und Qwen können CPU oder GPU verwenden; ohne geeignete GPU-Sensoren erfolgt die Ausführung auf der CPU. CPU-Temperatursensoren werden derzeit nicht ausgelesen.
 - Das Outlook-Add-in funktioniert nur im klassischen Outlook.

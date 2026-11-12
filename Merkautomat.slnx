@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Merkautomat/Merkautomat.csproj" />
+    <Project Path="src/MerkautomatOutlook/MerkautomatOutlook.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Merkautomat.Tests/Merkautomat.Tests.csproj" />
+  </Folder>
+</Solution>
